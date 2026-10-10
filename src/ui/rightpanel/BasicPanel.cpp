@@ -356,10 +356,38 @@ BasicPanel::BasicPanel(QWidget *parent)
 
     outerLayout->addWidget(content);
 
+    auto *contentAnimation = new QVariantAnimation(this);
+    contentAnimation->setDuration(180);
+    contentAnimation->setEasingCurve(QEasingCurve::InOutCubic);
+
+    connect(contentAnimation, &QVariantAnimation::valueChanged, content,
+            [content](const QVariant &value) {
+                content->setMaximumHeight(value.toInt());
+            });
+
+    connect(contentAnimation, &QVariantAnimation::finished, content,
+            [content, titleButton]() {
+                if (titleButton->isChecked()) {
+                    content->setMaximumHeight(QWIDGETSIZE_MAX);
+                } else {
+                    content->setMaximumHeight(0);
+                    content->setVisible(false);
+                }
+            });
+
     connect(titleButton, &QToolButton::toggled, this,
-            [content, chevronButton](bool expanded) {
-                content->setVisible(expanded);
+            [content, contentLayout, contentAnimation, chevronButton](bool expanded) {
                 chevronButton->setExpanded(expanded);
+
+                const int currentHeight = content->isVisible() ? content->height() : 0;
+                if (expanded) {
+                    content->setVisible(true);
+                }
+
+                contentAnimation->stop();
+                contentAnimation->setStartValue(currentHeight);
+                contentAnimation->setEndValue(expanded ? contentLayout->sizeHint().height() : 0);
+                contentAnimation->start();
             });
 
     connect(chevronButton, &QToolButton::clicked, titleButton,
