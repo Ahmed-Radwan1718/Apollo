@@ -2,7 +2,11 @@
 
 #include <QFrame>
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QLabel>
+#include <QPaintEvent>
+#include <QPainter>
+#include <QPainterPath>
 #include <QSizePolicy>
 #include <QSlider>
 #include <QToolButton>
@@ -42,6 +46,105 @@ QLabel *sectionLabel(const QString &text, QWidget *parent)
     label->setObjectName(QStringLiteral("basicSectionLabel"));
     return label;
 }
+
+class EyeButton final : public QToolButton
+{
+public:
+    explicit EyeButton(QWidget *parent = nullptr)
+        : QToolButton(parent)
+    {
+        setFixedSize(28, 30);
+        setCursor(Qt::PointingHandCursor);
+        setFocusPolicy(Qt::NoFocus);
+        setToolTip(tr("Basic adjustments visibility"));
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        const QColor color = underMouse()
+            ? QColor(255, 255, 255)
+            : QColor(211, 211, 211);
+
+        const QPointF center(width() / 2.0, height() / 2.0);
+        constexpr qreal halfWidth = 7.2;
+        constexpr qreal halfHeight = 4.2;
+
+        QPainterPath eye;
+        eye.moveTo(center.x() - halfWidth, center.y());
+        eye.cubicTo(center.x() - 4.3, center.y() - halfHeight,
+                    center.x() + 4.3, center.y() - halfHeight,
+                    center.x() + halfWidth, center.y());
+        eye.cubicTo(center.x() + 4.3, center.y() + halfHeight,
+                    center.x() - 4.3, center.y() + halfHeight,
+                    center.x() - halfWidth, center.y());
+
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(color, 1.35, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.drawPath(eye);
+
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(color);
+        painter.drawEllipse(center, 2.0, 2.0);
+    }
+};
+
+class ChevronButton final : public QToolButton
+{
+public:
+    explicit ChevronButton(QWidget *parent = nullptr)
+        : QToolButton(parent)
+    {
+        setFixedSize(26, 30);
+        setCursor(Qt::PointingHandCursor);
+        setFocusPolicy(Qt::NoFocus);
+    }
+
+    void setExpanded(bool expanded)
+    {
+        if (m_expanded == expanded) {
+            return;
+        }
+
+        m_expanded = expanded;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        const QColor color = underMouse()
+            ? QColor(255, 255, 255)
+            : QColor(190, 190, 190);
+        painter.setPen(QPen(color, 1.45, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+
+        const QPointF center(width() / 2.0, height() / 2.0);
+        if (m_expanded) {
+            painter.drawLine(QPointF(center.x() - 3.5, center.y() - 1.5),
+                             QPointF(center.x(), center.y() + 2.0));
+            painter.drawLine(QPointF(center.x(), center.y() + 2.0),
+                             QPointF(center.x() + 3.5, center.y() - 1.5));
+        } else {
+            painter.drawLine(QPointF(center.x() - 1.5, center.y() - 3.5),
+                             QPointF(center.x() + 2.0, center.y()));
+            painter.drawLine(QPointF(center.x() + 2.0, center.y()),
+                             QPointF(center.x() - 1.5, center.y() + 3.5));
+        }
+    }
+
+private:
+    bool m_expanded = true;
+};
 
 void addSliderRow(QGridLayout *layout,
                   int row,
@@ -87,16 +190,30 @@ BasicPanel::BasicPanel(QWidget *parent)
     outerLayout->setContentsMargins(0, 0, 0, 0);
     outerLayout->setSpacing(0);
 
-    auto *header = new QToolButton(this);
+    auto *header = new QFrame(this);
     header->setObjectName(QStringLiteral("basicHeader"));
-    header->setText(tr("Basic"));
-    header->setCheckable(true);
-    header->setChecked(true);
-    header->setArrowType(Qt::DownArrow);
-    header->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    header->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    header->setCursor(Qt::PointingHandCursor);
     header->setFixedHeight(40);
+
+    auto *headerLayout = new QHBoxLayout(header);
+    headerLayout->setContentsMargins(6, 5, 0, 0);
+    headerLayout->setSpacing(2);
+
+    auto *titleButton = new QToolButton(header);
+    titleButton->setObjectName(QStringLiteral("basicTitle"));
+    titleButton->setText(tr("Basic"));
+    titleButton->setCheckable(true);
+    titleButton->setChecked(true);
+    titleButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    titleButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    titleButton->setCursor(Qt::PointingHandCursor);
+    titleButton->setFocusPolicy(Qt::NoFocus);
+
+    auto *eyeButton = new EyeButton(header);
+    auto *chevronButton = new ChevronButton(header);
+
+    headerLayout->addWidget(titleButton, 1);
+    headerLayout->addWidget(eyeButton);
+    headerLayout->addWidget(chevronButton);
     outerLayout->addWidget(header);
 
     auto *content = new QFrame(this);
@@ -165,10 +282,15 @@ BasicPanel::BasicPanel(QWidget *parent)
 
     outerLayout->addWidget(content);
 
-    connect(header, &QToolButton::toggled, this,
-            [header, content](bool expanded) {
-                header->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
+    connect(titleButton, &QToolButton::toggled, this,
+            [content, chevronButton](bool expanded) {
                 content->setVisible(expanded);
+                chevronButton->setExpanded(expanded);
+            });
+
+    connect(chevronButton, &QToolButton::clicked, titleButton,
+            [titleButton]() {
+                titleButton->toggle();
             });
 
     setStyleSheet(QStringLiteral(
@@ -176,20 +298,21 @@ BasicPanel::BasicPanel(QWidget *parent)
         "  background: #181818;"
         "  font-family: \"Segoe UI Variable\";"
         "}"
-        "QToolButton#basicHeader {"
-        "  color: #d6d6d6;"
+        "QFrame#basicHeader {"
         "  background: transparent;"
         "  border: 0;"
         "  border-top: 1px solid #2a2a2a;"
+        "}"
+        "QToolButton#basicTitle {"
+        "  color: #d6d6d6;"
+        "  background: transparent;"
+        "  border: 0;"
         "  text-align: left;"
         "  font-size: 13px;"
         "  font-weight: 600;"
-        "  padding: 5px 6px 0 6px;"
+        "  padding: 0;"
         "}"
-        "QToolButton#basicHeader:hover {"
-        "  color: #ffffff;"
-        "  background: #1b1b1b;"
-        "}"
+        "QToolButton#basicTitle:hover { color: #ffffff; }"
         "QFrame#basicContent { background: #181818; border: 0; }"
         "QLabel#basicSectionLabel {"
         "  color: #8f8f8f;"
