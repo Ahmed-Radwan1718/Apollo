@@ -2,7 +2,6 @@
 
 #include <QEasingCurve>
 #include <QFrame>
-#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPaintEvent>
@@ -30,7 +29,7 @@ QString formattedValue(int value, ValueFormat format)
     case ValueFormat::Exposure: {
         const double stops = static_cast<double>(value) / 100.0;
         return QStringLiteral("%1%2")
-            .arg(stops > 0.0 ? QStringLiteral("+") : QString(),
+            .arg(stops >= 0.0 ? QStringLiteral("+") : QString(),
                  QString::number(stops, 'f', 2));
     }
     case ValueFormat::SignedInteger:
@@ -40,13 +39,6 @@ QString formattedValue(int value, ValueFormat format)
     }
 
     return {};
-}
-
-QLabel *sectionLabel(const QString &text, QWidget *parent)
-{
-    auto *label = new QLabel(text, parent);
-    label->setObjectName(QStringLiteral("basicSectionLabel"));
-    return label;
 }
 
 class BasicTitleButton final : public QToolButton
@@ -176,37 +168,97 @@ private:
     QVariantAnimation *m_animation = nullptr;
 };
 
-void addSliderRow(QGridLayout *layout,
-                  int row,
-                  const QString &labelText,
-                  int minimum,
-                  int maximum,
-                  int value,
-                  ValueFormat format,
-                  QWidget *parent)
+class BasicSlider final : public QSlider
 {
-    auto *label = new QLabel(labelText, parent);
+public:
+    BasicSlider(bool showNeutralMarker, QWidget *parent = nullptr)
+        : QSlider(Qt::Horizontal, parent)
+        , m_showNeutralMarker(showNeutralMarker)
+    {
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        QSlider::paintEvent(event);
+
+        if (!m_showNeutralMarker) {
+            return;
+        }
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, false);
+        painter.setPen(QPen(QColor(92, 92, 92), 1.0));
+
+        const qreal x = width() / 2.0;
+        const qreal y = height() / 2.0;
+        painter.drawLine(QPointF(x, y - 5.0), QPointF(x, y - 3.0));
+        painter.drawLine(QPointF(x, y + 3.0), QPointF(x, y + 5.0));
+    }
+
+private:
+    bool m_showNeutralMarker = false;
+};
+
+QLabel *sectionLabel(const QString &text, QWidget *parent)
+{
+    auto *label = new QLabel(text, parent);
+    label->setObjectName(QStringLiteral("basicSectionLabel"));
+    return label;
+}
+
+void addSliderControl(QVBoxLayout *layout,
+                      const QString &labelText,
+                      int minimum,
+                      int maximum,
+                      int value,
+                      ValueFormat format,
+                      bool showNeutralMarker,
+                      const QString &sliderObjectName,
+                      QWidget *parent)
+{
+    auto *control = new QWidget(parent);
+    control->setObjectName(QStringLiteral("basicControl"));
+
+    auto *controlLayout = new QVBoxLayout(control);
+    controlLayout->setContentsMargins(0, 0, 0, 0);
+    controlLayout->setSpacing(2);
+
+    auto *labelRow = new QHBoxLayout;
+    labelRow->setContentsMargins(0, 0, 0, 0);
+    labelRow->setSpacing(8);
+
+    auto *label = new QLabel(labelText, control);
     label->setObjectName(QStringLiteral("basicControlLabel"));
 
-    auto *slider = new QSlider(Qt::Horizontal, parent);
-    slider->setObjectName(QStringLiteral("basicSlider"));
+    auto *valueLabel = new QLabel(formattedValue(value, format), control);
+    valueLabel->setObjectName(QStringLiteral("basicValueLabel"));
+    valueLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+    labelRow->addWidget(label);
+    labelRow->addStretch(1);
+    labelRow->addWidget(valueLabel);
+
+    auto *slider = new BasicSlider(showNeutralMarker, control);
+    slider->setObjectName(sliderObjectName);
     slider->setRange(minimum, maximum);
     slider->setValue(value);
     slider->setTracking(true);
-
-    auto *valueLabel = new QLabel(formattedValue(value, format), parent);
-    valueLabel->setObjectName(QStringLiteral("basicValueLabel"));
-    valueLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    valueLabel->setMinimumWidth(42);
+    slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     QObject::connect(slider, &QSlider::valueChanged, valueLabel,
                      [valueLabel, format](int currentValue) {
                          valueLabel->setText(formattedValue(currentValue, format));
                      });
 
-    layout->addWidget(label, row, 0);
-    layout->addWidget(slider, row, 1);
-    layout->addWidget(valueLabel, row, 2);
+    controlLayout->addLayout(labelRow);
+    controlLayout->addWidget(slider);
+    layout->addWidget(control);
+}
+
+void addSectionSpacing(QVBoxLayout *layout)
+{
+    layout->addSpacing(7);
 }
 
 } // namespace
@@ -249,66 +301,58 @@ BasicPanel::BasicPanel(QWidget *parent)
     auto *content = new QFrame(this);
     content->setObjectName(QStringLiteral("basicContent"));
     auto *contentLayout = new QVBoxLayout(content);
-    contentLayout->setContentsMargins(2, 7, 2, 12);
-    contentLayout->setSpacing(5);
+    contentLayout->setContentsMargins(12, 10, 12, 16);
+    contentLayout->setSpacing(6);
 
     contentLayout->addWidget(sectionLabel(tr("White Balance"), content));
-    auto *whiteBalanceGrid = new QGridLayout;
-    whiteBalanceGrid->setContentsMargins(0, 0, 0, 4);
-    whiteBalanceGrid->setHorizontalSpacing(8);
-    whiteBalanceGrid->setVerticalSpacing(5);
-    whiteBalanceGrid->setColumnStretch(1, 1);
-    addSliderRow(whiteBalanceGrid, 0, tr("Temp"), 2000, 50000, 6500,
-                 ValueFormat::Temperature, content);
-    addSliderRow(whiteBalanceGrid, 1, tr("Tint"), -150, 150, 0,
-                 ValueFormat::SignedInteger, content);
-    contentLayout->addLayout(whiteBalanceGrid);
+    addSliderControl(contentLayout, tr("Temp"), 2000, 50000, 6500,
+                     ValueFormat::Temperature, false,
+                     QStringLiteral("temperatureSlider"), content);
+    addSliderControl(contentLayout, tr("Tint"), -150, 150, 0,
+                     ValueFormat::SignedInteger, true,
+                     QStringLiteral("tintSlider"), content);
 
+    addSectionSpacing(contentLayout);
     contentLayout->addWidget(sectionLabel(tr("Tone"), content));
-    auto *toneGrid = new QGridLayout;
-    toneGrid->setContentsMargins(0, 0, 0, 4);
-    toneGrid->setHorizontalSpacing(8);
-    toneGrid->setVerticalSpacing(5);
-    toneGrid->setColumnStretch(1, 1);
-    addSliderRow(toneGrid, 0, tr("Exposure"), -500, 500, 0,
-                 ValueFormat::Exposure, content);
-    addSliderRow(toneGrid, 1, tr("Contrast"), -100, 100, 0,
-                 ValueFormat::SignedInteger, content);
-    addSliderRow(toneGrid, 2, tr("Highlights"), -100, 100, 0,
-                 ValueFormat::SignedInteger, content);
-    addSliderRow(toneGrid, 3, tr("Shadows"), -100, 100, 0,
-                 ValueFormat::SignedInteger, content);
-    addSliderRow(toneGrid, 4, tr("Whites"), -100, 100, 0,
-                 ValueFormat::SignedInteger, content);
-    addSliderRow(toneGrid, 5, tr("Blacks"), -100, 100, 0,
-                 ValueFormat::SignedInteger, content);
-    contentLayout->addLayout(toneGrid);
+    addSliderControl(contentLayout, tr("Exposure"), -500, 500, 0,
+                     ValueFormat::Exposure, true,
+                     QStringLiteral("basicSlider"), content);
+    addSliderControl(contentLayout, tr("Contrast"), -100, 100, 0,
+                     ValueFormat::SignedInteger, true,
+                     QStringLiteral("basicSlider"), content);
+    addSliderControl(contentLayout, tr("Highlights"), -100, 100, 0,
+                     ValueFormat::SignedInteger, true,
+                     QStringLiteral("basicSlider"), content);
+    addSliderControl(contentLayout, tr("Shadows"), -100, 100, 0,
+                     ValueFormat::SignedInteger, true,
+                     QStringLiteral("basicSlider"), content);
+    addSliderControl(contentLayout, tr("Whites"), -100, 100, 0,
+                     ValueFormat::SignedInteger, true,
+                     QStringLiteral("basicSlider"), content);
+    addSliderControl(contentLayout, tr("Blacks"), -100, 100, 0,
+                     ValueFormat::SignedInteger, true,
+                     QStringLiteral("basicSlider"), content);
 
+    addSectionSpacing(contentLayout);
     contentLayout->addWidget(sectionLabel(tr("Presence"), content));
-    auto *presenceGrid = new QGridLayout;
-    presenceGrid->setContentsMargins(0, 0, 0, 4);
-    presenceGrid->setHorizontalSpacing(8);
-    presenceGrid->setVerticalSpacing(5);
-    presenceGrid->setColumnStretch(1, 1);
-    addSliderRow(presenceGrid, 0, tr("Texture"), -100, 100, 0,
-                 ValueFormat::SignedInteger, content);
-    addSliderRow(presenceGrid, 1, tr("Clarity"), -100, 100, 0,
-                 ValueFormat::SignedInteger, content);
-    addSliderRow(presenceGrid, 2, tr("Dehaze"), -100, 100, 0,
-                 ValueFormat::SignedInteger, content);
-    contentLayout->addLayout(presenceGrid);
+    addSliderControl(contentLayout, tr("Texture"), -100, 100, 0,
+                     ValueFormat::SignedInteger, true,
+                     QStringLiteral("basicSlider"), content);
+    addSliderControl(contentLayout, tr("Clarity"), -100, 100, 0,
+                     ValueFormat::SignedInteger, true,
+                     QStringLiteral("basicSlider"), content);
+    addSliderControl(contentLayout, tr("Dehaze"), -100, 100, 0,
+                     ValueFormat::SignedInteger, true,
+                     QStringLiteral("basicSlider"), content);
 
+    addSectionSpacing(contentLayout);
     contentLayout->addWidget(sectionLabel(tr("Color"), content));
-    auto *colorGrid = new QGridLayout;
-    colorGrid->setContentsMargins(0, 0, 0, 0);
-    colorGrid->setHorizontalSpacing(8);
-    colorGrid->setVerticalSpacing(5);
-    colorGrid->setColumnStretch(1, 1);
-    addSliderRow(colorGrid, 0, tr("Vibrance"), -100, 100, 0,
-                 ValueFormat::SignedInteger, content);
-    addSliderRow(colorGrid, 1, tr("Saturation"), -100, 100, 0,
-                 ValueFormat::SignedInteger, content);
-    contentLayout->addLayout(colorGrid);
+    addSliderControl(contentLayout, tr("Vibrance"), -100, 100, 0,
+                     ValueFormat::SignedInteger, true,
+                     QStringLiteral("basicSlider"), content);
+    addSliderControl(contentLayout, tr("Saturation"), -100, 100, 0,
+                     ValueFormat::SignedInteger, true,
+                     QStringLiteral("basicSlider"), content);
 
     outerLayout->addWidget(content);
 
@@ -342,37 +386,60 @@ BasicPanel::BasicPanel(QWidget *parent)
         "  padding: 0;"
         "}"
         "QToolButton#basicTitle:hover { color: #ffffff; }"
-        "QFrame#basicContent { background: #181818; border: 0; }"
+        "QFrame#basicContent, QWidget#basicControl { background: #181818; border: 0; }"
         "QLabel#basicSectionLabel {"
-        "  color: #8f8f8f;"
+        "  color: #b3b3b3;"
         "  font-size: 11px;"
         "  font-weight: 600;"
-        "  padding-top: 6px;"
-        "  padding-bottom: 2px;"
+        "  padding-top: 1px;"
+        "  padding-bottom: 1px;"
         "}"
         "QLabel#basicControlLabel {"
-        "  color: #c2c2c2;"
+        "  color: #d0d0d0;"
         "  font-size: 12px;"
-        "  min-width: 64px;"
         "}"
         "QLabel#basicValueLabel {"
-        "  color: #8f8f8f;"
+        "  color: #9f9f9f;"
         "  font-size: 11px;"
         "}"
-        "QSlider#basicSlider { min-height: 14px; }"
-        "QSlider#basicSlider::groove:horizontal {"
-        "  height: 1px;"
-        "  background: #3e3e3e;"
+        "QSlider#basicSlider, QSlider#temperatureSlider, QSlider#tintSlider {"
+        "  min-height: 14px;"
+        "  max-height: 14px;"
         "}"
-        "QSlider#basicSlider::sub-page:horizontal { background: #707070; }"
-        "QSlider#basicSlider::add-page:horizontal { background: #3e3e3e; }"
-        "QSlider#basicSlider::handle:horizontal {"
-        "  width: 8px;"
-        "  height: 8px;"
+        "QSlider#basicSlider::groove:horizontal {"
+        "  height: 2px;"
+        "  background: #414141;"
+        "  border-radius: 1px;"
+        "}"
+        "QSlider#basicSlider::sub-page:horizontal { background: #727272; border-radius: 1px; }"
+        "QSlider#basicSlider::add-page:horizontal { background: #414141; border-radius: 1px; }"
+        "QSlider#temperatureSlider::groove:horizontal {"
+        "  height: 2px;"
+        "  border-radius: 1px;"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+        "    stop:0 #46658f, stop:0.5 #696969, stop:1 #9a6947);"
+        "}"
+        "QSlider#temperatureSlider::sub-page:horizontal,"
+        "QSlider#temperatureSlider::add-page:horizontal { background: transparent; }"
+        "QSlider#tintSlider::groove:horizontal {"
+        "  height: 2px;"
+        "  border-radius: 1px;"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+        "    stop:0 #4f7659, stop:0.5 #696969, stop:1 #835b79);"
+        "}"
+        "QSlider#tintSlider::sub-page:horizontal,"
+        "QSlider#tintSlider::add-page:horizontal { background: transparent; }"
+        "QSlider#basicSlider::handle:horizontal,"
+        "QSlider#temperatureSlider::handle:horizontal,"
+        "QSlider#tintSlider::handle:horizontal {"
+        "  width: 10px;"
+        "  height: 10px;"
         "  margin: -4px 0;"
-        "  border-radius: 4px;"
-        "  background: #d7d7d7;"
+        "  border-radius: 5px;"
+        "  background: #d9d9d9;"
         "  border: 0;"
         "}"
-        "QSlider#basicSlider::handle:horizontal:hover { background: #ffffff; }"));
+        "QSlider#basicSlider::handle:horizontal:hover,"
+        "QSlider#temperatureSlider::handle:horizontal:hover,"
+        "QSlider#tintSlider::handle:horizontal:hover { background: #ffffff; }"));
 }
