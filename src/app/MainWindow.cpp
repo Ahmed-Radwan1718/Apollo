@@ -3,6 +3,7 @@
 #include "imaging/ImageLoader.h"
 #include "ui/canvas/PhotoCanvas.h"
 #include "ui/histogram/HistogramWidget.h"
+#include "ui/leftpanel/NavigatorPanel.h"
 #include "ui/rightpanel/BasicPanel.h"
 #include "ui/rightpanel/PhotoMetadataWidget.h"
 
@@ -24,6 +25,20 @@ MainWindow::MainWindow(QWidget *parent)
     auto *workspaceLayout = new QHBoxLayout(workspace);
     workspaceLayout->setContentsMargins(0, 0, 0, 0);
     workspaceLayout->setSpacing(0);
+
+    auto *leftPanel = new QWidget(workspace);
+    leftPanel->setObjectName(QStringLiteral("leftPanel"));
+    leftPanel->setFixedWidth(260);
+
+    auto *leftLayout = new QVBoxLayout(leftPanel);
+    leftLayout->setContentsMargins(0, 0, 0, 0);
+    leftLayout->setSpacing(0);
+
+    m_navigator = new NavigatorPanel(leftPanel);
+    leftLayout->addWidget(m_navigator);
+    leftLayout->addStretch(1);
+
+    workspaceLayout->addWidget(leftPanel);
 
     m_canvas = new PhotoCanvas(workspace);
     workspaceLayout->addWidget(m_canvas, 1);
@@ -59,6 +74,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     setStyleSheet(QStringLiteral(
         "QMainWindow { background: #181818; }"
+        "QWidget#leftPanel {"
+        "  background: #181818;"
+        "  border-right: 1px solid #252525;"
+        "}"
         "QWidget#rightPanel {"
         "  background: #181818;"
         "  border-left: 1px solid #252525;"
@@ -103,6 +122,7 @@ void MainWindow::openImage(const QString &filePath)
     }
 
     m_canvas->setImage(result.image);
+    m_navigator->setImage(result.image);
     m_histogram->setImage(result.image);
     m_photoMetadata->setMetadata(result.metadata);
     setWindowTitle(QStringLiteral("%1 — Nexus").arg(QFileInfo(filePath).fileName()));
