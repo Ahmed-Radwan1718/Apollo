@@ -25,26 +25,29 @@ Other raster image formats continue to use Qt's installed image plugins.
 
 ## Build on Windows 11
 
-Nexus requires Qt 6.8 or newer and LibRaw. The repository includes a `vcpkg.json` manifest for LibRaw.
+Nexus requires Qt 6.8 or newer. LibRaw does not need to be installed separately: CMake downloads the pinned LibRaw 0.22.2 source and its official companion CMake project on the first configure, then builds LibRaw statically as part of Nexus.
 
-Install and bootstrap vcpkg once, then configure Nexus with the vcpkg toolchain and your Qt MSVC kit. For example:
+Because LibRaw is downloaded during the first configure, an internet connection and Git must be available at that time. Subsequent builds reuse the copy in the build directory.
+
+### Qt Creator
+
+Open the repository with your normal Qt desktop kit and configure it normally. Qt 6.12 MinGW 64-bit is supported by this project setup; no vcpkg toolchain or `libraw_DIR` setting is required.
+
+If you previously configured the older vcpkg-based version, clear the old CMake configuration or delete the kit's build directory once before reconfiguring.
+
+### Command line example
 
 ```powershell
-git clone https://github.com/microsoft/vcpkg C:/dev/vcpkg
-C:/dev/vcpkg/bootstrap-vcpkg.bat
-
-cmake -S . -B build -G Ninja `
-  -DCMAKE_TOOLCHAIN_FILE=C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake `
-  -DCMAKE_PREFIX_PATH="C:/Qt/6.8.3/msvc2022_64"
-
+cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH="C:/Qt/6.12.0/mingw_64"
 cmake --build build
 ```
 
-The vcpkg manifest installs LibRaw automatically during configuration. Run `build/Nexus.exe` after the build completes (the exact output location can vary by generator/configuration).
+Run `build/Nexus.exe` after the build completes (the exact output location can vary by generator/configuration).
 
 ## Source layout
 
 ```text
+cmake/                    # third-party build integration
 src/
 ├── app/                  # application shell
 ├── imaging/              # Qt raster loading and Sony ARW decoding

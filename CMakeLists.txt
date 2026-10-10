@@ -7,8 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Qt6 6.8 REQUIRED COMPONENTS Widgets)
-find_package(libraw CONFIG REQUIRED)
 qt_standard_project_setup()
+
+include(cmake/LibRaw.cmake)
+nexus_add_libraw()
 
 qt_add_executable(Nexus WIN32
     src/main.cpp
@@ -25,7 +27,7 @@ qt_add_executable(Nexus WIN32
 target_include_directories(Nexus PRIVATE src)
 target_link_libraries(Nexus PRIVATE
     Qt6::Widgets
-    libraw::raw_r
+    libraw::libraw_r
 )
 
 set_target_properties(Nexus PROPERTIES
