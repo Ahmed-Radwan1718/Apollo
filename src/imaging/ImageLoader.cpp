@@ -15,8 +15,9 @@ ImageLoadResult ImageLoader::load(const QString &filePath)
 {
     if (QFileInfo(filePath).suffix().compare(QStringLiteral("arw"), Qt::CaseInsensitive) == 0) {
         QString error;
-        QImage image = ArwDecoder::decode(filePath, &error);
-        return {std::move(image), std::move(error)};
+        PhotoMetadata metadata;
+        QImage image = ArwDecoder::decode(filePath, &error, &metadata);
+        return {std::move(image), metadata, std::move(error)};
     }
 
     QImageReader reader(filePath);
@@ -24,7 +25,7 @@ ImageLoadResult ImageLoader::load(const QString &filePath)
 
     QImage image = reader.read();
     if (image.isNull()) {
-        return {{}, reader.errorString()};
+        return {{}, {}, reader.errorString()};
     }
 
     // A photograph's image dimensions are pixel dimensions. QImageReader may assign
@@ -32,7 +33,7 @@ ImageLoadResult ImageLoader::load(const QString &filePath)
     // useful for UI assets but wrong for photo-editor zoom math.
     image.setDevicePixelRatio(1.0);
 
-    return {std::move(image), {}};
+    return {std::move(image), {}, {}};
 }
 
 QString ImageLoader::fileDialogFilter()
