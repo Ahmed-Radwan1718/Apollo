@@ -5,6 +5,7 @@
 class QAction;
 class HistogramWidget;
 class PhotoCanvas;
+class PhotoMetadataWidget;
 class QString;
 
 class MainWindow final : public QMainWindow
@@ -23,6 +24,7 @@ private:
 
     PhotoCanvas *m_canvas = nullptr;
     HistogramWidget *m_histogram = nullptr;
+    PhotoMetadataWidget *m_photoMetadata = nullptr;
 
     QAction *m_openAction = nullptr;
     QAction *m_fitAction = nullptr;
