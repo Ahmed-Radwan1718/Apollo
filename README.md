@@ -2,9 +2,11 @@
 
 Nexus is a personal, non-destructive RAW photo editor for Windows 11 built with Qt.
 
-## Current feature: photo canvas
+## Current features
 
-The first implemented slice is the center editing canvas. It is deliberately separate from decoding and future edit state: the canvas receives a display-ready `QImage` preview and never changes source pixels.
+### Photo canvas
+
+The center editing canvas receives a display-ready `QImage` preview and never changes source pixels.
 
 Current interactions:
 
@@ -15,27 +17,37 @@ Current interactions:
 - **Pan:** hold `Space` and drag with the left mouse button, or drag with the middle mouse button.
 - **Toggle Fit / 100%:** double-click the image.
 
-The temporary bootstrap loader uses Qt's supported raster formats (typically JPEG, PNG, TIFF, and others provided by the installed Qt image plugins). RAW decoding is intentionally not faked here; it belongs in the render pipeline that will later feed the canvas.
+### Sony ARW import
+
+`.arw` files are decoded with LibRaw and rendered to an sRGB display image for the canvas. Nexus uses the camera white balance and keeps LibRaw automatic brightness disabled. The source ARW file is never modified.
+
+Other raster image formats continue to use Qt's installed image plugins.
 
 ## Build on Windows 11
 
-Install Qt 6.8 or newer with a matching compiler kit (MSVC 2022 is recommended), then configure with Qt Creator or CMake.
+Nexus requires Qt 6.8 or newer and LibRaw. The repository includes a `vcpkg.json` manifest for LibRaw.
 
-Example with a Qt MSVC kit and Ninja:
+Install and bootstrap vcpkg once, then configure Nexus with the vcpkg toolchain and your Qt MSVC kit. For example:
 
 ```powershell
-cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH="C:/Qt/6.8.3/msvc2022_64"
+git clone https://github.com/microsoft/vcpkg C:/dev/vcpkg
+C:/dev/vcpkg/bootstrap-vcpkg.bat
+
+cmake -S . -B build -G Ninja `
+  -DCMAKE_TOOLCHAIN_FILE=C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake `
+  -DCMAKE_PREFIX_PATH="C:/Qt/6.8.3/msvc2022_64"
+
 cmake --build build
 ```
 
-Run `build/Nexus.exe` (the exact output location can vary by generator/configuration).
+The vcpkg manifest installs LibRaw automatically during configuration. Run `build/Nexus.exe` after the build completes (the exact output location can vary by generator/configuration).
 
 ## Source layout
 
 ```text
 src/
 ├── app/                  # application shell
-├── imaging/              # image decoding/loading boundaries
+├── imaging/              # Qt raster loading and Sony ARW decoding
 └── ui/
     └── canvas/           # center photo viewer
 ```

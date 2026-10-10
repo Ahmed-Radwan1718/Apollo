@@ -1,5 +1,8 @@
 #include "imaging/ImageLoader.h"
 
+#include "imaging/ArwDecoder.h"
+
+#include <QFileInfo>
 #include <QImageReader>
 #include <QStringList>
 
@@ -10,6 +13,12 @@ namespace imaging {
 
 ImageLoadResult ImageLoader::load(const QString &filePath)
 {
+    if (QFileInfo(filePath).suffix().compare(QStringLiteral("arw"), Qt::CaseInsensitive) == 0) {
+        QString error;
+        QImage image = ArwDecoder::decode(filePath, &error);
+        return {std::move(image), std::move(error)};
+    }
+
     QImageReader reader(filePath);
     reader.setAutoTransform(true);
 
@@ -30,7 +39,9 @@ QString ImageLoader::fileDialogFilter()
 {
     QStringList patterns;
     const QList<QByteArray> formats = QImageReader::supportedImageFormats();
-    patterns.reserve(formats.size());
+    patterns.reserve(formats.size() + 1);
+
+    patterns.push_back(QStringLiteral("*.arw"));
 
     for (const QByteArray &format : formats) {
         const QString suffix = QString::fromLatin1(format).toLower();
@@ -42,7 +53,7 @@ QString ImageLoader::fileDialogFilter()
     patterns.removeDuplicates();
     std::sort(patterns.begin(), patterns.end());
 
-    return QStringLiteral("Supported images (%1);;All files (*.*)")
+    return QStringLiteral("Supported images (%1);;Sony RAW (*.arw);;All files (*.*)")
         .arg(patterns.join(QLatin1Char(' ')));
 }
 

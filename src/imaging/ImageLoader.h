@@ -17,8 +17,7 @@ class ImageLoader final
 public:
     ImageLoader() = delete;
 
-    // Bootstrap loader for display images supported by Qt (JPEG/PNG/TIFF/etc.).
-    // RAW decoding will live in the image pipeline, not in PhotoCanvas.
+    // Loads Sony ARW through LibRaw and regular raster formats through Qt.
     [[nodiscard]] static ImageLoadResult load(const QString &filePath);
     [[nodiscard]] static QString fileDialogFilter();
 };
