@@ -1,0 +1,25 @@
+# Build output
+/build/
+/build-*/
+/out/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+
+# Qt Creator
+CMakeLists.txt.user*
+*.pro.user*
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.user
+*.suo
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*~
