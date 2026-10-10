@@ -4,6 +4,7 @@
 #include "ui/canvas/PhotoCanvas.h"
 #include "ui/histogram/HistogramWidget.h"
 #include "ui/rightpanel/BasicPanel.h"
+#include "ui/rightpanel/PhotoMetadataWidget.h"
 
 #include <QAction>
 #include <QDir>
@@ -41,6 +42,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_histogram = new HistogramWidget(rightPanel);
     rightLayout->addWidget(m_histogram);
+
+    m_photoMetadata = new PhotoMetadataWidget(rightPanel);
+    rightLayout->addWidget(m_photoMetadata);
 
     auto *basicPanel = new BasicPanel(rightPanel);
     rightLayout->addWidget(basicPanel);
@@ -100,6 +104,7 @@ void MainWindow::openImage(const QString &filePath)
 
     m_canvas->setImage(result.image);
     m_histogram->setImage(result.image);
+    m_photoMetadata->setMetadata(result.metadata);
     setWindowTitle(QStringLiteral("%1 — Nexus").arg(QFileInfo(filePath).fileName()));
 }
 
