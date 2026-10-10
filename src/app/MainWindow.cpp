@@ -11,8 +11,6 @@
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
-#include <QMenu>
-#include <QMenuBar>
 #include <QMessageBox>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -53,15 +51,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     setStyleSheet(QStringLiteral(
         "QMainWindow { background: #181818; }"
-        "QMenuBar { background: #202020; color: #dddddd; }"
-        "QMenuBar::item:selected { background: #343434; }"
-        "QMenu { background: #242424; color: #dddddd; border: 1px solid #3a3a3a; }"
-        "QMenu::item:selected { background: #3a3a3a; }"
         "QWidget#rightPanel { background: #202020; border-left: 1px solid #303030; }"
         "QLabel#histogramTitle { color: #cfcfcf; font-weight: bold; }"));
 
     createActions();
-    createMenus();
 
     connect(m_canvas, &PhotoCanvas::fileDropped,
             this, &MainWindow::openImage);
@@ -99,41 +92,33 @@ void MainWindow::openImage(const QString &filePath)
 
 void MainWindow::createActions()
 {
-    m_openAction = new QAction(tr("&Open Photo…"), this);
+    m_openAction = new QAction(tr("Open Photo"), this);
     m_openAction->setShortcut(QKeySequence::Open);
     connect(m_openAction, &QAction::triggered,
             this, &MainWindow::chooseAndOpenImage);
+    addAction(m_openAction);
 
-    m_fitAction = new QAction(tr("&Fit to View"), this);
+    m_fitAction = new QAction(tr("Fit to View"), this);
     m_fitAction->setShortcut(QKeySequence(Qt::Key_F));
     connect(m_fitAction, &QAction::triggered,
             m_canvas, &PhotoCanvas::fitToView);
+    addAction(m_fitAction);
 
-    m_actualPixelsAction = new QAction(tr("&100% (Actual Pixels)"), this);
+    m_actualPixelsAction = new QAction(tr("100% (Actual Pixels)"), this);
     m_actualPixelsAction->setShortcut(QKeySequence(Qt::Key_1));
     connect(m_actualPixelsAction, &QAction::triggered,
             m_canvas, &PhotoCanvas::actualPixels);
+    addAction(m_actualPixelsAction);
 
-    m_zoomInAction = new QAction(tr("Zoom &In"), this);
+    m_zoomInAction = new QAction(tr("Zoom In"), this);
     m_zoomInAction->setShortcuts(QKeySequence::ZoomIn);
     connect(m_zoomInAction, &QAction::triggered,
             m_canvas, &PhotoCanvas::zoomIn);
+    addAction(m_zoomInAction);
 
-    m_zoomOutAction = new QAction(tr("Zoom &Out"), this);
+    m_zoomOutAction = new QAction(tr("Zoom Out"), this);
     m_zoomOutAction->setShortcuts(QKeySequence::ZoomOut);
     connect(m_zoomOutAction, &QAction::triggered,
             m_canvas, &PhotoCanvas::zoomOut);
-}
-
-void MainWindow::createMenus()
-{
-    QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
-    fileMenu->addAction(m_openAction);
-
-    QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
-    viewMenu->addAction(m_fitAction);
-    viewMenu->addAction(m_actualPixelsAction);
-    viewMenu->addSeparator();
-    viewMenu->addAction(m_zoomInAction);
-    viewMenu->addAction(m_zoomOutAction);
+    addAction(m_zoomOutAction);
 }

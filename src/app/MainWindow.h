@@ -20,7 +20,6 @@ private slots:
 
 private:
     void createActions();
-    void createMenus();
 
     PhotoCanvas *m_canvas = nullptr;
     HistogramWidget *m_histogram = nullptr;
