@@ -43,10 +43,15 @@ void setError(QString *error, QString message)
 
 } // namespace
 
-QImage ArwDecoder::decode(const QString &filePath, QString *error)
+QImage ArwDecoder::decode(const QString &filePath,
+                          QString *error,
+                          PhotoMetadata *metadata)
 {
     if (error != nullptr) {
         error->clear();
+    }
+    if (metadata != nullptr) {
+        *metadata = {};
     }
 
     LibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
@@ -66,6 +71,14 @@ QImage ArwDecoder::decode(const QString &filePath, QString *error)
     if (result != LIBRAW_SUCCESS) {
         setError(error, libRawError("Opening ARW", result));
         return {};
+    }
+
+    if (metadata != nullptr) {
+        const libraw_imgother_t &other = processor.imgdata.other;
+        metadata->shutterSeconds = other.shutter;
+        metadata->aperture = other.aperture;
+        metadata->iso = other.iso_speed;
+        metadata->focalLengthMm = other.focal_len;
     }
 
     result = processor.unpack();
