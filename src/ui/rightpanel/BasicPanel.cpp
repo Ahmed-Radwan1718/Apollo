@@ -47,6 +47,26 @@ QLabel *sectionLabel(const QString &text, QWidget *parent)
     return label;
 }
 
+class BasicTitleButton final : public QToolButton
+{
+public:
+    explicit BasicTitleButton(QWidget *parent = nullptr)
+        : QToolButton(parent)
+    {
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::TextAntialiasing, true);
+        painter.setPen(underMouse() ? QColor(255, 255, 255) : QColor(214, 214, 214));
+        painter.drawText(rect(), Qt::AlignLeft | Qt::AlignVCenter, text());
+    }
+};
+
 class EyeButton final : public QToolButton
 {
 public:
@@ -198,7 +218,7 @@ BasicPanel::BasicPanel(QWidget *parent)
     headerLayout->setContentsMargins(6, 5, 0, 0);
     headerLayout->setSpacing(2);
 
-    auto *titleButton = new QToolButton(header);
+    auto *titleButton = new BasicTitleButton(header);
     titleButton->setObjectName(QStringLiteral("basicTitle"));
     titleButton->setText(tr("Basic"));
     titleButton->setCheckable(true);
@@ -307,7 +327,6 @@ BasicPanel::BasicPanel(QWidget *parent)
         "  color: #d6d6d6;"
         "  background: transparent;"
         "  border: 0;"
-        "  text-align: left;"
         "  font-size: 13px;"
         "  font-weight: 600;"
         "  padding: 0;"
