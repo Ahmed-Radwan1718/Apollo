@@ -3,6 +3,7 @@
 #include <QMainWindow>
 
 class QAction;
+class HistogramWidget;
 class PhotoCanvas;
 class QString;
 
@@ -22,6 +23,7 @@ private:
     void createMenus();
 
     PhotoCanvas *m_canvas = nullptr;
+    HistogramWidget *m_histogram = nullptr;
 
     QAction *m_openAction = nullptr;
     QAction *m_fitAction = nullptr;

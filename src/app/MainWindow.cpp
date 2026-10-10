@@ -2,21 +2,51 @@
 
 #include "imaging/ImageLoader.h"
 #include "ui/canvas/PhotoCanvas.h"
+#include "ui/histogram/HistogramWidget.h"
 
 #include <QAction>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QHBoxLayout>
 #include <QKeySequence>
+#include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QVBoxLayout>
+#include <QWidget>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
-    , m_canvas(new PhotoCanvas(this))
 {
-    setCentralWidget(m_canvas);
+    auto *workspace = new QWidget(this);
+    auto *workspaceLayout = new QHBoxLayout(workspace);
+    workspaceLayout->setContentsMargins(0, 0, 0, 0);
+    workspaceLayout->setSpacing(0);
+
+    m_canvas = new PhotoCanvas(workspace);
+    workspaceLayout->addWidget(m_canvas, 1);
+
+    auto *rightPanel = new QWidget(workspace);
+    rightPanel->setObjectName(QStringLiteral("rightPanel"));
+    rightPanel->setFixedWidth(320);
+
+    auto *rightLayout = new QVBoxLayout(rightPanel);
+    rightLayout->setContentsMargins(12, 12, 12, 12);
+    rightLayout->setSpacing(8);
+
+    auto *histogramTitle = new QLabel(tr("HISTOGRAM"), rightPanel);
+    histogramTitle->setObjectName(QStringLiteral("histogramTitle"));
+    rightLayout->addWidget(histogramTitle);
+
+    m_histogram = new HistogramWidget(rightPanel);
+    rightLayout->addWidget(m_histogram);
+    rightLayout->addStretch(1);
+
+    workspaceLayout->addWidget(rightPanel);
+    setCentralWidget(workspace);
+
     resize(1440, 900);
     setMinimumSize(800, 520);
     setWindowTitle(QStringLiteral("Nexus"));
@@ -26,7 +56,9 @@ MainWindow::MainWindow(QWidget *parent)
         "QMenuBar { background: #202020; color: #dddddd; }"
         "QMenuBar::item:selected { background: #343434; }"
         "QMenu { background: #242424; color: #dddddd; border: 1px solid #3a3a3a; }"
-        "QMenu::item:selected { background: #3a3a3a; }"));
+        "QMenu::item:selected { background: #3a3a3a; }"
+        "QWidget#rightPanel { background: #202020; border-left: 1px solid #303030; }"
+        "QLabel#histogramTitle { color: #cfcfcf; font-weight: bold; }"));
 
     createActions();
     createMenus();
@@ -61,6 +93,7 @@ void MainWindow::openImage(const QString &filePath)
     }
 
     m_canvas->setImage(result.image);
+    m_histogram->setImage(result.image);
     setWindowTitle(QStringLiteral("%1 — Nexus").arg(QFileInfo(filePath).fileName()));
 }
 

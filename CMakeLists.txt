@@ -18,10 +18,14 @@ qt_add_executable(Nexus WIN32
     src/app/MainWindow.h
     src/imaging/ArwDecoder.cpp
     src/imaging/ArwDecoder.h
+    src/imaging/Histogram.cpp
+    src/imaging/Histogram.h
     src/imaging/ImageLoader.cpp
     src/imaging/ImageLoader.h
     src/ui/canvas/PhotoCanvas.cpp
     src/ui/canvas/PhotoCanvas.h
+    src/ui/histogram/HistogramWidget.cpp
+    src/ui/histogram/HistogramWidget.h
 )
 
 target_include_directories(Nexus PRIVATE src)
