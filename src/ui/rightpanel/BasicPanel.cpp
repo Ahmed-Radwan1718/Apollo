@@ -8,6 +8,7 @@
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QResizeEvent>
 #include <QSizePolicy>
 #include <QSlider>
 #include <QToolButton>
@@ -15,6 +16,8 @@
 #include <QVBoxLayout>
 
 namespace {
+
+constexpr int kPanelAnimationDurationMs = 220;
 
 enum class ValueFormat {
     Temperature,
@@ -120,7 +123,7 @@ public:
         setCursor(Qt::PointingHandCursor);
         setFocusPolicy(Qt::NoFocus);
 
-        m_animation->setDuration(180);
+        m_animation->setDuration(kPanelAnimationDurationMs);
         m_animation->setEasingCurve(QEasingCurve::InOutCubic);
         connect(m_animation, &QVariantAnimation::valueChanged, this,
                 [this](const QVariant &value) {
@@ -167,6 +170,106 @@ private:
     bool m_expanded = true;
     qreal m_angle = 90.0;
     QVariantAnimation *m_animation = nullptr;
+};
+
+class RevealContainer final : public QWidget
+{
+public:
+    explicit RevealContainer(QWidget *parent = nullptr)
+        : QWidget(parent)
+        , m_animation(new QVariantAnimation(this))
+    {
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+        m_animation->setDuration(kPanelAnimationDurationMs);
+        m_animation->setEasingCurve(QEasingCurve::InOutCubic);
+
+        connect(m_animation, &QVariantAnimation::valueChanged, this,
+                [this](const QVariant &value) {
+                    setFixedHeight(value.toInt());
+                });
+
+        connect(m_animation, &QVariantAnimation::finished, this,
+                [this]() {
+                    setFixedHeight(m_expanded ? m_expandedHeight : 0);
+                });
+    }
+
+    void setContentWidget(QWidget *content)
+    {
+        m_content = content;
+        if (!m_content) {
+            return;
+        }
+
+        m_content->setParent(this);
+        m_content->show();
+        refreshExpandedHeight();
+    }
+
+    void refreshExpandedHeight()
+    {
+        if (!m_content) {
+            return;
+        }
+
+        m_content->ensurePolished();
+        if (m_content->layout()) {
+            m_content->layout()->activate();
+            m_expandedHeight = m_content->layout()->sizeHint().height();
+        } else {
+            m_expandedHeight = m_content->sizeHint().height();
+        }
+
+        m_expandedHeight = qMax(0, m_expandedHeight);
+        m_content->setFixedHeight(m_expandedHeight);
+        updateContentGeometry();
+
+        if (m_animation->state() != QAbstractAnimation::Running) {
+            setFixedHeight(m_expanded ? m_expandedHeight : 0);
+        }
+    }
+
+    void setExpanded(bool expanded)
+    {
+        if (m_expanded == expanded) {
+            return;
+        }
+
+        if (expanded) {
+            refreshExpandedHeight();
+        }
+
+        m_expanded = expanded;
+        m_animation->stop();
+        m_animation->setStartValue(height());
+        m_animation->setEndValue(expanded ? m_expandedHeight : 0);
+        m_animation->start();
+    }
+
+protected:
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QWidget::resizeEvent(event);
+        updateContentGeometry();
+    }
+
+private:
+    void updateContentGeometry()
+    {
+        if (!m_content) {
+            return;
+        }
+
+        if (m_content->width() != width() || m_content->height() != m_expandedHeight) {
+            m_content->setGeometry(0, 0, width(), m_expandedHeight);
+        }
+    }
+
+    QWidget *m_content = nullptr;
+    QVariantAnimation *m_animation = nullptr;
+    int m_expandedHeight = 0;
+    bool m_expanded = true;
 };
 
 class BasicSlider final : public QSlider
@@ -324,7 +427,8 @@ BasicPanel::BasicPanel(QWidget *parent)
     headerLayout->addWidget(chevronButton);
     outerLayout->addWidget(header);
 
-    auto *content = new QFrame(this);
+    auto *revealContainer = new RevealContainer(this);
+    auto *content = new QFrame(revealContainer);
     content->setObjectName(QStringLiteral("basicContent"));
     auto *contentLayout = new QVBoxLayout(content);
     contentLayout->setContentsMargins(12, 10, 12, 16);
@@ -388,40 +492,13 @@ BasicPanel::BasicPanel(QWidget *parent)
                      ValueFormat::SignedInteger, true,
                      QStringLiteral("basicSlider"), content);
 
-    outerLayout->addWidget(content);
-
-    auto *contentAnimation = new QVariantAnimation(this);
-    contentAnimation->setDuration(180);
-    contentAnimation->setEasingCurve(QEasingCurve::InOutCubic);
-
-    connect(contentAnimation, &QVariantAnimation::valueChanged, content,
-            [content](const QVariant &value) {
-                content->setMaximumHeight(value.toInt());
-            });
-
-    connect(contentAnimation, &QVariantAnimation::finished, content,
-            [content, titleButton]() {
-                if (titleButton->isChecked()) {
-                    content->setMaximumHeight(QWIDGETSIZE_MAX);
-                } else {
-                    content->setMaximumHeight(0);
-                    content->setVisible(false);
-                }
-            });
+    revealContainer->setContentWidget(content);
+    outerLayout->addWidget(revealContainer);
 
     connect(titleButton, &QToolButton::toggled, this,
-            [content, contentLayout, contentAnimation, chevronButton](bool expanded) {
+            [revealContainer, chevronButton](bool expanded) {
                 chevronButton->setExpanded(expanded);
-
-                const int currentHeight = content->isVisible() ? content->height() : 0;
-                if (expanded) {
-                    content->setVisible(true);
-                }
-
-                contentAnimation->stop();
-                contentAnimation->setStartValue(currentHeight);
-                contentAnimation->setEndValue(expanded ? contentLayout->sizeHint().height() : 0);
-                contentAnimation->start();
+                revealContainer->setExpanded(expanded);
             });
 
     connect(chevronButton, &QToolButton::clicked, titleButton,
@@ -505,4 +582,6 @@ BasicPanel::BasicPanel(QWidget *parent)
         "QSlider#basicSlider::handle:horizontal:hover,"
         "QSlider#temperatureSlider::handle:horizontal:hover,"
         "QSlider#tintSlider::handle:horizontal:hover { background: #ffffff; }"));
+
+    revealContainer->refreshExpandedHeight();
 }
