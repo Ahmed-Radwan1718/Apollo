@@ -43,7 +43,7 @@ HistogramWidget::HistogramWidget(QWidget *parent)
     : QWidget(parent)
 {
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    setMinimumHeight(160);
+    setMinimumHeight(132);
 }
 
 void HistogramWidget::setImage(const QImage &image)
@@ -60,12 +60,12 @@ void HistogramWidget::clear()
 
 QSize HistogramWidget::sizeHint() const
 {
-    return {290, 180};
+    return {292, 148};
 }
 
 QSize HistogramWidget::minimumSizeHint() const
 {
-    return {220, 150};
+    return {220, 126};
 }
 
 void HistogramWidget::paintEvent(QPaintEvent *event)
@@ -74,16 +74,21 @@ void HistogramWidget::paintEvent(QPaintEvent *event)
 
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.fillRect(rect(), QColor(28, 28, 28));
+    painter.fillRect(rect(), QColor(24, 24, 24));
 
-    const QRectF plotRect = QRectF(rect()).adjusted(8.0, 8.0, -8.0, -8.0);
-    painter.fillRect(plotRect, Qt::black);
+    const QRectF plotRect = QRectF(rect()).adjusted(1.0, 3.0, -1.0, -2.0);
+
+    painter.setPen(QPen(QColor(38, 38, 38), 1.0));
+    for (int division = 1; division < 4; ++division) {
+        const qreal x = plotRect.left()
+            + (plotRect.width() * static_cast<qreal>(division) / 4.0);
+        painter.drawLine(QPointF(x, plotRect.top()), QPointF(x, plotRect.bottom()));
+    }
+    painter.drawLine(plotRect.bottomLeft(), plotRect.bottomRight());
 
     if (m_histogram.isEmpty()) {
-        painter.setPen(QColor(125, 125, 125));
+        painter.setPen(QColor(105, 105, 105));
         painter.drawText(plotRect, Qt::AlignCenter, QStringLiteral("No image"));
-        painter.setPen(QColor(58, 58, 58));
-        painter.drawRect(plotRect);
         return;
     }
 
@@ -99,15 +104,10 @@ void HistogramWidget::paintEvent(QPaintEvent *event)
     painter.save();
     painter.setClipRect(plotRect);
 
-    // Additive blending reproduces the familiar RGB overlap colors: red+green is
-    // yellow, red+blue is magenta, green+blue is cyan, and all three are gray.
     painter.setCompositionMode(QPainter::CompositionMode_Plus);
-    painter.fillPath(redPath, QColor(255, 0, 0, 92));
-    painter.fillPath(greenPath, QColor(0, 255, 0, 92));
-    painter.fillPath(bluePath, QColor(0, 0, 255, 92));
+    painter.fillPath(redPath, QColor(255, 55, 55, 78));
+    painter.fillPath(greenPath, QColor(55, 255, 95, 78));
+    painter.fillPath(bluePath, QColor(70, 115, 255, 78));
 
     painter.restore();
-
-    painter.setPen(QPen(QColor(70, 70, 70), 1.0));
-    painter.drawRect(plotRect);
 }

@@ -32,10 +32,10 @@ MainWindow::MainWindow(QWidget *parent)
     rightPanel->setFixedWidth(320);
 
     auto *rightLayout = new QVBoxLayout(rightPanel);
-    rightLayout->setContentsMargins(12, 12, 12, 12);
+    rightLayout->setContentsMargins(14, 14, 14, 0);
     rightLayout->setSpacing(8);
 
-    auto *histogramTitle = new QLabel(tr("HISTOGRAM"), rightPanel);
+    auto *histogramTitle = new QLabel(tr("Histogram"), rightPanel);
     histogramTitle->setObjectName(QStringLiteral("histogramTitle"));
     rightLayout->addWidget(histogramTitle);
 
@@ -55,8 +55,17 @@ MainWindow::MainWindow(QWidget *parent)
 
     setStyleSheet(QStringLiteral(
         "QMainWindow { background: #181818; }"
-        "QWidget#rightPanel { background: #202020; border-left: 1px solid #303030; }"
-        "QLabel#histogramTitle { color: #cfcfcf; font-weight: bold; }"));
+        "QWidget#rightPanel {"
+        "  background: #181818;"
+        "  border-left: 1px solid #252525;"
+        "  font-family: \"Segoe UI Variable\";"
+        "}"
+        "QLabel#histogramTitle {"
+        "  color: #b9b9b9;"
+        "  font-size: 12px;"
+        "  font-weight: 600;"
+        "  padding: 1px 2px 0 2px;"
+        "}"));
 
     createActions();
 
