@@ -4,6 +4,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -200,6 +201,33 @@ private:
     bool m_showNeutralMarker = false;
 };
 
+class ResetLabel final : public QLabel
+{
+public:
+    ResetLabel(const QString &text, QSlider *slider, int resetValue, QWidget *parent = nullptr)
+        : QLabel(text, parent)
+        , m_slider(slider)
+        , m_resetValue(resetValue)
+    {
+    }
+
+protected:
+    void mouseDoubleClickEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton && m_slider) {
+            m_slider->setValue(m_resetValue);
+            event->accept();
+            return;
+        }
+
+        QLabel::mouseDoubleClickEvent(event);
+    }
+
+private:
+    QSlider *m_slider = nullptr;
+    int m_resetValue = 0;
+};
+
 QLabel *sectionLabel(const QString &text, QWidget *parent)
 {
     auto *label = new QLabel(text, parent);
@@ -228,7 +256,14 @@ void addSliderControl(QVBoxLayout *layout,
     labelRow->setContentsMargins(0, 0, 0, 0);
     labelRow->setSpacing(8);
 
-    auto *label = new QLabel(labelText, control);
+    auto *slider = new BasicSlider(showNeutralMarker, control);
+    slider->setObjectName(sliderObjectName);
+    slider->setRange(minimum, maximum);
+    slider->setValue(value);
+    slider->setTracking(true);
+    slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    auto *label = new ResetLabel(labelText, slider, value, control);
     label->setObjectName(QStringLiteral("basicControlLabel"));
 
     auto *valueLabel = new QLabel(formattedValue(value, format), control);
@@ -238,13 +273,6 @@ void addSliderControl(QVBoxLayout *layout,
     labelRow->addWidget(label);
     labelRow->addStretch(1);
     labelRow->addWidget(valueLabel);
-
-    auto *slider = new BasicSlider(showNeutralMarker, control);
-    slider->setObjectName(sliderObjectName);
-    slider->setRange(minimum, maximum);
-    slider->setValue(value);
-    slider->setTracking(true);
-    slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     QObject::connect(slider, &QSlider::valueChanged, valueLabel,
                      [valueLabel, format](int currentValue) {
