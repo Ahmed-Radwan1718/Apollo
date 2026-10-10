@@ -6,6 +6,7 @@
 
 class QDragEnterEvent;
 class QDropEvent;
+class QEvent;
 class QFocusEvent;
 class QGraphicsItem;
 class QGraphicsScene;

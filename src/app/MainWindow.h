@@ -4,6 +4,7 @@
 
 class QAction;
 class PhotoCanvas;
+class QString;
 
 class MainWindow final : public QMainWindow
 {
