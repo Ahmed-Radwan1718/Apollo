@@ -89,12 +89,14 @@ BasicPanel::BasicPanel(QWidget *parent)
 
     auto *header = new QToolButton(this);
     header->setObjectName(QStringLiteral("basicHeader"));
-    header->setText(tr("▾  Basic"));
+    header->setText(tr("Basic"));
     header->setCheckable(true);
     header->setChecked(true);
-    header->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    header->setArrowType(Qt::DownArrow);
+    header->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     header->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     header->setCursor(Qt::PointingHandCursor);
+    header->setFixedHeight(34);
     outerLayout->addWidget(header);
 
     auto *content = new QFrame(this);
@@ -165,9 +167,7 @@ BasicPanel::BasicPanel(QWidget *parent)
 
     connect(header, &QToolButton::toggled, this,
             [header, content](bool expanded) {
-                header->setText(expanded
-                    ? QObject::tr("▾  Basic")
-                    : QObject::tr("›  Basic"));
+                header->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
                 content->setVisible(expanded);
             });
 
@@ -184,7 +184,7 @@ BasicPanel::BasicPanel(QWidget *parent)
         "  text-align: left;"
         "  font-size: 13px;"
         "  font-weight: 600;"
-        "  padding: 9px 2px;"
+        "  padding: 0 6px;"
         "}"
         "QToolButton#basicHeader:hover {"
         "  color: #ffffff;"
