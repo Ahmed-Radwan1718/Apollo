@@ -341,7 +341,9 @@ BasicPanel::BasicPanel(QWidget *parent)
                      QStringLiteral("tintSlider"), content);
 
     addSectionSpacing(contentLayout);
-    contentLayout->addWidget(sectionLabel(tr("Tone"), content));
+    auto *toneLabel = sectionLabel(tr("Tone"), content);
+    toneLabel->setStyleSheet(QStringLiteral("color: transparent;"));
+    contentLayout->addWidget(toneLabel);
     addSliderControl(contentLayout, tr("Exposure"), -500, 500, 0,
                      ValueFormat::Exposure, true,
                      QStringLiteral("basicSlider"), content);
@@ -362,7 +364,9 @@ BasicPanel::BasicPanel(QWidget *parent)
                      QStringLiteral("basicSlider"), content);
 
     addSectionSpacing(contentLayout);
-    contentLayout->addWidget(sectionLabel(tr("Presence"), content));
+    auto *presenceLabel = sectionLabel(tr("Presence"), content);
+    presenceLabel->setStyleSheet(QStringLiteral("color: transparent;"));
+    contentLayout->addWidget(presenceLabel);
     addSliderControl(contentLayout, tr("Texture"), -100, 100, 0,
                      ValueFormat::SignedInteger, true,
                      QStringLiteral("basicSlider"), content);
@@ -374,7 +378,9 @@ BasicPanel::BasicPanel(QWidget *parent)
                      QStringLiteral("basicSlider"), content);
 
     addSectionSpacing(contentLayout);
-    contentLayout->addWidget(sectionLabel(tr("Color"), content));
+    auto *colorLabel = sectionLabel(tr("Color"), content);
+    colorLabel->setStyleSheet(QStringLiteral("color: transparent;"));
+    contentLayout->addWidget(colorLabel);
     addSliderControl(contentLayout, tr("Vibrance"), -100, 100, 0,
                      ValueFormat::SignedInteger, true,
                      QStringLiteral("basicSlider"), content);
