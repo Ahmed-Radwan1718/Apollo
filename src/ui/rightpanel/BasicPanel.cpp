@@ -181,20 +181,18 @@ public:
 protected:
     void paintEvent(QPaintEvent *event) override
     {
-        QSlider::paintEvent(event);
+        if (m_showNeutralMarker) {
+            QPainter painter(this);
+            painter.setRenderHint(QPainter::Antialiasing, false);
+            painter.setPen(QPen(QColor(92, 92, 92), 1.0));
 
-        if (!m_showNeutralMarker) {
-            return;
+            const qreal x = width() / 2.0;
+            const qreal y = height() / 2.0;
+            painter.drawLine(QPointF(x, y - 6.0), QPointF(x, y - 5.0));
+            painter.drawLine(QPointF(x, y + 5.0), QPointF(x, y + 6.0));
         }
 
-        QPainter painter(this);
-        painter.setRenderHint(QPainter::Antialiasing, false);
-        painter.setPen(QPen(QColor(92, 92, 92), 1.0));
-
-        const qreal x = width() / 2.0;
-        const qreal y = height() / 2.0;
-        painter.drawLine(QPointF(x, y - 5.0), QPointF(x, y - 3.0));
-        painter.drawLine(QPointF(x, y + 3.0), QPointF(x, y + 5.0));
+        QSlider::paintEvent(event);
     }
 
 private:
@@ -481,7 +479,7 @@ BasicPanel::BasicPanel(QWidget *parent)
         "  height: 2px;"
         "  border-radius: 1px;"
         "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
-        "    stop:0 #4f7659, stop:0.5 #696969, stop:1 #835b79);"
+        "    stop:0 #38b96b, stop:0.5 #696969, stop:1 #c94fb3);"
         "}"
         "QSlider#tintSlider::sub-page:horizontal,"
         "QSlider#tintSlider::add-page:horizontal { background: transparent; }"
