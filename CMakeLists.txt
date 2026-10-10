@@ -26,6 +26,8 @@ qt_add_executable(Nexus WIN32
     src/ui/canvas/PhotoCanvas.h
     src/ui/histogram/HistogramWidget.cpp
     src/ui/histogram/HistogramWidget.h
+    src/ui/rightpanel/BasicPanel.cpp
+    src/ui/rightpanel/BasicPanel.h
 )
 
 target_include_directories(Nexus PRIVATE src)
