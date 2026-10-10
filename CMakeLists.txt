@@ -22,12 +22,15 @@ qt_add_executable(Nexus WIN32
     src/imaging/Histogram.h
     src/imaging/ImageLoader.cpp
     src/imaging/ImageLoader.h
+    src/imaging/PhotoMetadata.h
     src/ui/canvas/PhotoCanvas.cpp
     src/ui/canvas/PhotoCanvas.h
     src/ui/histogram/HistogramWidget.cpp
     src/ui/histogram/HistogramWidget.h
     src/ui/rightpanel/BasicPanel.cpp
     src/ui/rightpanel/BasicPanel.h
+    src/ui/rightpanel/PhotoMetadataWidget.cpp
+    src/ui/rightpanel/PhotoMetadataWidget.h
 )
 
 target_include_directories(Nexus PRIVATE src)
