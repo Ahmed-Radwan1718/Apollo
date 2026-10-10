@@ -330,7 +330,9 @@ BasicPanel::BasicPanel(QWidget *parent)
     contentLayout->setContentsMargins(12, 10, 12, 16);
     contentLayout->setSpacing(6);
 
-    contentLayout->addWidget(sectionLabel(tr("White Balance"), content));
+    auto *whiteBalanceLabel = sectionLabel(tr("White Balance"), content);
+    whiteBalanceLabel->setStyleSheet(QStringLiteral("color: transparent;"));
+    contentLayout->addWidget(whiteBalanceLabel);
     addSliderControl(contentLayout, tr("Temp"), 2000, 50000, 6500,
                      ValueFormat::Temperature, false,
                      QStringLiteral("temperatureSlider"), content);
