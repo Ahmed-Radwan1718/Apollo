@@ -1,5 +1,7 @@
 #pragma once
 
+#include "imaging/PhotoMetadata.h"
+
 #include <QImage>
 #include <QString>
 
@@ -11,7 +13,8 @@ public:
     ArwDecoder() = delete;
 
     [[nodiscard]] static QImage decode(const QString &filePath,
-                                       QString *error = nullptr);
+                                       QString *error = nullptr,
+                                       PhotoMetadata *metadata = nullptr);
 };
 
 } // namespace imaging
