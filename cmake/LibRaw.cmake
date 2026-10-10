@@ -33,6 +33,10 @@ function(nexus_add_libraw)
     file(COPY "${nexus_libraw_cmake_SOURCE_DIR}/cmake"
          DESTINATION "${nexus_libraw_source_SOURCE_DIR}")
 
+    # The third-party CMake project predates CMP0077. This is the documented way
+    # to make its option() calls honor the values Nexus supplies below.
+    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+
     # Nexus currently needs Sony ARW decoding only. Keep LibRaw static and avoid
     # optional codecs/dependencies that are unrelated to ARW import.
     set(BUILD_SHARED_LIBS OFF)
@@ -52,4 +56,16 @@ function(nexus_add_libraw)
         "${nexus_libraw_source_BINARY_DIR}"
         EXCLUDE_FROM_ALL
     )
+
+    # MinGW's <math.h> exposes M_PI/M_SQRT1_2 in strict C++ mode only when
+    # _USE_MATH_DEFINES is visible before the header's first inclusion. LibRaw
+    # defines it internally, but some translation units reach <math.h> earlier,
+    # so put it on the compiler command line for the LibRaw targets themselves.
+    if(MINGW)
+        foreach(libraw_target raw raw_r)
+            if(TARGET ${libraw_target})
+                target_compile_definitions(${libraw_target} PRIVATE _USE_MATH_DEFINES)
+            endif()
+        endforeach()
+    endif()
 endfunction()
