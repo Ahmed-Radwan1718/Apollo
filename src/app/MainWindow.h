@@ -4,6 +4,7 @@
 
 class QAction;
 class HistogramWidget;
+class NavigatorPanel;
 class PhotoCanvas;
 class PhotoMetadataWidget;
 class QString;
@@ -22,6 +23,7 @@ private slots:
 private:
     void createActions();
 
+    NavigatorPanel *m_navigator = nullptr;
     PhotoCanvas *m_canvas = nullptr;
     HistogramWidget *m_histogram = nullptr;
     PhotoMetadataWidget *m_photoMetadata = nullptr;
