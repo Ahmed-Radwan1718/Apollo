@@ -3,6 +3,7 @@
 #include "imaging/ImageLoader.h"
 #include "ui/canvas/PhotoCanvas.h"
 #include "ui/histogram/HistogramWidget.h"
+#include "ui/rightpanel/BasicPanel.h"
 
 #include <QAction>
 #include <QDir>
@@ -40,6 +41,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_histogram = new HistogramWidget(rightPanel);
     rightLayout->addWidget(m_histogram);
+
+    auto *basicPanel = new BasicPanel(rightPanel);
+    rightLayout->addWidget(basicPanel);
     rightLayout->addStretch(1);
 
     workspaceLayout->addWidget(rightPanel);
