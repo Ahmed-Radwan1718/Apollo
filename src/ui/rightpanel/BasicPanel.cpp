@@ -1,5 +1,6 @@
 #include "ui/rightpanel/BasicPanel.h"
 
+#include <QEasingCurve>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -10,6 +11,7 @@
 #include <QSizePolicy>
 #include <QSlider>
 #include <QToolButton>
+#include <QVariantAnimation>
 #include <QVBoxLayout>
 
 namespace {
@@ -119,10 +121,19 @@ class ChevronButton final : public QToolButton
 public:
     explicit ChevronButton(QWidget *parent = nullptr)
         : QToolButton(parent)
+        , m_animation(new QVariantAnimation(this))
     {
         setFixedSize(26, 30);
         setCursor(Qt::PointingHandCursor);
         setFocusPolicy(Qt::NoFocus);
+
+        m_animation->setDuration(180);
+        m_animation->setEasingCurve(QEasingCurve::InOutCubic);
+        connect(m_animation, &QVariantAnimation::valueChanged, this,
+                [this](const QVariant &value) {
+                    m_angle = value.toReal();
+                    update();
+                });
     }
 
     void setExpanded(bool expanded)
@@ -132,7 +143,10 @@ public:
         }
 
         m_expanded = expanded;
-        update();
+        m_animation->stop();
+        m_animation->setStartValue(m_angle);
+        m_animation->setEndValue(expanded ? 90.0 : 0.0);
+        m_animation->start();
     }
 
 protected:
@@ -149,21 +163,17 @@ protected:
         painter.setPen(QPen(color, 1.45, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
 
         const QPointF center(width() / 2.0, height() / 2.0);
-        if (m_expanded) {
-            painter.drawLine(QPointF(center.x() - 3.5, center.y() - 1.5),
-                             QPointF(center.x(), center.y() + 2.0));
-            painter.drawLine(QPointF(center.x(), center.y() + 2.0),
-                             QPointF(center.x() + 3.5, center.y() - 1.5));
-        } else {
-            painter.drawLine(QPointF(center.x() - 1.5, center.y() - 3.5),
-                             QPointF(center.x() + 2.0, center.y()));
-            painter.drawLine(QPointF(center.x() + 2.0, center.y()),
-                             QPointF(center.x() - 1.5, center.y() + 3.5));
-        }
+        painter.translate(center);
+        painter.rotate(m_angle);
+
+        painter.drawLine(QPointF(-1.5, -3.5), QPointF(2.0, 0.0));
+        painter.drawLine(QPointF(2.0, 0.0), QPointF(-1.5, 3.5));
     }
 
 private:
     bool m_expanded = true;
+    qreal m_angle = 90.0;
+    QVariantAnimation *m_animation = nullptr;
 };
 
 void addSliderRow(QGridLayout *layout,
