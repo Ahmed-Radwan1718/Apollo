@@ -96,7 +96,7 @@ BasicPanel::BasicPanel(QWidget *parent)
     header->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     header->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     header->setCursor(Qt::PointingHandCursor);
-    header->setFixedHeight(34);
+    header->setFixedHeight(40);
     outerLayout->addWidget(header);
 
     auto *content = new QFrame(this);
@@ -184,7 +184,7 @@ BasicPanel::BasicPanel(QWidget *parent)
         "  text-align: left;"
         "  font-size: 13px;"
         "  font-weight: 600;"
-        "  padding: 0 6px;"
+        "  padding: 5px 6px 0 6px;"
         "}"
         "QToolButton#basicHeader:hover {"
         "  color: #ffffff;"
