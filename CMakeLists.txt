@@ -27,6 +27,8 @@ qt_add_executable(Nexus WIN32
     src/ui/canvas/PhotoCanvas.h
     src/ui/histogram/HistogramWidget.cpp
     src/ui/histogram/HistogramWidget.h
+    src/ui/leftpanel/NavigatorPanel.cpp
+    src/ui/leftpanel/NavigatorPanel.h
     src/ui/rightpanel/BasicPanel.cpp
     src/ui/rightpanel/BasicPanel.h
     src/ui/rightpanel/PhotoMetadataWidget.cpp
