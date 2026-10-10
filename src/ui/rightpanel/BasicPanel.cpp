@@ -445,7 +445,7 @@ BasicPanel::BasicPanel(QWidget *parent)
         "  height: 2px;"
         "  border-radius: 1px;"
         "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
-        "    stop:0 #46658f, stop:0.5 #696969, stop:1 #9a6947);"
+        "    stop:0 #46658f, stop:0.5 #696969, stop:1 #cbb75a);"
         "}"
         "QSlider#temperatureSlider::sub-page:horizontal,"
         "QSlider#temperatureSlider::add-page:horizontal { background: transparent; }"
