@@ -184,7 +184,7 @@ BasicPanel::BasicPanel(QWidget *parent)
         "  text-align: left;"
         "  font-size: 13px;"
         "  font-weight: 600;"
-        "  padding: 9px 2px 8px 2px;"
+        "  padding: 9px 2px;"
         "}"
         "QToolButton#basicHeader:hover {"
         "  color: #ffffff;"
