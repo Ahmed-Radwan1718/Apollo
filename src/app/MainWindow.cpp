@@ -142,6 +142,7 @@ MainWindow::MainWindow(QWidget *parent)
         "}"));
 
     m_renderService = new imaging::TemperatureRenderService(this);
+    m_tintSlider = m_basicPanel->findChild<QSlider *>(QStringLiteral("tintSlider"));
     m_exposureSlider = findExposureSlider(m_basicPanel);
 
     createActions();
@@ -162,6 +163,27 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_basicPanel, &BasicPanel::temperatureChanged,
             this, &MainWindow::applyTemperature);
+
+    if (m_tintSlider) {
+        connect(m_tintSlider, &QSlider::valueChanged, this,
+                [this](int tint) {
+                    if (m_settingDevelopControls) {
+                        return;
+                    }
+
+                    if (m_tintSlider->isSliderDown()) {
+                        previewTint(tint);
+                    } else {
+                        applyTint(tint);
+                    }
+                });
+        connect(m_tintSlider, &QSlider::sliderReleased, this,
+                [this]() {
+                    if (!m_settingDevelopControls) {
+                        applyTint(m_tintSlider->value());
+                    }
+                });
+    }
 
     if (m_exposureSlider) {
         connect(m_exposureSlider, &QSlider::valueChanged, this,
@@ -218,6 +240,7 @@ void MainWindow::openImage(const QString &filePath)
     m_requestedState.temperatureKelvin = result.metadata.whiteBalanceTemperatureKelvin > 0
         ? result.metadata.whiteBalanceTemperatureKelvin
         : kDefaultTemperatureKelvin;
+    m_requestedState.tint = 0;
     m_requestedState.exposureHundredths = 0;
     m_fullQualityState = m_requestedState;
 
@@ -228,6 +251,9 @@ void MainWindow::openImage(const QString &filePath)
 
     m_settingDevelopControls = true;
     m_basicPanel->setCameraTemperatureKelvin(result.metadata.whiteBalanceTemperatureKelvin);
+    if (m_tintSlider) {
+        m_tintSlider->setValue(0);
+    }
     if (m_exposureSlider) {
         m_exposureSlider->setValue(0);
     }
@@ -247,6 +273,20 @@ void MainWindow::applyTemperature(int kelvin)
 {
     DevelopState state = m_requestedState;
     state.temperatureKelvin = kelvin;
+    requestFullRender(state);
+}
+
+void MainWindow::previewTint(int tint)
+{
+    DevelopState state = m_requestedState;
+    state.tint = tint;
+    requestPreview(state);
+}
+
+void MainWindow::applyTint(int tint)
+{
+    DevelopState state = m_requestedState;
+    state.tint = tint;
     requestFullRender(state);
 }
 
@@ -276,6 +316,7 @@ void MainWindow::requestPreview(const DevelopState &state)
     m_fullQualityState.reset();
     m_renderService->requestPreview(m_currentFilePath,
                                     state.temperatureKelvin,
+                                    state.tint,
                                     state.exposureHundredths);
 }
 
@@ -290,11 +331,13 @@ void MainWindow::requestFullRender(const DevelopState &state)
     m_requestedState = state;
     m_renderService->requestFullRender(m_currentFilePath,
                                        state.temperatureKelvin,
+                                       state.tint,
                                        state.exposureHundredths);
 }
 
 void MainWindow::handleDevelopRender(const QString &filePath,
                                      int temperatureKelvin,
+                                     int tint,
                                      int exposureHundredths,
                                      bool preview,
                                      const QImage &image,
@@ -302,6 +345,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
 {
     const DevelopState renderedState{
         temperatureKelvin,
+        tint,
         exposureHundredths,
     };
 

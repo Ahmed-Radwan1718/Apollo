@@ -32,6 +32,7 @@ private slots:
     void applyTemperature(int kelvin);
     void handleDevelopRender(const QString &filePath,
                              int temperatureKelvin,
+                             int tint,
                              int exposureHundredths,
                              bool preview,
                              const QImage &image,
@@ -40,6 +41,7 @@ private slots:
 private:
     struct DevelopState {
         int temperatureKelvin = 0;
+        int tint = 0;
         int exposureHundredths = 0;
 
         bool operator==(const DevelopState &) const = default;
@@ -47,6 +49,8 @@ private:
 
     void createActions();
     void previewTemperature(int kelvin);
+    void previewTint(int tint);
+    void applyTint(int tint);
     void previewExposure(int exposureHundredths);
     void applyExposure(int exposureHundredths);
     void requestPreview(const DevelopState &state);
@@ -57,6 +61,7 @@ private:
     HistogramWidget *m_histogram = nullptr;
     PhotoMetadataWidget *m_photoMetadata = nullptr;
     BasicPanel *m_basicPanel = nullptr;
+    QSlider *m_tintSlider = nullptr;
     QSlider *m_exposureSlider = nullptr;
     imaging::TemperatureRenderService *m_renderService = nullptr;
 

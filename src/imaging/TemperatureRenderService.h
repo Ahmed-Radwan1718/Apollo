@@ -22,14 +22,17 @@ public:
 
     void requestPreview(const QString &filePath,
                         int kelvin,
+                        int tint,
                         int exposureHundredths);
     void requestFullRender(const QString &filePath,
                            int kelvin,
+                           int tint,
                            int exposureHundredths);
 
 signals:
     void renderReady(const QString &filePath,
                      int kelvin,
+                     int tint,
                      int exposureHundredths,
                      bool preview,
                      const QImage &image,
@@ -39,6 +42,7 @@ private:
     struct Request {
         QString filePath;
         int kelvin = 0;
+        int tint = 0;
         int exposureHundredths = 0;
     };
 

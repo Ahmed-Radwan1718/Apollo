@@ -20,6 +20,9 @@ namespace {
 constexpr int kSonyTemperatureMinimumKelvin = 2000;
 constexpr int kSonyTemperatureMaximumKelvin = 20000;
 constexpr int kSonyTemperatureStepKelvin = 100;
+constexpr int kTintMinimum = -150;
+constexpr int kTintMaximum = 150;
+constexpr double kTintMaximumLogShift = 0.6931471805599453; // ln(2)
 constexpr int kExposureMinimumHundredths = -500;
 constexpr int kExposureMaximumHundredths = 500;
 constexpr int kLinearMaximum = 65535;
@@ -206,11 +209,19 @@ int sonyWhiteBalanceTemperatureKelvin(
     return bestKelvin;
 }
 
-bool sonyWhiteBalanceMultipliersForTemperature(
+double tintLogShift(int tint)
+{
+    const int clampedTint = std::clamp(tint, kTintMinimum, kTintMaximum);
+    return (static_cast<double>(clampedTint) / static_cast<double>(kTintMaximum))
+        * kTintMaximumLogShift;
+}
+
+bool sonyWhiteBalanceMultipliersForDevelopState(
     const libraw_colordata_t &color,
     const std::vector<TemperatureCalibration> &calibrations,
     int cameraKelvin,
     int targetKelvin,
+    int tint,
     float (&multipliers)[4])
 {
     WhiteBalanceRatios asShotRatios;
@@ -224,12 +235,15 @@ bool sonyWhiteBalanceMultipliersForTemperature(
     }
 
     // Move along Sony's own temperature calibration curve while retaining the
-    // as-shot offset from that curve. That preserves the camera's green/magenta
-    // bias so Temp changes temperature only; Tint remains a separate future edit.
+    // as-shot offset from that curve, then apply Tint independently in the same
+    // log-ratio space so green/magenta remains a pre-demosaic RAW adjustment.
+    const double tintShift = tintLogShift(tint);
     const double redToGreen = targetCurveRatios.redToGreen
-        + (asShotRatios.redToGreen - cameraCurveRatios.redToGreen);
+        + (asShotRatios.redToGreen - cameraCurveRatios.redToGreen)
+        + tintShift;
     const double blueToGreen = targetCurveRatios.blueToGreen
-        + (asShotRatios.blueToGreen - cameraCurveRatios.blueToGreen);
+        + (asShotRatios.blueToGreen - cameraCurveRatios.blueToGreen)
+        + tintShift;
 
     const double red = std::exp(redToGreen);
     const double blue = std::exp(blueToGreen);
@@ -354,6 +368,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                           QString *error,
                           PhotoMetadata *metadata,
                           int whiteBalanceTemperatureKelvin,
+                          int tint,
                           int exposureHundredths,
                           bool halfSizePreview)
 {
@@ -404,16 +419,18 @@ QImage ArwDecoder::decode(const QString &filePath,
                      kSonyTemperatureMinimumKelvin,
                      kSonyTemperatureMaximumKelvin)
         : 0;
+    const int requestedTint = std::clamp(tint, kTintMinimum, kTintMaximum);
 
     if (requestedTemperatureKelvin > 0
-        && requestedTemperatureKelvin != cameraTemperatureKelvin) {
+        && (requestedTemperatureKelvin != cameraTemperatureKelvin || requestedTint != 0)) {
         float userMultipliers[4] = {};
         if (cameraTemperatureKelvin <= 0
-            || !sonyWhiteBalanceMultipliersForTemperature(processor.imgdata.color,
-                                                          calibrations,
-                                                          cameraTemperatureKelvin,
-                                                          requestedTemperatureKelvin,
-                                                          userMultipliers)) {
+            || !sonyWhiteBalanceMultipliersForDevelopState(processor.imgdata.color,
+                                                           calibrations,
+                                                           cameraTemperatureKelvin,
+                                                           requestedTemperatureKelvin,
+                                                           requestedTint,
+                                                           userMultipliers)) {
             setError(error,
                      QStringLiteral("Sony white-balance calibration data is unavailable for this RAW file."));
             return {};
