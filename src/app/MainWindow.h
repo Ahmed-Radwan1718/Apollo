@@ -36,6 +36,7 @@ private slots:
                              int temperatureKelvin,
                              int tint,
                              int exposureHundredths,
+                             int contrast,
                              int saturation,
                              int vibrance,
                              bool preview,
@@ -51,6 +52,7 @@ private:
         int temperatureKelvin = 0;
         int tint = 0;
         int exposureHundredths = 0;
+        int contrast = 0;
         int saturation = 0;
         int vibrance = 0;
 
@@ -63,6 +65,8 @@ private:
     void applyTint(int tint);
     void previewExposure(int exposureHundredths);
     void applyExposure(int exposureHundredths);
+    void previewContrast(int contrast);
+    void applyContrast(int contrast);
     void previewSaturation(int saturation);
     void applySaturation(int saturation);
     void previewVibrance(int vibrance);
@@ -78,6 +82,7 @@ private:
     QSlider *m_temperatureSlider = nullptr;
     QSlider *m_tintSlider = nullptr;
     QSlider *m_exposureSlider = nullptr;
+    QSlider *m_contrastSlider = nullptr;
     QSlider *m_saturationSlider = nullptr;
     QSlider *m_vibranceSlider = nullptr;
     imaging::TemperatureRenderService *m_renderService = nullptr;

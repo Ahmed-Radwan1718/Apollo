@@ -30,6 +30,7 @@ public:
                                        int whiteBalanceTemperatureKelvin = 0,
                                        int tint = 0,
                                        int exposureHundredths = 0,
+                                       int contrast = 0,
                                        int saturation = 0,
                                        int vibrance = 0,
                                        bool halfSizePreview = false);

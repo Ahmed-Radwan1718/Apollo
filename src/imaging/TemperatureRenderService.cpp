@@ -33,20 +33,24 @@ void TemperatureRenderService::requestPreview(const QString &filePath,
                                               int kelvin,
                                               int tint,
                                               int exposureHundredths,
+                                              int contrast,
                                               int saturation,
                                               int vibrance)
 {
-    request({filePath, kelvin, tint, exposureHundredths, saturation, vibrance}, true);
+    request({filePath, kelvin, tint, exposureHundredths, contrast, saturation, vibrance},
+            true);
 }
 
 void TemperatureRenderService::requestFullRender(const QString &filePath,
                                                  int kelvin,
                                                  int tint,
                                                  int exposureHundredths,
+                                                 int contrast,
                                                  int saturation,
                                                  int vibrance)
 {
-    request({filePath, kelvin, tint, exposureHundredths, saturation, vibrance}, false);
+    request({filePath, kelvin, tint, exposureHundredths, contrast, saturation, vibrance},
+            false);
 }
 
 void TemperatureRenderService::request(Request request, bool preview)
@@ -62,7 +66,7 @@ void TemperatureRenderService::request(Request request, bool preview)
     {
         std::lock_guard lock(mutex);
         // Keep only the newest develop state. A RAW render already in progress may
-        // finish, but obsolete Temp/Tint/Exposure/Saturation/Vibrance positions never queue.
+        // finish, but obsolete Temp/Tint/Exposure/Contrast/Saturation/Vibrance positions never queue.
         pending = std::move(request);
     }
 
@@ -99,6 +103,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                           request.kelvin,
                                           request.tint,
                                           request.exposureHundredths,
+                                          request.contrast,
                                           request.saturation,
                                           request.vibrance,
                                           preview);
@@ -114,6 +119,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                  request.kelvin,
                                  request.tint,
                                  request.exposureHundredths,
+                                 request.contrast,
                                  request.saturation,
                                  request.vibrance,
                                  preview,

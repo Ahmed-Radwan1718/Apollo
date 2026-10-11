@@ -25,6 +25,9 @@ constexpr int kTintMaximum = 150;
 constexpr double kTintMaximumLogShift = 0.6931471805599453; // ln(2)
 constexpr int kExposureMinimumHundredths = -500;
 constexpr int kExposureMaximumHundredths = 500;
+constexpr int kContrastMinimum = -100;
+constexpr int kContrastMaximum = 100;
+constexpr double kContrastPivot = 0.18;
 constexpr int kSaturationMinimum = -100;
 constexpr int kSaturationMaximum = 100;
 constexpr int kVibranceMinimum = -100;
@@ -457,6 +460,48 @@ std::uint8_t linearToSrgb8(double linear)
         static_cast<int>(std::lround(encoded * 255.0)), 0, 255));
 }
 
+double contrastToneValue(double luminance, int contrast)
+{
+    const int clampedContrast = std::clamp(contrast,
+                                           kContrastMinimum,
+                                           kContrastMaximum);
+    if (clampedContrast == 0 || !(luminance > 0.0) || luminance >= 1.0) {
+        return luminance;
+    }
+
+    const double exponent = std::exp2(static_cast<double>(clampedContrast) / 100.0);
+    if (luminance < kContrastPivot) {
+        return kContrastPivot
+            * std::pow(luminance / kContrastPivot, exponent);
+    }
+
+    return 1.0 - (1.0 - kContrastPivot)
+        * std::pow((1.0 - luminance) / (1.0 - kContrastPivot), exponent);
+}
+
+void applyLinearContrast(double &red,
+                         double &green,
+                         double &blue,
+                         int contrast)
+{
+    if (contrast == 0) {
+        return;
+    }
+
+    const double luminance = red * kLinearSrgbRedLuminance
+        + green * kLinearSrgbGreenLuminance
+        + blue * kLinearSrgbBlueLuminance;
+    if (luminance <= std::numeric_limits<double>::epsilon()) {
+        return;
+    }
+
+    const double mappedLuminance = contrastToneValue(luminance, contrast);
+    const double scale = mappedLuminance / luminance;
+    red *= scale;
+    green *= scale;
+    blue *= scale;
+}
+
 double saturationChromaScale(int saturation)
 {
     const int clampedSaturation = std::clamp(saturation,
@@ -645,6 +690,7 @@ void applyOklabVibrance(double &red,
 
 QImage developedSrgbImage(const libraw_processed_image_t &processed,
                           int exposureHundredths,
+                          int contrast,
                           int saturation,
                           int vibrance,
                           QString *error)
@@ -676,6 +722,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                                            kExposureMaximumHundredths);
     const double exposureGain = std::exp2(static_cast<double>(clampedExposure) / 100.0);
     const double totalGain = baselineGain * exposureGain;
+    const int clampedContrast = std::clamp(contrast,
+                                           kContrastMinimum,
+                                           kContrastMaximum);
     const int clampedSaturation = std::clamp(saturation,
                                              kSaturationMinimum,
                                              kSaturationMaximum);
@@ -689,9 +738,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
         return {};
     }
 
-    if (clampedSaturation == 0 && clampedVibrance == 0) {
+    if (clampedContrast == 0 && clampedSaturation == 0 && clampedVibrance == 0) {
         // Keep the neutral path byte-for-byte equivalent to the existing exposure
-        // render and avoid per-pixel floating-point color work when color controls are 0.
+        // render and avoid per-pixel floating-point work when tonal/color controls are 0.
         std::vector<std::uint8_t> transferTable(kLinearMaximum + 1);
         for (int value = 0; value <= kLinearMaximum; ++value) {
             const double linear = static_cast<double>(value)
@@ -725,6 +774,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                 double green = static_cast<double>(samples[source + 1]) * sampleScale;
                 double blue = static_cast<double>(samples[source + 2]) * sampleScale;
 
+                if (clampedContrast != 0) {
+                    applyLinearContrast(red, green, blue, clampedContrast);
+                }
                 if (clampedVibrance != 0) {
                     applyOklabVibrance(red, green, blue, clampedVibrance);
                 }
@@ -752,6 +804,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                           int whiteBalanceTemperatureKelvin,
                           int tint,
                           int exposureHundredths,
+                          int contrast,
                           int saturation,
                           int vibrance,
                           bool halfSizePreview)
@@ -766,8 +819,8 @@ QImage ArwDecoder::decode(const QString &filePath,
     LibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
 
     // Ask LibRaw for a high-precision linear sRGB render. Nexus performs the
-    // final exposure, perceptual vibrance, saturation, and sRGB transfer itself
-    // instead of applying color changes to an already rendered 8-bit image.
+    // final exposure, midtone contrast, perceptual vibrance, saturation, and
+    // sRGB transfer itself instead of editing an already rendered 8-bit image.
     processor.imgdata.params.use_camera_wb = 1;
     processor.imgdata.params.use_camera_matrix = 1;
     processor.imgdata.params.output_color = 1; // linear sRGB primaries
@@ -849,6 +902,7 @@ QImage ArwDecoder::decode(const QString &filePath,
 
     QImage image = developedSrgbImage(*processed,
                                       exposureHundredths,
+                                      contrast,
                                       saturation,
                                       vibrance,
                                       error);

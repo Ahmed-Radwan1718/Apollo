@@ -200,6 +200,7 @@ MainWindow::MainWindow(QWidget *parent)
         m_basicPanel->findChild<QSlider *>(QStringLiteral("temperatureSlider"));
     m_tintSlider = m_basicPanel->findChild<QSlider *>(QStringLiteral("tintSlider"));
     m_exposureSlider = findExposureSlider(m_basicPanel);
+    m_contrastSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Contrast"));
     m_saturationSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Saturation"));
     m_vibranceSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Vibrance"));
     m_whiteBalancePickerController =
@@ -266,6 +267,27 @@ MainWindow::MainWindow(QWidget *parent)
                 [this]() {
                     if (!m_settingDevelopControls) {
                         applyExposure(m_exposureSlider->value());
+                    }
+                });
+    }
+
+    if (m_contrastSlider) {
+        connect(m_contrastSlider, &QSlider::valueChanged, this,
+                [this](int contrast) {
+                    if (m_settingDevelopControls) {
+                        return;
+                    }
+
+                    if (m_contrastSlider->isSliderDown()) {
+                        previewContrast(contrast);
+                    } else {
+                        applyContrast(contrast);
+                    }
+                });
+        connect(m_contrastSlider, &QSlider::sliderReleased, this,
+                [this]() {
+                    if (!m_settingDevelopControls) {
+                        applyContrast(m_contrastSlider->value());
                     }
                 });
     }
@@ -363,6 +385,7 @@ void MainWindow::openImage(const QString &filePath)
         : kDefaultTemperatureKelvin;
     m_requestedState.tint = 0;
     m_requestedState.exposureHundredths = 0;
+    m_requestedState.contrast = 0;
     m_requestedState.saturation = 0;
     m_requestedState.vibrance = 0;
     m_fullQualityState = m_requestedState;
@@ -382,6 +405,9 @@ void MainWindow::openImage(const QString &filePath)
     }
     if (m_exposureSlider) {
         m_exposureSlider->setValue(0);
+    }
+    if (m_contrastSlider) {
+        m_contrastSlider->setValue(0);
     }
     if (m_saturationSlider) {
         m_saturationSlider->setValue(0);
@@ -436,6 +462,20 @@ void MainWindow::applyExposure(int exposureHundredths)
     requestFullRender(state);
 }
 
+void MainWindow::previewContrast(int contrast)
+{
+    DevelopState state = m_requestedState;
+    state.contrast = contrast;
+    requestPreview(state);
+}
+
+void MainWindow::applyContrast(int contrast)
+{
+    DevelopState state = m_requestedState;
+    state.contrast = contrast;
+    requestFullRender(state);
+}
+
 void MainWindow::previewSaturation(int saturation)
 {
     DevelopState state = m_requestedState;
@@ -476,6 +516,7 @@ void MainWindow::requestPreview(const DevelopState &state)
                                     state.temperatureKelvin,
                                     state.tint,
                                     state.exposureHundredths,
+                                    state.contrast,
                                     state.saturation,
                                     state.vibrance);
 }
@@ -491,6 +532,7 @@ void MainWindow::requestFullRender(const DevelopState &state)
                                        state.temperatureKelvin,
                                        state.tint,
                                        state.exposureHundredths,
+                                       state.contrast,
                                        state.saturation,
                                        state.vibrance);
 }
@@ -499,6 +541,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
                                      int temperatureKelvin,
                                      int tint,
                                      int exposureHundredths,
+                                     int contrast,
                                      int saturation,
                                      int vibrance,
                                      bool preview,
@@ -509,6 +552,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
         temperatureKelvin,
         tint,
         exposureHundredths,
+        contrast,
         saturation,
         vibrance,
     };
