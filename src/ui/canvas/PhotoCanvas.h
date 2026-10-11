@@ -67,6 +67,7 @@ private:
     [[nodiscard]] qreal currentViewScale() const noexcept;
     [[nodiscard]] qreal actualPixelScale() const noexcept;
     [[nodiscard]] qreal fitScale() const noexcept;
+    [[nodiscard]] bool canPan() const noexcept;
 
     void setZoomPercentAt(qreal percent, const QPointF &anchorInViewport);
     void applyViewScale(qreal scale, const QPointF &anchorInViewport);
