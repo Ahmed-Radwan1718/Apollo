@@ -25,8 +25,13 @@ constexpr int kTintMaximum = 150;
 constexpr double kTintMaximumLogShift = 0.6931471805599453; // ln(2)
 constexpr int kExposureMinimumHundredths = -500;
 constexpr int kExposureMaximumHundredths = 500;
+constexpr int kSaturationMinimum = -100;
+constexpr int kSaturationMaximum = 100;
 constexpr int kLinearMaximum = 65535;
 constexpr double kAutoBrightnessClipFraction = 0.01;
+constexpr double kLinearSrgbRedLuminance = 0.2126;
+constexpr double kLinearSrgbGreenLuminance = 0.7152;
+constexpr double kLinearSrgbBlueLuminance = 0.0722;
 
 struct WhiteBalanceRatios {
     double redToGreen = 0.0;
@@ -432,9 +437,32 @@ std::uint8_t linearToSrgb8(double linear)
         static_cast<int>(std::lround(encoded * 255.0)), 0, 255));
 }
 
-QImage exposedSrgbImage(const libraw_processed_image_t &processed,
-                        int exposureHundredths,
-                        QString *error)
+double saturationChromaScale(int saturation)
+{
+    const int clampedSaturation = std::clamp(saturation,
+                                             kSaturationMinimum,
+                                             kSaturationMaximum);
+    return 1.0 + static_cast<double>(clampedSaturation) / 100.0;
+}
+
+void applyLinearSaturation(double &red,
+                           double &green,
+                           double &blue,
+                           double chromaScale)
+{
+    const double luminance = red * kLinearSrgbRedLuminance
+        + green * kLinearSrgbGreenLuminance
+        + blue * kLinearSrgbBlueLuminance;
+
+    red = luminance + (red - luminance) * chromaScale;
+    green = luminance + (green - luminance) * chromaScale;
+    blue = luminance + (blue - luminance) * chromaScale;
+}
+
+QImage developedSrgbImage(const libraw_processed_image_t &processed,
+                          int exposureHundredths,
+                          int saturation,
+                          QString *error)
 {
     if (processed.type != LIBRAW_IMAGE_BITMAP
         || processed.width == 0
@@ -463,13 +491,9 @@ QImage exposedSrgbImage(const libraw_processed_image_t &processed,
                                            kExposureMaximumHundredths);
     const double exposureGain = std::exp2(static_cast<double>(clampedExposure) / 100.0);
     const double totalGain = baselineGain * exposureGain;
-
-    std::vector<std::uint8_t> transferTable(kLinearMaximum + 1);
-    for (int value = 0; value <= kLinearMaximum; ++value) {
-        const double linear = static_cast<double>(value)
-            / static_cast<double>(kLinearMaximum);
-        transferTable[static_cast<std::size_t>(value)] = linearToSrgb8(linear * totalGain);
-    }
+    const int clampedSaturation = std::clamp(saturation,
+                                             kSaturationMinimum,
+                                             kSaturationMaximum);
 
     QImage image(processed.width, processed.height, QImage::Format_RGB888);
     if (image.isNull()) {
@@ -477,15 +501,48 @@ QImage exposedSrgbImage(const libraw_processed_image_t &processed,
         return {};
     }
 
-    for (int y = 0; y < processed.height; ++y) {
-        auto *destination = image.scanLine(y);
-        const std::size_t sourceRow = static_cast<std::size_t>(y) * processed.width * 3;
-        for (int x = 0; x < processed.width; ++x) {
-            const std::size_t source = sourceRow + static_cast<std::size_t>(x) * 3;
-            const int destinationOffset = x * 3;
-            destination[destinationOffset] = transferTable[samples[source]];
-            destination[destinationOffset + 1] = transferTable[samples[source + 1]];
-            destination[destinationOffset + 2] = transferTable[samples[source + 2]];
+    if (clampedSaturation == 0) {
+        // Keep the neutral path byte-for-byte equivalent to the existing exposure
+        // render and avoid per-pixel floating-point color work when Saturation is 0.
+        std::vector<std::uint8_t> transferTable(kLinearMaximum + 1);
+        for (int value = 0; value <= kLinearMaximum; ++value) {
+            const double linear = static_cast<double>(value)
+                / static_cast<double>(kLinearMaximum);
+            transferTable[static_cast<std::size_t>(value)] = linearToSrgb8(linear * totalGain);
+        }
+
+        for (int y = 0; y < processed.height; ++y) {
+            auto *destination = image.scanLine(y);
+            const std::size_t sourceRow = static_cast<std::size_t>(y) * processed.width * 3;
+            for (int x = 0; x < processed.width; ++x) {
+                const std::size_t source = sourceRow + static_cast<std::size_t>(x) * 3;
+                const int destinationOffset = x * 3;
+                destination[destinationOffset] = transferTable[samples[source]];
+                destination[destinationOffset + 1] = transferTable[samples[source + 1]];
+                destination[destinationOffset + 2] = transferTable[samples[source + 2]];
+            }
+        }
+    } else {
+        const double chromaScale = saturationChromaScale(clampedSaturation);
+        const double sampleScale = totalGain / static_cast<double>(kLinearMaximum);
+
+        for (int y = 0; y < processed.height; ++y) {
+            auto *destination = image.scanLine(y);
+            const std::size_t sourceRow = static_cast<std::size_t>(y) * processed.width * 3;
+            for (int x = 0; x < processed.width; ++x) {
+                const std::size_t source = sourceRow + static_cast<std::size_t>(x) * 3;
+                const int destinationOffset = x * 3;
+
+                double red = static_cast<double>(samples[source]) * sampleScale;
+                double green = static_cast<double>(samples[source + 1]) * sampleScale;
+                double blue = static_cast<double>(samples[source + 2]) * sampleScale;
+
+                applyLinearSaturation(red, green, blue, chromaScale);
+
+                destination[destinationOffset] = linearToSrgb8(red);
+                destination[destinationOffset + 1] = linearToSrgb8(green);
+                destination[destinationOffset + 2] = linearToSrgb8(blue);
+            }
         }
     }
 
@@ -502,6 +559,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                           int whiteBalanceTemperatureKelvin,
                           int tint,
                           int exposureHundredths,
+                          int saturation,
                           bool halfSizePreview)
 {
     if (error != nullptr) {
@@ -514,8 +572,8 @@ QImage ArwDecoder::decode(const QString &filePath,
     LibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
 
     // Ask LibRaw for a high-precision linear sRGB render. Nexus performs the
-    // final exposure multiplication and sRGB transfer itself so ±5 EV remains
-    // a true 2^EV linear-light adjustment instead of an 8-bit brightness filter.
+    // final exposure, luminance/chroma saturation adjustment, and sRGB transfer
+    // itself instead of applying color changes to an already rendered 8-bit image.
     processor.imgdata.params.use_camera_wb = 1;
     processor.imgdata.params.use_camera_matrix = 1;
     processor.imgdata.params.output_color = 1; // linear sRGB primaries
@@ -595,7 +653,10 @@ QImage ArwDecoder::decode(const QString &filePath,
         return {};
     }
 
-    QImage image = exposedSrgbImage(*processed, exposureHundredths, error);
+    QImage image = developedSrgbImage(*processed,
+                                      exposureHundredths,
+                                      saturation,
+                                      error);
     LibRaw::dcraw_clear_mem(processed);
     return image;
 }

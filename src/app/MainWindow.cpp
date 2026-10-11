@@ -99,6 +99,27 @@ QSlider *findExposureSlider(BasicPanel *panel)
     return nullptr;
 }
 
+QSlider *findLabeledSlider(BasicPanel *panel, const QString &labelText)
+{
+    if (!panel) {
+        return nullptr;
+    }
+
+    const QList<QLabel *> labels = panel->findChildren<QLabel *>();
+    for (QLabel *label : labels) {
+        if (label->objectName() != QStringLiteral("basicControlLabel")
+            || label->text() != labelText) {
+            continue;
+        }
+
+        if (QWidget *control = label->parentWidget()) {
+            return control->findChild<QSlider *>();
+        }
+    }
+
+    return nullptr;
+}
+
 } // namespace
 
 MainWindow::MainWindow(QWidget *parent)
@@ -179,6 +200,7 @@ MainWindow::MainWindow(QWidget *parent)
         m_basicPanel->findChild<QSlider *>(QStringLiteral("temperatureSlider"));
     m_tintSlider = m_basicPanel->findChild<QSlider *>(QStringLiteral("tintSlider"));
     m_exposureSlider = findExposureSlider(m_basicPanel);
+    m_saturationSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Saturation"));
     m_whiteBalancePickerController =
         new WhiteBalancePickerController(m_basicPanel, m_canvas, this);
 
@@ -247,6 +269,27 @@ MainWindow::MainWindow(QWidget *parent)
                 });
     }
 
+    if (m_saturationSlider) {
+        connect(m_saturationSlider, &QSlider::valueChanged, this,
+                [this](int saturation) {
+                    if (m_settingDevelopControls) {
+                        return;
+                    }
+
+                    if (m_saturationSlider->isSliderDown()) {
+                        previewSaturation(saturation);
+                    } else {
+                        applySaturation(saturation);
+                    }
+                });
+        connect(m_saturationSlider, &QSlider::sliderReleased, this,
+                [this]() {
+                    if (!m_settingDevelopControls) {
+                        applySaturation(m_saturationSlider->value());
+                    }
+                });
+    }
+
     connect(m_whiteBalancePickerController,
             &WhiteBalancePickerController::pointPicked,
             this,
@@ -298,6 +341,7 @@ void MainWindow::openImage(const QString &filePath)
         : kDefaultTemperatureKelvin;
     m_requestedState.tint = 0;
     m_requestedState.exposureHundredths = 0;
+    m_requestedState.saturation = 0;
     m_fullQualityState = m_requestedState;
 
     m_whiteBalancePickerController->setActive(false);
@@ -315,6 +359,9 @@ void MainWindow::openImage(const QString &filePath)
     }
     if (m_exposureSlider) {
         m_exposureSlider->setValue(0);
+    }
+    if (m_saturationSlider) {
+        m_saturationSlider->setValue(0);
     }
     m_settingDevelopControls = false;
 
@@ -363,6 +410,20 @@ void MainWindow::applyExposure(int exposureHundredths)
     requestFullRender(state);
 }
 
+void MainWindow::previewSaturation(int saturation)
+{
+    DevelopState state = m_requestedState;
+    state.saturation = saturation;
+    requestPreview(state);
+}
+
+void MainWindow::applySaturation(int saturation)
+{
+    DevelopState state = m_requestedState;
+    state.saturation = saturation;
+    requestFullRender(state);
+}
+
 void MainWindow::requestPreview(const DevelopState &state)
 {
     if (!isArwPath(m_currentFilePath)) {
@@ -374,7 +435,8 @@ void MainWindow::requestPreview(const DevelopState &state)
     m_renderService->requestPreview(m_currentFilePath,
                                     state.temperatureKelvin,
                                     state.tint,
-                                    state.exposureHundredths);
+                                    state.exposureHundredths,
+                                    state.saturation);
 }
 
 void MainWindow::requestFullRender(const DevelopState &state)
@@ -387,13 +449,15 @@ void MainWindow::requestFullRender(const DevelopState &state)
     m_renderService->requestFullRender(m_currentFilePath,
                                        state.temperatureKelvin,
                                        state.tint,
-                                       state.exposureHundredths);
+                                       state.exposureHundredths,
+                                       state.saturation);
 }
 
 void MainWindow::handleDevelopRender(const QString &filePath,
                                      int temperatureKelvin,
                                      int tint,
                                      int exposureHundredths,
+                                     int saturation,
                                      bool preview,
                                      const QImage &image,
                                      const QString &error)
@@ -402,6 +466,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
         temperatureKelvin,
         tint,
         exposureHundredths,
+        saturation,
     };
 
     if (filePath != m_currentFilePath || renderedState != m_requestedState) {

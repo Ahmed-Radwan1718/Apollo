@@ -32,17 +32,19 @@ TemperatureRenderService::~TemperatureRenderService()
 void TemperatureRenderService::requestPreview(const QString &filePath,
                                               int kelvin,
                                               int tint,
-                                              int exposureHundredths)
+                                              int exposureHundredths,
+                                              int saturation)
 {
-    request({filePath, kelvin, tint, exposureHundredths}, true);
+    request({filePath, kelvin, tint, exposureHundredths, saturation}, true);
 }
 
 void TemperatureRenderService::requestFullRender(const QString &filePath,
                                                  int kelvin,
                                                  int tint,
-                                                 int exposureHundredths)
+                                                 int exposureHundredths,
+                                                 int saturation)
 {
-    request({filePath, kelvin, tint, exposureHundredths}, false);
+    request({filePath, kelvin, tint, exposureHundredths, saturation}, false);
 }
 
 void TemperatureRenderService::request(Request request, bool preview)
@@ -58,7 +60,7 @@ void TemperatureRenderService::request(Request request, bool preview)
     {
         std::lock_guard lock(mutex);
         // Keep only the newest develop state. A RAW render already in progress may
-        // finish, but obsolete Temp/Tint/Exposure positions never build a queue.
+        // finish, but obsolete Temp/Tint/Exposure/Saturation positions never queue.
         pending = std::move(request);
     }
 
@@ -95,6 +97,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                           request.kelvin,
                                           request.tint,
                                           request.exposureHundredths,
+                                          request.saturation,
                                           preview);
 
         QMetaObject::invokeMethod(
@@ -108,6 +111,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                  request.kelvin,
                                  request.tint,
                                  request.exposureHundredths,
+                                 request.saturation,
                                  preview,
                                  image,
                                  error);

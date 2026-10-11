@@ -36,6 +36,7 @@ private slots:
                              int temperatureKelvin,
                              int tint,
                              int exposureHundredths,
+                             int saturation,
                              bool preview,
                              const QImage &image,
                              const QString &error);
@@ -49,6 +50,7 @@ private:
         int temperatureKelvin = 0;
         int tint = 0;
         int exposureHundredths = 0;
+        int saturation = 0;
 
         bool operator==(const DevelopState &) const = default;
     };
@@ -59,6 +61,8 @@ private:
     void applyTint(int tint);
     void previewExposure(int exposureHundredths);
     void applyExposure(int exposureHundredths);
+    void previewSaturation(int saturation);
+    void applySaturation(int saturation);
     void requestPreview(const DevelopState &state);
     void requestFullRender(const DevelopState &state);
 
@@ -70,6 +74,7 @@ private:
     QSlider *m_temperatureSlider = nullptr;
     QSlider *m_tintSlider = nullptr;
     QSlider *m_exposureSlider = nullptr;
+    QSlider *m_saturationSlider = nullptr;
     imaging::TemperatureRenderService *m_renderService = nullptr;
     imaging::WhiteBalancePickerService *m_whiteBalancePickerService = nullptr;
     WhiteBalancePickerController *m_whiteBalancePickerController = nullptr;
