@@ -1,5 +1,7 @@
 #include "ui/leftpanel/NavigatorPanel.h"
 
+#include "ui/sidebar/SidebarCollapseHandle.h"
+
 #include <QLabel>
 #include <QPainter>
 #include <QPaintEvent>
@@ -95,6 +97,11 @@ NavigatorPanel::NavigatorPanel(QWidget *parent)
         "  font-weight: 600;"
         "  padding: 0;"
         "}"));
+
+    if (QWidget *sidePanel = parentWidget()) {
+        new SidebarCollapseHandle(sidePanel,
+                                  SidebarCollapseHandle::Side::Left);
+    }
 }
 
 void NavigatorPanel::setImage(const QImage &image)

@@ -41,6 +41,7 @@ qt_add_executable(Nexus WIN32
     src/ui/rightpanel/PhotoMetadataWidget.h
     src/ui/rightpanel/WhiteBalancePickerController.cpp
     src/ui/rightpanel/WhiteBalancePickerController.h
+    src/ui/sidebar/SidebarCollapseHandle.h
 )
 
 target_include_directories(Nexus PRIVATE src)
