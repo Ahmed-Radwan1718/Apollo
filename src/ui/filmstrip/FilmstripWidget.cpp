@@ -152,15 +152,15 @@ FilmstripWidget::FilmstripWidget(QWidget *parent)
 
     setStyleSheet(QStringLiteral(
         "QWidget#filmstripWidget {"
-        "  background: #151515;"
+        "  background: #181818;"
         "  border-top: 1px solid #2a2a2a;"
         "}"
         "QScrollArea#filmstripScrollArea, QWidget#filmstripContent {"
-        "  background: #151515;"
+        "  background: #181818;"
         "  border: 0;"
         "}"
         "QScrollBar:horizontal {"
-        "  background: #151515;"
+        "  background: #181818;"
         "  height: 10px;"
         "  margin: 0;"
         "}"
