@@ -14,9 +14,11 @@ class NavigatorPanel;
 class PhotoCanvas;
 class PhotoMetadataWidget;
 class QSlider;
+class WhiteBalancePickerController;
 
 namespace imaging {
 class TemperatureRenderService;
+class WhiteBalancePickerService;
 }
 
 class MainWindow final : public QMainWindow
@@ -37,6 +39,10 @@ private slots:
                              bool preview,
                              const QImage &image,
                              const QString &error);
+    void handleWhiteBalancePick(const QString &filePath,
+                                int temperatureKelvin,
+                                int tint,
+                                const QString &error);
 
 private:
     struct DevelopState {
@@ -61,9 +67,12 @@ private:
     HistogramWidget *m_histogram = nullptr;
     PhotoMetadataWidget *m_photoMetadata = nullptr;
     BasicPanel *m_basicPanel = nullptr;
+    QSlider *m_temperatureSlider = nullptr;
     QSlider *m_tintSlider = nullptr;
     QSlider *m_exposureSlider = nullptr;
     imaging::TemperatureRenderService *m_renderService = nullptr;
+    imaging::WhiteBalancePickerService *m_whiteBalancePickerService = nullptr;
+    WhiteBalancePickerController *m_whiteBalancePickerController = nullptr;
 
     QString m_currentFilePath;
     QSize m_fullImageSize;

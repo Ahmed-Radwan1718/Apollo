@@ -263,6 +263,138 @@ bool sonyWhiteBalanceMultipliersForDevelopState(
     return true;
 }
 
+bool sonyWhiteBalanceValuesForMultipliers(
+    const libraw_colordata_t &color,
+    const std::vector<TemperatureCalibration> &calibrations,
+    int cameraKelvin,
+    const float *targetMultipliers,
+    int &temperatureKelvin,
+    int &tint)
+{
+    WhiteBalanceRatios asShotRatios;
+    WhiteBalanceRatios cameraCurveRatios;
+    WhiteBalanceRatios targetRatios;
+
+    if (cameraKelvin <= 0
+        || !logarithmicWhiteBalanceRatios(color.cam_mul, asShotRatios)
+        || !whiteBalanceRatiosAtKelvin(calibrations, cameraKelvin, cameraCurveRatios)
+        || !logarithmicWhiteBalanceRatios(targetMultipliers, targetRatios)) {
+        return false;
+    }
+
+    const double redOffset = asShotRatios.redToGreen - cameraCurveRatios.redToGreen;
+    const double blueOffset = asShotRatios.blueToGreen - cameraCurveRatios.blueToGreen;
+
+    double bestError = std::numeric_limits<double>::infinity();
+    double bestTintShift = 0.0;
+    int bestKelvin = 0;
+
+    for (int kelvin = kSonyTemperatureMinimumKelvin;
+         kelvin <= kSonyTemperatureMaximumKelvin;
+         ++kelvin) {
+        WhiteBalanceRatios curveRatios;
+        if (!whiteBalanceRatiosAtKelvin(calibrations, kelvin, curveRatios)) {
+            continue;
+        }
+
+        const double baseRed = curveRatios.redToGreen + redOffset;
+        const double baseBlue = curveRatios.blueToGreen + blueOffset;
+        const double requestedShift = 0.5
+            * ((targetRatios.redToGreen - baseRed)
+               + (targetRatios.blueToGreen - baseBlue));
+        const double shift = std::clamp(requestedShift,
+                                        -kTintMaximumLogShift,
+                                        kTintMaximumLogShift);
+
+        const double redError = targetRatios.redToGreen - (baseRed + shift);
+        const double blueError = targetRatios.blueToGreen - (baseBlue + shift);
+        const double error = redError * redError + blueError * blueError;
+
+        if (error < bestError) {
+            bestError = error;
+            bestKelvin = kelvin;
+            bestTintShift = shift;
+        }
+    }
+
+    if (bestKelvin <= 0 || !std::isfinite(bestError)) {
+        return false;
+    }
+
+    temperatureKelvin = bestKelvin;
+    tint = std::clamp(
+        static_cast<int>(std::lround(
+            (bestTintShift / kTintMaximumLogShift) * kTintMaximum)),
+        kTintMinimum,
+        kTintMaximum);
+    return true;
+}
+
+QPointF normalizedPointBeforeRotation(const QPointF &point, int flip)
+{
+    const qreal x = std::clamp(point.x(), 0.0, 1.0);
+    const qreal y = std::clamp(point.y(), 0.0, 1.0);
+
+    switch (flip) {
+    case 3:
+    case 180:
+        return QPointF(1.0 - x, 1.0 - y);
+    case 5:
+    case 270:
+    case -90:
+        return QPointF(1.0 - y, x);
+    case 6:
+    case 90:
+        return QPointF(y, 1.0 - x);
+    default:
+        return QPointF(x, y);
+    }
+}
+
+bool configureGreyBox(LibRaw &processor, const QPointF &normalizedPosition)
+{
+    if (!std::isfinite(normalizedPosition.x())
+        || !std::isfinite(normalizedPosition.y())) {
+        return false;
+    }
+
+    const int width = processor.imgdata.sizes.width;
+    const int height = processor.imgdata.sizes.height;
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+
+    const QPointF sourcePoint = normalizedPointBeforeRotation(
+        normalizedPosition, processor.imgdata.sizes.flip);
+
+    int sampleSide = std::clamp(std::min(width, height) / 300, 8, 32);
+    if ((sampleSide & 1) != 0) {
+        ++sampleSide;
+    }
+    sampleSide = std::min(sampleSide, std::min(width, height));
+    if (sampleSide < 4) {
+        return false;
+    }
+
+    const int centerX = std::clamp(
+        static_cast<int>(std::lround(sourcePoint.x() * (width - 1))),
+        0,
+        width - 1);
+    const int centerY = std::clamp(
+        static_cast<int>(std::lround(sourcePoint.y() * (height - 1))),
+        0,
+        height - 1);
+
+    const int x = std::clamp(centerX - sampleSide / 2, 0, width - sampleSide);
+    const int y = std::clamp(centerY - sampleSide / 2, 0, height - sampleSide);
+
+    processor.imgdata.params.greybox[0] = static_cast<unsigned>(x);
+    processor.imgdata.params.greybox[1] = static_cast<unsigned>(y);
+    processor.imgdata.params.greybox[2] = static_cast<unsigned>(sampleSide);
+    processor.imgdata.params.greybox[3] = static_cast<unsigned>(sampleSide);
+    return true;
+}
+
 int autoBrightnessWhitePoint(const std::uint16_t *samples, std::size_t pixelCount)
 {
     if (samples == nullptr || pixelCount == 0) {
@@ -466,6 +598,67 @@ QImage ArwDecoder::decode(const QString &filePath,
     QImage image = exposedSrgbImage(*processed, exposureHundredths, error);
     LibRaw::dcraw_clear_mem(processed);
     return image;
+}
+
+WhiteBalancePickResult ArwDecoder::pickWhiteBalance(
+    const QString &filePath,
+    const QPointF &normalizedPosition)
+{
+    WhiteBalancePickResult pick;
+
+    LibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
+    processor.imgdata.params.use_camera_wb = 0;
+    processor.imgdata.params.use_auto_wb = 1;
+    processor.imgdata.params.use_camera_matrix = 1;
+    processor.imgdata.params.no_auto_bright = 1;
+    processor.imgdata.params.no_interpolation = 1;
+
+    int result = openFile(processor, filePath);
+    if (result != LIBRAW_SUCCESS) {
+        pick.error = libRawError("Opening ARW for white-balance sampling", result);
+        return pick;
+    }
+
+    const std::vector<TemperatureCalibration> calibrations =
+        sonyTemperatureCalibrations(processor.imgdata.color);
+    const int cameraTemperatureKelvin =
+        sonyWhiteBalanceTemperatureKelvin(processor.imgdata.color, calibrations);
+    if (cameraTemperatureKelvin <= 0 || calibrations.size() < 2) {
+        pick.error = QStringLiteral(
+            "Sony white-balance calibration data is unavailable for this RAW file.");
+        return pick;
+    }
+
+    if (!configureGreyBox(processor, normalizedPosition)) {
+        pick.error = QStringLiteral("The selected white-balance sample is outside the image.");
+        return pick;
+    }
+
+    result = processor.unpack();
+    if (result != LIBRAW_SUCCESS) {
+        pick.error = libRawError("Decoding ARW for white-balance sampling", result);
+        return pick;
+    }
+
+    result = processor.dcraw_process();
+    if (result != LIBRAW_SUCCESS) {
+        pick.error = libRawError("Sampling RAW white balance", result);
+        return pick;
+    }
+
+    if (!sonyWhiteBalanceValuesForMultipliers(processor.imgdata.color,
+                                              calibrations,
+                                              cameraTemperatureKelvin,
+                                              processor.imgdata.color.pre_mul,
+                                              pick.temperatureKelvin,
+                                              pick.tint)) {
+        pick.error = QStringLiteral(
+            "The selected area did not provide a usable neutral white-balance sample.");
+        pick.temperatureKelvin = 0;
+        pick.tint = 0;
+    }
+
+    return pick;
 }
 
 } // namespace imaging

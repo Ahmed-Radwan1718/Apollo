@@ -1,12 +1,14 @@
 #include "app/MainWindow.h"
 
-#include "imaging/TemperatureRenderService.h"
 #include "imaging/ImageLoader.h"
+#include "imaging/TemperatureRenderService.h"
+#include "imaging/WhiteBalancePickerService.h"
 #include "ui/canvas/PhotoCanvas.h"
 #include "ui/histogram/HistogramWidget.h"
 #include "ui/leftpanel/NavigatorPanel.h"
 #include "ui/rightpanel/BasicPanel.h"
 #include "ui/rightpanel/PhotoMetadataWidget.h"
+#include "ui/rightpanel/WhiteBalancePickerController.h"
 
 #include <QAction>
 #include <QDir>
@@ -30,6 +32,13 @@ constexpr int kTemperatureMinimumKelvin = 2000;
 constexpr int kTemperatureMaximumKelvin = 20000;
 constexpr int kDefaultTemperatureKelvin = 6500;
 
+bool isArwPath(const QString &filePath)
+{
+    return !filePath.isEmpty()
+        && QFileInfo(filePath).suffix().compare(QStringLiteral("arw"),
+                                               Qt::CaseInsensitive) == 0;
+}
+
 int temperatureKelvinFromSlider(const QSlider *slider, int position)
 {
     if (!slider || slider->maximum() <= slider->minimum()) {
@@ -49,6 +58,29 @@ int temperatureKelvinFromSlider(const QSlider *slider, int position)
     return std::clamp(static_cast<int>(std::lround(1.0 / reciprocal)),
                       kTemperatureMinimumKelvin,
                       kTemperatureMaximumKelvin);
+}
+
+int temperatureSliderPositionForKelvin(const QSlider *slider, int kelvin)
+{
+    if (!slider || slider->maximum() <= slider->minimum()) {
+        return 0;
+    }
+
+    const int clampedKelvin = std::clamp(kelvin,
+                                         kTemperatureMinimumKelvin,
+                                         kTemperatureMaximumKelvin);
+    const double minimumReciprocal = 1.0 / static_cast<double>(kTemperatureMinimumKelvin);
+    const double maximumReciprocal = 1.0 / static_cast<double>(kTemperatureMaximumKelvin);
+    const double kelvinReciprocal = 1.0 / static_cast<double>(clampedKelvin);
+    const double normalized = std::clamp(
+        (minimumReciprocal - kelvinReciprocal)
+            / (minimumReciprocal - maximumReciprocal),
+        0.0,
+        1.0);
+
+    return slider->minimum()
+        + static_cast<int>(std::lround(
+            normalized * static_cast<double>(slider->maximum() - slider->minimum())));
 }
 
 QSlider *findExposureSlider(BasicPanel *panel)
@@ -142,27 +174,36 @@ MainWindow::MainWindow(QWidget *parent)
         "}"));
 
     m_renderService = new imaging::TemperatureRenderService(this);
+    m_whiteBalancePickerService = new imaging::WhiteBalancePickerService(this);
+    m_temperatureSlider =
+        m_basicPanel->findChild<QSlider *>(QStringLiteral("temperatureSlider"));
     m_tintSlider = m_basicPanel->findChild<QSlider *>(QStringLiteral("tintSlider"));
     m_exposureSlider = findExposureSlider(m_basicPanel);
+    m_whiteBalancePickerController =
+        new WhiteBalancePickerController(m_basicPanel, m_canvas, this);
 
     createActions();
 
     connect(m_canvas, &PhotoCanvas::fileDropped,
             this, &MainWindow::openImage);
 
-    if (auto *temperatureSlider =
-            m_basicPanel->findChild<QSlider *>(QStringLiteral("temperatureSlider"))) {
-        connect(temperatureSlider, &QSlider::valueChanged, this,
-                [this, temperatureSlider](int position) {
-                    if (m_settingDevelopControls || !temperatureSlider->isSliderDown()) {
+    if (m_temperatureSlider) {
+        connect(m_temperatureSlider, &QSlider::valueChanged, this,
+                [this](int position) {
+                    if (m_settingDevelopControls || !m_temperatureSlider->isSliderDown()) {
                         return;
                     }
-                    previewTemperature(temperatureKelvinFromSlider(temperatureSlider, position));
+                    previewTemperature(
+                        temperatureKelvinFromSlider(m_temperatureSlider, position));
                 });
     }
 
-    connect(m_basicPanel, &BasicPanel::temperatureChanged,
-            this, &MainWindow::applyTemperature);
+    connect(m_basicPanel, &BasicPanel::temperatureChanged, this,
+            [this](int kelvin) {
+                if (!m_settingDevelopControls) {
+                    applyTemperature(kelvin);
+                }
+            });
 
     if (m_tintSlider) {
         connect(m_tintSlider, &QSlider::valueChanged, this,
@@ -206,6 +247,21 @@ MainWindow::MainWindow(QWidget *parent)
                 });
     }
 
+    connect(m_whiteBalancePickerController,
+            &WhiteBalancePickerController::pointPicked,
+            this,
+            [this](const QPointF &normalizedPosition) {
+                if (isArwPath(m_currentFilePath)) {
+                    m_whiteBalancePickerService->request(m_currentFilePath,
+                                                         normalizedPosition);
+                }
+            });
+
+    connect(m_whiteBalancePickerService,
+            &imaging::WhiteBalancePickerService::resultReady,
+            this,
+            &MainWindow::handleWhiteBalancePick);
+
     connect(m_renderService, &imaging::TemperatureRenderService::renderReady,
             this, &MainWindow::handleDevelopRender);
 }
@@ -243,6 +299,9 @@ void MainWindow::openImage(const QString &filePath)
     m_requestedState.tint = 0;
     m_requestedState.exposureHundredths = 0;
     m_fullQualityState = m_requestedState;
+
+    m_whiteBalancePickerController->setActive(false);
+    m_whiteBalancePickerController->setEnabled(isArwPath(m_currentFilePath));
 
     m_canvas->setImage(result.image);
     m_navigator->setImage(result.image);
@@ -306,9 +365,7 @@ void MainWindow::applyExposure(int exposureHundredths)
 
 void MainWindow::requestPreview(const DevelopState &state)
 {
-    if (m_currentFilePath.isEmpty()
-        || QFileInfo(m_currentFilePath).suffix().compare(QStringLiteral("arw"),
-                                                        Qt::CaseInsensitive) != 0) {
+    if (!isArwPath(m_currentFilePath)) {
         return;
     }
 
@@ -322,9 +379,7 @@ void MainWindow::requestPreview(const DevelopState &state)
 
 void MainWindow::requestFullRender(const DevelopState &state)
 {
-    if (m_currentFilePath.isEmpty()
-        || QFileInfo(m_currentFilePath).suffix().compare(QStringLiteral("arw"),
-                                                        Qt::CaseInsensitive) != 0) {
+    if (!isArwPath(m_currentFilePath)) {
         return;
     }
 
@@ -377,6 +432,42 @@ void MainWindow::handleDevelopRender(const QString &filePath,
 
     m_navigator->setImage(image);
     m_histogram->setImage(image);
+}
+
+void MainWindow::handleWhiteBalancePick(const QString &filePath,
+                                        int temperatureKelvin,
+                                        int tint,
+                                        const QString &error)
+{
+    if (filePath != m_currentFilePath) {
+        return;
+    }
+
+    if (!error.isEmpty() || temperatureKelvin <= 0) {
+        QMessageBox::warning(
+            this,
+            tr("Could not set white balance"),
+            tr("Nexus could not use that area as a neutral white-balance sample.\n\n%1")
+                .arg(error));
+        return;
+    }
+
+    DevelopState state = m_requestedState;
+    state.temperatureKelvin = temperatureKelvin;
+    state.tint = tint;
+
+    m_settingDevelopControls = true;
+    if (m_temperatureSlider) {
+        m_temperatureSlider->setValue(
+            temperatureSliderPositionForKelvin(m_temperatureSlider,
+                                               temperatureKelvin));
+    }
+    if (m_tintSlider) {
+        m_tintSlider->setValue(tint);
+    }
+    m_settingDevelopControls = false;
+
+    requestFullRender(state);
 }
 
 void MainWindow::createActions()
