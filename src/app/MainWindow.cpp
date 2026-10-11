@@ -4,6 +4,7 @@
 #include "imaging/TemperatureRenderService.h"
 #include "imaging/WhiteBalancePickerService.h"
 #include "ui/canvas/PhotoCanvas.h"
+#include "ui/filmstrip/FilmstripWidget.h"
 #include "ui/histogram/HistogramWidget.h"
 #include "ui/leftpanel/NavigatorPanel.h"
 #include "ui/rightpanel/BasicPanel.h"
@@ -144,8 +145,19 @@ MainWindow::MainWindow(QWidget *parent)
 
     workspaceLayout->addWidget(leftPanel);
 
-    m_canvas = new PhotoCanvas(workspace);
-    workspaceLayout->addWidget(m_canvas, 1);
+    auto *centerPanel = new QWidget(workspace);
+    centerPanel->setObjectName(QStringLiteral("centerPanel"));
+    auto *centerLayout = new QVBoxLayout(centerPanel);
+    centerLayout->setContentsMargins(0, 0, 0, 0);
+    centerLayout->setSpacing(0);
+
+    m_canvas = new PhotoCanvas(centerPanel);
+    centerLayout->addWidget(m_canvas, 1);
+
+    m_filmstrip = new FilmstripWidget(centerPanel);
+    centerLayout->addWidget(m_filmstrip);
+
+    workspaceLayout->addWidget(centerPanel, 1);
 
     auto *rightPanel = new QWidget(workspace);
     rightPanel->setObjectName(QStringLiteral("rightPanel"));
@@ -397,6 +409,7 @@ void MainWindow::openImage(const QString &filePath)
     m_navigator->setImage(result.image);
     m_histogram->setImage(result.image);
     m_photoMetadata->setMetadata(result.metadata);
+    m_filmstrip->addPhoto(m_currentFilePath, result.image);
 
     m_settingDevelopControls = true;
     m_basicPanel->setCameraTemperatureKelvin(result.metadata.whiteBalanceTemperatureKelvin);

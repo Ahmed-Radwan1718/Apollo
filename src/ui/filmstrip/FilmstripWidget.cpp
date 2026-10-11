@@ -1,0 +1,128 @@
+#include "ui/filmstrip/FilmstripWidget.h"
+
+#include <QFrame>
+#include <QHBoxLayout>
+#include <QPainter>
+#include <QPaintEvent>
+#include <QScrollArea>
+#include <QSizePolicy>
+#include <QVBoxLayout>
+
+namespace {
+
+constexpr int kFilmstripHeight = 116;
+constexpr int kThumbnailWidth = 112;
+constexpr int kThumbnailHeight = 78;
+constexpr int kThumbnailPreviewSize = 320;
+
+class FilmstripThumbnail final : public QWidget
+{
+public:
+    explicit FilmstripThumbnail(const QImage &image, QWidget *parent = nullptr)
+        : QWidget(parent)
+        , m_thumbnail(image.scaled(kThumbnailPreviewSize,
+                                   kThumbnailPreviewSize,
+                                   Qt::KeepAspectRatio,
+                                   Qt::SmoothTransformation))
+    {
+        setFixedSize(kThumbnailWidth, kThumbnailHeight);
+        setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        painter.fillRect(rect(), QColor(17, 17, 17));
+
+        if (!m_thumbnail.isNull()) {
+            painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+            const QRect available = rect().adjusted(4, 4, -4, -4);
+            const QSize drawnSize = m_thumbnail.size().scaled(available.size(),
+                                                              Qt::KeepAspectRatio);
+            const QRect target(available.center().x() - drawnSize.width() / 2,
+                               available.center().y() - drawnSize.height() / 2,
+                               drawnSize.width(),
+                               drawnSize.height());
+            painter.drawImage(target, m_thumbnail);
+        }
+
+        painter.setPen(QColor(48, 48, 48));
+        painter.drawRect(rect().adjusted(0, 0, -1, -1));
+    }
+
+private:
+    QImage m_thumbnail;
+};
+
+} // namespace
+
+FilmstripWidget::FilmstripWidget(QWidget *parent)
+    : QWidget(parent)
+{
+    setObjectName(QStringLiteral("filmstripWidget"));
+    setFixedHeight(kFilmstripHeight);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    m_scrollArea = new QScrollArea(this);
+    m_scrollArea->setObjectName(QStringLiteral("filmstripScrollArea"));
+    m_scrollArea->setFrameShape(QFrame::NoFrame);
+    m_scrollArea->setWidgetResizable(true);
+    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_scrollArea->setFocusPolicy(Qt::NoFocus);
+
+    m_content = new QWidget(m_scrollArea);
+    m_content->setObjectName(QStringLiteral("filmstripContent"));
+    m_contentLayout = new QHBoxLayout(m_content);
+    m_contentLayout->setContentsMargins(10, 10, 10, 10);
+    m_contentLayout->setSpacing(8);
+    m_contentLayout->addStretch(1);
+
+    m_scrollArea->setWidget(m_content);
+    layout->addWidget(m_scrollArea);
+
+    setStyleSheet(QStringLiteral(
+        "QWidget#filmstripWidget {"
+        "  background: #151515;"
+        "  border-top: 1px solid #2a2a2a;"
+        "}"
+        "QScrollArea#filmstripScrollArea, QWidget#filmstripContent {"
+        "  background: #151515;"
+        "  border: 0;"
+        "}"
+        "QScrollBar:horizontal {"
+        "  background: #151515;"
+        "  height: 10px;"
+        "  margin: 0;"
+        "}"
+        "QScrollBar::handle:horizontal {"
+        "  background: #3a3a3a;"
+        "  min-width: 28px;"
+        "  border-radius: 4px;"
+        "}"
+        "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
+        "  width: 0;"
+        "}"
+        "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {"
+        "  background: transparent;"
+        "}"));
+}
+
+void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
+{
+    if (filePath.isEmpty() || image.isNull() || m_importedPaths.contains(filePath)) {
+        return;
+    }
+
+    m_importedPaths.insert(filePath);
+    auto *thumbnail = new FilmstripThumbnail(image, m_content);
+    m_contentLayout->insertWidget(m_contentLayout->count() - 1, thumbnail);
+}

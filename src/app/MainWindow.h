@@ -9,6 +9,7 @@
 
 class QAction;
 class BasicPanel;
+class FilmstripWidget;
 class HistogramWidget;
 class NavigatorPanel;
 class PhotoCanvas;
@@ -76,6 +77,7 @@ private:
 
     NavigatorPanel *m_navigator = nullptr;
     PhotoCanvas *m_canvas = nullptr;
+    FilmstripWidget *m_filmstrip = nullptr;
     HistogramWidget *m_histogram = nullptr;
     PhotoMetadataWidget *m_photoMetadata = nullptr;
     BasicPanel *m_basicPanel = nullptr;

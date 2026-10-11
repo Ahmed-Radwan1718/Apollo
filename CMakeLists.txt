@@ -29,6 +29,8 @@ qt_add_executable(Nexus WIN32
     src/imaging/WhiteBalancePickerService.h
     src/ui/canvas/PhotoCanvas.cpp
     src/ui/canvas/PhotoCanvas.h
+    src/ui/filmstrip/FilmstripWidget.cpp
+    src/ui/filmstrip/FilmstripWidget.h
     src/ui/histogram/HistogramWidget.cpp
     src/ui/histogram/HistogramWidget.h
     src/ui/leftpanel/NavigatorPanel.cpp
