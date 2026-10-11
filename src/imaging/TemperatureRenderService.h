@@ -24,12 +24,14 @@ public:
                         int kelvin,
                         int tint,
                         int exposureHundredths,
-                        int saturation);
+                        int saturation,
+                        int vibrance);
     void requestFullRender(const QString &filePath,
                            int kelvin,
                            int tint,
                            int exposureHundredths,
-                           int saturation);
+                           int saturation,
+                           int vibrance);
 
 signals:
     void renderReady(const QString &filePath,
@@ -37,6 +39,7 @@ signals:
                      int tint,
                      int exposureHundredths,
                      int saturation,
+                     int vibrance,
                      bool preview,
                      const QImage &image,
                      const QString &error);
@@ -48,6 +51,7 @@ private:
         int tint = 0;
         int exposureHundredths = 0;
         int saturation = 0;
+        int vibrance = 0;
     };
 
     void request(Request request, bool preview);

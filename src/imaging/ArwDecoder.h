@@ -31,6 +31,7 @@ public:
                                        int tint = 0,
                                        int exposureHundredths = 0,
                                        int saturation = 0,
+                                       int vibrance = 0,
                                        bool halfSizePreview = false);
 
     [[nodiscard]] static WhiteBalancePickResult pickWhiteBalance(

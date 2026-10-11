@@ -37,6 +37,7 @@ private slots:
                              int tint,
                              int exposureHundredths,
                              int saturation,
+                             int vibrance,
                              bool preview,
                              const QImage &image,
                              const QString &error);
@@ -51,6 +52,7 @@ private:
         int tint = 0;
         int exposureHundredths = 0;
         int saturation = 0;
+        int vibrance = 0;
 
         bool operator==(const DevelopState &) const = default;
     };
@@ -63,6 +65,8 @@ private:
     void applyExposure(int exposureHundredths);
     void previewSaturation(int saturation);
     void applySaturation(int saturation);
+    void previewVibrance(int vibrance);
+    void applyVibrance(int vibrance);
     void requestPreview(const DevelopState &state);
     void requestFullRender(const DevelopState &state);
 
@@ -75,6 +79,7 @@ private:
     QSlider *m_tintSlider = nullptr;
     QSlider *m_exposureSlider = nullptr;
     QSlider *m_saturationSlider = nullptr;
+    QSlider *m_vibranceSlider = nullptr;
     imaging::TemperatureRenderService *m_renderService = nullptr;
     imaging::WhiteBalancePickerService *m_whiteBalancePickerService = nullptr;
     WhiteBalancePickerController *m_whiteBalancePickerController = nullptr;

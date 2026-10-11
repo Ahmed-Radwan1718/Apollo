@@ -27,11 +27,19 @@ constexpr int kExposureMinimumHundredths = -500;
 constexpr int kExposureMaximumHundredths = 500;
 constexpr int kSaturationMinimum = -100;
 constexpr int kSaturationMaximum = 100;
+constexpr int kVibranceMinimum = -100;
+constexpr int kVibranceMaximum = 100;
 constexpr int kLinearMaximum = 65535;
 constexpr double kAutoBrightnessClipFraction = 0.01;
 constexpr double kLinearSrgbRedLuminance = 0.2126;
 constexpr double kLinearSrgbGreenLuminance = 0.7152;
 constexpr double kLinearSrgbBlueLuminance = 0.0722;
+constexpr double kOklabReferenceChroma = 0.25;
+constexpr double kWarmHueCenterRadians = 0.8726646259971648; // 50 degrees
+constexpr double kWarmHueHalfWidthRadians = 0.6108652381980153; // 35 degrees
+constexpr double kWarmHueProtectionStrength = 0.5;
+constexpr int kVibranceGamutSearchIterations = 8;
+constexpr double kTwoPi = 6.28318530717958647692;
 
 struct WhiteBalanceRatios {
     double redToGreen = 0.0;
@@ -41,6 +49,18 @@ struct WhiteBalanceRatios {
 struct TemperatureCalibration {
     int kelvin = 0;
     WhiteBalanceRatios ratios;
+};
+
+struct LinearRgb {
+    double red = 0.0;
+    double green = 0.0;
+    double blue = 0.0;
+};
+
+struct Oklab {
+    double lightness = 0.0;
+    double a = 0.0;
+    double b = 0.0;
 };
 
 QString libRawError(const char *stage, int errorCode)
@@ -459,9 +479,174 @@ void applyLinearSaturation(double &red,
     blue = luminance + (blue - luminance) * chromaScale;
 }
 
+double smoothstep01(double value)
+{
+    const double clamped = std::clamp(value, 0.0, 1.0);
+    return clamped * clamped * (3.0 - 2.0 * clamped);
+}
+
+Oklab linearSrgbToOklab(const LinearRgb &rgb)
+{
+    const double l = 0.4122214708 * rgb.red
+        + 0.5363325363 * rgb.green
+        + 0.0514459929 * rgb.blue;
+    const double m = 0.2119034982 * rgb.red
+        + 0.6806995451 * rgb.green
+        + 0.1073969566 * rgb.blue;
+    const double s = 0.0883024619 * rgb.red
+        + 0.2817188376 * rgb.green
+        + 0.6299787005 * rgb.blue;
+
+    const double lRoot = std::cbrt(l);
+    const double mRoot = std::cbrt(m);
+    const double sRoot = std::cbrt(s);
+
+    return {
+        0.2104542553 * lRoot + 0.7936177850 * mRoot - 0.0040720468 * sRoot,
+        1.9779984951 * lRoot - 2.4285922050 * mRoot + 0.4505937099 * sRoot,
+        0.0259040371 * lRoot + 0.7827717662 * mRoot - 0.8086757660 * sRoot,
+    };
+}
+
+LinearRgb oklabToLinearSrgb(const Oklab &lab)
+{
+    const double lRoot = lab.lightness + 0.3963377774 * lab.a + 0.2158037573 * lab.b;
+    const double mRoot = lab.lightness - 0.1055613458 * lab.a - 0.0638541728 * lab.b;
+    const double sRoot = lab.lightness - 0.0894841775 * lab.a - 1.2914855480 * lab.b;
+
+    const double l = lRoot * lRoot * lRoot;
+    const double m = mRoot * mRoot * mRoot;
+    const double s = sRoot * sRoot * sRoot;
+
+    return {
+        4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+        -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+        -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+    };
+}
+
+Oklab oklabWithChroma(const Oklab &lab, double chroma)
+{
+    const double currentChroma = std::hypot(lab.a, lab.b);
+    if (currentChroma <= std::numeric_limits<double>::epsilon()) {
+        return lab;
+    }
+
+    const double scale = chroma / currentChroma;
+    return {lab.lightness, lab.a * scale, lab.b * scale};
+}
+
+bool isUnitGamut(const LinearRgb &rgb)
+{
+    constexpr double epsilon = 1e-7;
+    return rgb.red >= -epsilon && rgb.red <= 1.0 + epsilon
+        && rgb.green >= -epsilon && rgb.green <= 1.0 + epsilon
+        && rgb.blue >= -epsilon && rgb.blue <= 1.0 + epsilon;
+}
+
+double warmHueVibranceScale(const Oklab &lab, double chroma)
+{
+    if (chroma <= 0.02) {
+        return 1.0;
+    }
+
+    const double hue = std::atan2(lab.b, lab.a);
+    const double hueDistance = std::abs(std::remainder(
+        hue - kWarmHueCenterRadians, kTwoPi));
+    const double hueWeight = 1.0 - smoothstep01(
+        hueDistance / kWarmHueHalfWidthRadians);
+
+    const double lowLightnessWeight = smoothstep01(
+        (lab.lightness - 0.20) / 0.15);
+    const double highLightnessWeight = smoothstep01(
+        (0.95 - lab.lightness) / 0.15);
+    const double chromaWeight = smoothstep01((chroma - 0.02) / 0.06);
+    const double protection = hueWeight
+        * lowLightnessWeight
+        * highLightnessWeight
+        * chromaWeight;
+
+    return 1.0 - kWarmHueProtectionStrength * protection;
+}
+
+void applyOklabVibrance(double &red,
+                        double &green,
+                        double &blue,
+                        int vibrance)
+{
+    const int clampedVibrance = std::clamp(vibrance,
+                                           kVibranceMinimum,
+                                           kVibranceMaximum);
+    if (clampedVibrance == 0) {
+        return;
+    }
+
+    // Normalize only for the perceptual color calculation so Exposure remains a
+    // separate linear-light control and Vibrance does not become stronger simply
+    // because a pixel is above display white.
+    const double normalization = std::max({1.0, red, green, blue});
+    const LinearRgb normalizedRgb{
+        red / normalization,
+        green / normalization,
+        blue / normalization,
+    };
+
+    const Oklab lab = linearSrgbToOklab(normalizedRgb);
+    const double chroma = std::hypot(lab.a, lab.b);
+    if (chroma <= 1e-10) {
+        return;
+    }
+
+    const double normalizedChroma = std::clamp(
+        chroma / kOklabReferenceChroma, 0.0, 1.0);
+    const double amount = std::abs(static_cast<double>(clampedVibrance)) / 100.0;
+
+    double chromaMultiplier = 1.0;
+    if (clampedVibrance > 0) {
+        const double mutedWeight = (1.0 - normalizedChroma)
+            * (1.0 - normalizedChroma);
+        chromaMultiplier += amount
+            * mutedWeight
+            * warmHueVibranceScale(lab, chroma);
+    } else {
+        const double colorfulWeight = 0.35 + 0.65 * normalizedChroma;
+        chromaMultiplier = std::max(0.0, 1.0 - amount * colorfulWeight);
+    }
+
+    const double targetChroma = chroma * chromaMultiplier;
+    LinearRgb adjusted = oklabToLinearSrgb(oklabWithChroma(lab, targetChroma));
+
+    // Positive Vibrance should not create new channel clipping. If the requested
+    // Oklab chroma falls outside normalized linear sRGB, back off chroma while
+    // preserving Oklab lightness and hue.
+    if (clampedVibrance > 0 && targetChroma > chroma && !isUnitGamut(adjusted)) {
+        double lowerChroma = chroma;
+        double upperChroma = targetChroma;
+        adjusted = normalizedRgb;
+
+        for (int iteration = 0; iteration < kVibranceGamutSearchIterations; ++iteration) {
+            const double candidateChroma = 0.5 * (lowerChroma + upperChroma);
+            const LinearRgb candidate = oklabToLinearSrgb(
+                oklabWithChroma(lab, candidateChroma));
+
+            if (isUnitGamut(candidate)) {
+                lowerChroma = candidateChroma;
+                adjusted = candidate;
+            } else {
+                upperChroma = candidateChroma;
+            }
+        }
+    }
+
+    red = std::max(0.0, adjusted.red * normalization);
+    green = std::max(0.0, adjusted.green * normalization);
+    blue = std::max(0.0, adjusted.blue * normalization);
+}
+
 QImage developedSrgbImage(const libraw_processed_image_t &processed,
                           int exposureHundredths,
                           int saturation,
+                          int vibrance,
                           QString *error)
 {
     if (processed.type != LIBRAW_IMAGE_BITMAP
@@ -494,6 +679,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
     const int clampedSaturation = std::clamp(saturation,
                                              kSaturationMinimum,
                                              kSaturationMaximum);
+    const int clampedVibrance = std::clamp(vibrance,
+                                           kVibranceMinimum,
+                                           kVibranceMaximum);
 
     QImage image(processed.width, processed.height, QImage::Format_RGB888);
     if (image.isNull()) {
@@ -501,9 +689,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
         return {};
     }
 
-    if (clampedSaturation == 0) {
+    if (clampedSaturation == 0 && clampedVibrance == 0) {
         // Keep the neutral path byte-for-byte equivalent to the existing exposure
-        // render and avoid per-pixel floating-point color work when Saturation is 0.
+        // render and avoid per-pixel floating-point color work when color controls are 0.
         std::vector<std::uint8_t> transferTable(kLinearMaximum + 1);
         for (int value = 0; value <= kLinearMaximum; ++value) {
             const double linear = static_cast<double>(value)
@@ -537,7 +725,12 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                 double green = static_cast<double>(samples[source + 1]) * sampleScale;
                 double blue = static_cast<double>(samples[source + 2]) * sampleScale;
 
-                applyLinearSaturation(red, green, blue, chromaScale);
+                if (clampedVibrance != 0) {
+                    applyOklabVibrance(red, green, blue, clampedVibrance);
+                }
+                if (clampedSaturation != 0) {
+                    applyLinearSaturation(red, green, blue, chromaScale);
+                }
 
                 destination[destinationOffset] = linearToSrgb8(red);
                 destination[destinationOffset + 1] = linearToSrgb8(green);
@@ -560,6 +753,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                           int tint,
                           int exposureHundredths,
                           int saturation,
+                          int vibrance,
                           bool halfSizePreview)
 {
     if (error != nullptr) {
@@ -572,8 +766,8 @@ QImage ArwDecoder::decode(const QString &filePath,
     LibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
 
     // Ask LibRaw for a high-precision linear sRGB render. Nexus performs the
-    // final exposure, luminance/chroma saturation adjustment, and sRGB transfer
-    // itself instead of applying color changes to an already rendered 8-bit image.
+    // final exposure, perceptual vibrance, saturation, and sRGB transfer itself
+    // instead of applying color changes to an already rendered 8-bit image.
     processor.imgdata.params.use_camera_wb = 1;
     processor.imgdata.params.use_camera_matrix = 1;
     processor.imgdata.params.output_color = 1; // linear sRGB primaries
@@ -656,6 +850,7 @@ QImage ArwDecoder::decode(const QString &filePath,
     QImage image = developedSrgbImage(*processed,
                                       exposureHundredths,
                                       saturation,
+                                      vibrance,
                                       error);
     LibRaw::dcraw_clear_mem(processed);
     return image;

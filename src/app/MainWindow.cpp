@@ -201,6 +201,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_tintSlider = m_basicPanel->findChild<QSlider *>(QStringLiteral("tintSlider"));
     m_exposureSlider = findExposureSlider(m_basicPanel);
     m_saturationSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Saturation"));
+    m_vibranceSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Vibrance"));
     m_whiteBalancePickerController =
         new WhiteBalancePickerController(m_basicPanel, m_canvas, this);
 
@@ -290,6 +291,27 @@ MainWindow::MainWindow(QWidget *parent)
                 });
     }
 
+    if (m_vibranceSlider) {
+        connect(m_vibranceSlider, &QSlider::valueChanged, this,
+                [this](int vibrance) {
+                    if (m_settingDevelopControls) {
+                        return;
+                    }
+
+                    if (m_vibranceSlider->isSliderDown()) {
+                        previewVibrance(vibrance);
+                    } else {
+                        applyVibrance(vibrance);
+                    }
+                });
+        connect(m_vibranceSlider, &QSlider::sliderReleased, this,
+                [this]() {
+                    if (!m_settingDevelopControls) {
+                        applyVibrance(m_vibranceSlider->value());
+                    }
+                });
+    }
+
     connect(m_whiteBalancePickerController,
             &WhiteBalancePickerController::pointPicked,
             this,
@@ -342,6 +364,7 @@ void MainWindow::openImage(const QString &filePath)
     m_requestedState.tint = 0;
     m_requestedState.exposureHundredths = 0;
     m_requestedState.saturation = 0;
+    m_requestedState.vibrance = 0;
     m_fullQualityState = m_requestedState;
 
     m_whiteBalancePickerController->setActive(false);
@@ -362,6 +385,9 @@ void MainWindow::openImage(const QString &filePath)
     }
     if (m_saturationSlider) {
         m_saturationSlider->setValue(0);
+    }
+    if (m_vibranceSlider) {
+        m_vibranceSlider->setValue(0);
     }
     m_settingDevelopControls = false;
 
@@ -424,6 +450,20 @@ void MainWindow::applySaturation(int saturation)
     requestFullRender(state);
 }
 
+void MainWindow::previewVibrance(int vibrance)
+{
+    DevelopState state = m_requestedState;
+    state.vibrance = vibrance;
+    requestPreview(state);
+}
+
+void MainWindow::applyVibrance(int vibrance)
+{
+    DevelopState state = m_requestedState;
+    state.vibrance = vibrance;
+    requestFullRender(state);
+}
+
 void MainWindow::requestPreview(const DevelopState &state)
 {
     if (!isArwPath(m_currentFilePath)) {
@@ -436,7 +476,8 @@ void MainWindow::requestPreview(const DevelopState &state)
                                     state.temperatureKelvin,
                                     state.tint,
                                     state.exposureHundredths,
-                                    state.saturation);
+                                    state.saturation,
+                                    state.vibrance);
 }
 
 void MainWindow::requestFullRender(const DevelopState &state)
@@ -450,7 +491,8 @@ void MainWindow::requestFullRender(const DevelopState &state)
                                        state.temperatureKelvin,
                                        state.tint,
                                        state.exposureHundredths,
-                                       state.saturation);
+                                       state.saturation,
+                                       state.vibrance);
 }
 
 void MainWindow::handleDevelopRender(const QString &filePath,
@@ -458,6 +500,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
                                      int tint,
                                      int exposureHundredths,
                                      int saturation,
+                                     int vibrance,
                                      bool preview,
                                      const QImage &image,
                                      const QString &error)
@@ -467,6 +510,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
         tint,
         exposureHundredths,
         saturation,
+        vibrance,
     };
 
     if (filePath != m_currentFilePath || renderedState != m_requestedState) {
