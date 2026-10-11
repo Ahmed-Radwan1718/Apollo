@@ -34,6 +34,7 @@ public:
 
     [[nodiscard]] bool hasImage() const noexcept;
     [[nodiscard]] qreal zoomPercent() const noexcept;
+    [[nodiscard]] qreal defaultFitScale() const noexcept { return fitScale(); }
 
 public slots:
     void fitToView();

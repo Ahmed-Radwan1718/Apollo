@@ -2,6 +2,7 @@
 
 #include "ui/canvas/PhotoCanvas.h"
 
+#include <QEvent>
 #include <QFileInfo>
 #include <QFont>
 #include <QFrame>
@@ -26,7 +27,6 @@ constexpr int kThumbnailLabelHeight = 18;
 constexpr int kThumbnailHeight = kThumbnailImageHeight + kThumbnailLabelHeight;
 constexpr int kThumbnailPreviewSize = 320;
 constexpr int kFilmstripVerticalMargin = 10;
-constexpr int kFilmstripRightMargin = 10;
 
 class FilmstripThumbnail final : public QWidget
 {
@@ -147,9 +147,9 @@ FilmstripWidget::FilmstripWidget(QWidget *parent)
     m_content = new QWidget(m_scrollArea);
     m_content->setObjectName(QStringLiteral("filmstripContent"));
     m_contentLayout = new QHBoxLayout(m_content);
-    m_contentLayout->setContentsMargins(kFilmstripRightMargin,
+    m_contentLayout->setContentsMargins(0,
                                         kFilmstripVerticalMargin,
-                                        kFilmstripRightMargin,
+                                        0,
                                         kFilmstripVerticalMargin);
     m_contentLayout->setSpacing(8);
     m_contentLayout->addStretch(1);
@@ -182,6 +182,19 @@ FilmstripWidget::FilmstripWidget(QWidget *parent)
         "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {"
         "  background: transparent;"
         "}"));
+
+    if (parentWidget()) {
+        m_canvas = parentWidget()->findChild<PhotoCanvas *>(
+            QString(), Qt::FindDirectChildrenOnly);
+    }
+
+    if (m_canvas) {
+        m_canvas->installEventFilter(this);
+        connect(m_canvas, &PhotoCanvas::zoomChanged, this,
+                [this](qreal) {
+                    alignToDefaultPhotoBounds();
+                });
+    }
 }
 
 void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
@@ -190,7 +203,7 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
         return;
     }
 
-    alignToFittedPhotoOnce();
+    alignToDefaultPhotoBounds();
 
     if (m_thumbnails.contains(filePath)) {
         setCurrentPhoto(filePath);
@@ -208,6 +221,19 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
     m_thumbnails.insert(filePath, thumbnail);
     m_contentLayout->insertWidget(m_contentLayout->count() - 1, thumbnail);
     setCurrentPhoto(filePath);
+}
+
+bool FilmstripWidget::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_canvas && event->type() == QEvent::Resize) {
+        QMetaObject::invokeMethod(this,
+                                  [this]() {
+                                      alignToDefaultPhotoBounds(true);
+                                  },
+                                  Qt::QueuedConnection);
+    }
+
+    return QWidget::eventFilter(watched, event);
 }
 
 void FilmstripWidget::activatePhoto(const QString &filePath)
@@ -239,24 +265,44 @@ void FilmstripWidget::setCurrentPhoto(const QString &filePath)
     }
 }
 
-void FilmstripWidget::alignToFittedPhotoOnce()
+void FilmstripWidget::alignToDefaultPhotoBounds(bool updateWhileManual)
 {
-    if (m_alignmentLocked || !m_contentLayout || !parentWidget()) {
+    if (!m_canvas || !layout() || !m_canvas->hasImage() || m_canvas->sceneRect().isEmpty()) {
         return;
     }
 
-    PhotoCanvas *canvas = parentWidget()->findChild<PhotoCanvas *>(
-        QString(), Qt::FindDirectChildrenOnly);
-    if (!canvas || !canvas->hasImage() || canvas->sceneRect().isEmpty()) {
+    const QRect viewportRect = m_canvas->viewport()->rect();
+    if (viewportRect.isEmpty()) {
         return;
     }
 
-    const QRect fittedImageRect = canvas->mapFromScene(canvas->sceneRect()).boundingRect();
-    const int leftInset = qMax(0, fittedImageRect.left());
+    const QRectF photoRect = m_canvas->sceneRect();
+    const qreal fitScale = m_canvas->defaultFitScale();
+    if (fitScale <= 0.0) {
+        return;
+    }
 
-    m_contentLayout->setContentsMargins(leftInset,
-                                        kFilmstripVerticalMargin,
-                                        kFilmstripRightMargin,
-                                        kFilmstripVerticalMargin);
-    m_alignmentLocked = true;
+    const qreal currentScale = m_canvas->transform().m11();
+    const bool showingDefaultFit = qFuzzyCompare(currentScale, fitScale);
+
+    int leftInset = 0;
+    int rightInset = 0;
+
+    if (showingDefaultFit) {
+        const QRect fittedRect = m_canvas->mapFromScene(photoRect).boundingRect();
+        leftInset = qMax(0, fittedRect.left());
+        rightInset = qMax(0, viewportRect.width() - fittedRect.right() - 1);
+    } else {
+        if (!updateWhileManual) {
+            return;
+        }
+
+        const qreal fittedWidth = photoRect.width() * fitScale;
+        const qreal centeredInset = (viewportRect.width() - fittedWidth) / 2.0;
+        leftInset = qMax(0, qRound(centeredInset));
+        rightInset = qMax(0, viewportRect.width()
+                                - qRound(centeredInset + fittedWidth));
+    }
+
+    layout()->setContentsMargins(leftInset, 0, rightInset, 0);
 }
