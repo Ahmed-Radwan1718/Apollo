@@ -162,27 +162,41 @@ protected:
             ? QColor(255, 255, 255)
             : QColor(194, 194, 194);
 
-        const QPointF center(width() / 2.0, (height() / 2.0) - 0.25);
-        constexpr qreal halfWidth = 8.0;
-        constexpr qreal halfHeight = 4.7;
+        constexpr qreal iconScale = 0.95;
+        painter.translate(width() / 2.0, (height() / 2.0) - 0.25);
+        painter.scale(iconScale, iconScale);
+        painter.translate(-12.0, -13.0);
 
         QPainterPath eye;
-        eye.moveTo(center.x() - halfWidth, center.y());
-        eye.cubicTo(center.x() - 4.6, center.y() - halfHeight,
-                    center.x() + 4.6, center.y() - halfHeight,
-                    center.x() + halfWidth, center.y());
-        eye.cubicTo(center.x() + 4.6, center.y() + halfHeight,
-                    center.x() - 4.6, center.y() + halfHeight,
-                    center.x() - halfWidth, center.y());
+        eye.moveTo(12.0, 7.5);
+        eye.cubicTo(7.69517, 7.5,
+                    4.47617, 11.0833,
+                    3.39473, 12.4653);
+        eye.cubicTo(3.14595, 12.7832,
+                    3.14595, 13.2168,
+                    3.39473, 13.5347);
+        eye.cubicTo(4.47617, 14.9167,
+                    7.69517, 18.5,
+                    12.0, 18.5);
+        eye.cubicTo(16.3048, 18.5,
+                    19.5238, 14.9167,
+                    20.6053, 13.5347);
+        eye.cubicTo(20.8541, 13.2168,
+                    20.8541, 12.7832,
+                    20.6053, 12.4653);
+        eye.cubicTo(19.5238, 11.0833,
+                    16.3048, 7.5,
+                    12.0, 7.5);
+        eye.closeSubpath();
 
         painter.setBrush(Qt::NoBrush);
-        painter.setPen(QPen(color, 1.25, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.setPen(QPen(color,
+                            1.2 / iconScale,
+                            Qt::SolidLine,
+                            Qt::RoundCap,
+                            Qt::RoundJoin));
         painter.drawPath(eye);
-        painter.drawEllipse(center, 2.45, 2.45);
-
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(color);
-        painter.drawEllipse(center, 0.8, 0.8);
+        painter.drawEllipse(QPointF(12.0, 13.0), 2.0, 2.0);
     }
 };
 
