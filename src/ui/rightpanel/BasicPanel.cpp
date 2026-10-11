@@ -160,28 +160,29 @@ protected:
 
         const QColor color = underMouse()
             ? QColor(255, 255, 255)
-            : QColor(211, 211, 211);
+            : QColor(194, 194, 194);
 
-        const QPointF center(width() / 2.0, height() / 2.0);
-        constexpr qreal halfWidth = 7.2;
-        constexpr qreal halfHeight = 4.2;
+        const QPointF center(width() / 2.0, (height() / 2.0) - 0.25);
+        constexpr qreal halfWidth = 8.0;
+        constexpr qreal halfHeight = 4.7;
 
         QPainterPath eye;
         eye.moveTo(center.x() - halfWidth, center.y());
-        eye.cubicTo(center.x() - 4.3, center.y() - halfHeight,
-                    center.x() + 4.3, center.y() - halfHeight,
+        eye.cubicTo(center.x() - 4.6, center.y() - halfHeight,
+                    center.x() + 4.6, center.y() - halfHeight,
                     center.x() + halfWidth, center.y());
-        eye.cubicTo(center.x() + 4.3, center.y() + halfHeight,
-                    center.x() - 4.3, center.y() + halfHeight,
+        eye.cubicTo(center.x() + 4.6, center.y() + halfHeight,
+                    center.x() - 4.6, center.y() + halfHeight,
                     center.x() - halfWidth, center.y());
 
         painter.setBrush(Qt::NoBrush);
-        painter.setPen(QPen(color, 1.35, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.setPen(QPen(color, 1.25, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         painter.drawPath(eye);
+        painter.drawEllipse(center, 2.45, 2.45);
 
         painter.setPen(Qt::NoPen);
         painter.setBrush(color);
-        painter.drawEllipse(center, 2.0, 2.0);
+        painter.drawEllipse(center, 0.8, 0.8);
     }
 };
 
