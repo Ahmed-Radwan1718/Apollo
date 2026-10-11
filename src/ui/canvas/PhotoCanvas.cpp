@@ -236,6 +236,8 @@ void PhotoCanvas::resizeEvent(QResizeEvent *event)
 
     if (hasImage() && m_zoomMode == ZoomMode::Fit) {
         fitToView();
+    } else {
+        updateCursor();
     }
 }
 
@@ -266,8 +268,11 @@ void PhotoCanvas::mousePressEvent(QMouseEvent *event)
 {
     const bool middlePan = event->button() == Qt::MiddleButton;
     const bool spacePan = event->button() == Qt::LeftButton && m_spacePressed;
+    const bool directPan = event->button() == Qt::LeftButton
+        && canPan()
+        && itemAt(event->position().toPoint()) == m_imageItem;
 
-    if (hasImage() && (middlePan || spacePan)) {
+    if (hasImage() && canPan() && (middlePan || spacePan || directPan)) {
         beginPan(event->position());
         event->accept();
         return;
@@ -406,6 +411,21 @@ qreal PhotoCanvas::fitScale() const noexcept
                     availableHeight / imageRect.height());
 }
 
+bool PhotoCanvas::canPan() const noexcept
+{
+    if (!hasImage()) {
+        return false;
+    }
+
+    const qreal scale = currentViewScale();
+    const QRectF imageRect = m_imageItem->boundingRect();
+    const qreal scaledWidth = imageRect.width() * scale;
+    const qreal scaledHeight = imageRect.height() * scale;
+
+    return scaledWidth > viewport()->width() + 0.5
+        || scaledHeight > viewport()->height() + 0.5;
+}
+
 void PhotoCanvas::setZoomPercentAt(qreal percent, const QPointF &anchorInViewport)
 {
     if (!hasImage()) {
@@ -457,12 +477,14 @@ void PhotoCanvas::beginPan(const QPointF &position)
 
 void PhotoCanvas::updatePan(const QPointF &position)
 {
-    const QPointF previousScenePoint = mapToScene(m_lastPanPosition.toPoint());
-    const QPointF currentScenePoint = mapToScene(position.toPoint());
-    const QPointF sceneDelta = currentScenePoint - previousScenePoint;
+    const QPointF delta = position - m_lastPanPosition;
 
-    const QPoint viewportCenter = viewport()->rect().center();
-    centerOn(mapToScene(viewportCenter) - sceneDelta);
+    auto *horizontal = horizontalScrollBar();
+    auto *vertical = verticalScrollBar();
+
+    horizontal->setValue(horizontal->value() - static_cast<int>(std::lround(delta.x())));
+    vertical->setValue(vertical->value() - static_cast<int>(std::lround(delta.y())));
+
     m_lastPanPosition = position;
 }
 
@@ -479,7 +501,7 @@ void PhotoCanvas::updateCursor()
         return;
     }
 
-    if (hasImage() && m_spacePressed) {
+    if (hasImage() && (m_spacePressed || canPan())) {
         viewport()->setCursor(Qt::OpenHandCursor);
         return;
     }
