@@ -17,7 +17,7 @@ namespace imaging {
 namespace {
 
 constexpr int kSonyTemperatureMinimumKelvin = 2000;
-constexpr int kSonyTemperatureMaximumKelvin = 50000;
+constexpr int kSonyTemperatureMaximumKelvin = 20000;
 constexpr int kSonyTemperatureStepKelvin = 100;
 
 struct WhiteBalanceRatios {
