@@ -56,14 +56,14 @@ QImage ArwDecoder::decode(const QString &filePath,
 
     LibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
 
-    // Produce a neutral display rendering from the RAW data itself. Keep automatic
-    // brightness disabled so merely opening a file does not silently apply an
-    // exposure-like adjustment. The original ARW is never modified.
+    // Produce a display-ready rendering from the RAW data itself. LibRaw's normal
+    // histogram-based auto brightness is intentionally left enabled so 8-bit output
+    // uses a practical display range instead of appearing severely underexposed.
+    // The original ARW is never modified.
     processor.imgdata.params.use_camera_wb = 1;
     processor.imgdata.params.use_camera_matrix = 1;
     processor.imgdata.params.output_color = 1; // sRGB
     processor.imgdata.params.output_bps = 8;
-    processor.imgdata.params.no_auto_bright = 1;
     processor.imgdata.params.gamm[0] = 1.0 / 2.4;
     processor.imgdata.params.gamm[1] = 12.92;
 
