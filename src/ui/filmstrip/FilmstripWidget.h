@@ -18,10 +18,12 @@ public:
 private:
     void activatePhoto(const QString &filePath);
     void setCurrentPhoto(const QString &filePath);
+    void alignToFittedPhotoOnce();
 
     QScrollArea *m_scrollArea = nullptr;
     QWidget *m_content = nullptr;
     QHBoxLayout *m_contentLayout = nullptr;
     QHash<QString, QWidget *> m_thumbnails;
     QString m_currentFilePath;
+    bool m_alignmentLocked = false;
 };

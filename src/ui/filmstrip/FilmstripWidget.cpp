@@ -1,5 +1,7 @@
 #include "ui/filmstrip/FilmstripWidget.h"
 
+#include "ui/canvas/PhotoCanvas.h"
+
 #include <QFileInfo>
 #include <QFont>
 #include <QFrame>
@@ -23,6 +25,8 @@ constexpr int kThumbnailImageHeight = 78;
 constexpr int kThumbnailLabelHeight = 18;
 constexpr int kThumbnailHeight = kThumbnailImageHeight + kThumbnailLabelHeight;
 constexpr int kThumbnailPreviewSize = 320;
+constexpr int kFilmstripVerticalMargin = 10;
+constexpr int kFilmstripRightMargin = 10;
 
 class FilmstripThumbnail final : public QWidget
 {
@@ -143,7 +147,10 @@ FilmstripWidget::FilmstripWidget(QWidget *parent)
     m_content = new QWidget(m_scrollArea);
     m_content->setObjectName(QStringLiteral("filmstripContent"));
     m_contentLayout = new QHBoxLayout(m_content);
-    m_contentLayout->setContentsMargins(10, 10, 10, 10);
+    m_contentLayout->setContentsMargins(kFilmstripRightMargin,
+                                        kFilmstripVerticalMargin,
+                                        kFilmstripRightMargin,
+                                        kFilmstripVerticalMargin);
     m_contentLayout->setSpacing(8);
     m_contentLayout->addStretch(1);
 
@@ -182,6 +189,8 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
     if (filePath.isEmpty() || image.isNull()) {
         return;
     }
+
+    alignToFittedPhotoOnce();
 
     if (m_thumbnails.contains(filePath)) {
         setCurrentPhoto(filePath);
@@ -228,4 +237,26 @@ void FilmstripWidget::setCurrentPhoto(const QString &filePath)
     if (QWidget *current = m_thumbnails.value(m_currentFilePath, nullptr)) {
         static_cast<FilmstripThumbnail *>(current)->setSelected(true);
     }
+}
+
+void FilmstripWidget::alignToFittedPhotoOnce()
+{
+    if (m_alignmentLocked || !m_contentLayout || !parentWidget()) {
+        return;
+    }
+
+    PhotoCanvas *canvas = parentWidget()->findChild<PhotoCanvas *>(
+        QString(), Qt::FindDirectChildrenOnly);
+    if (!canvas || !canvas->hasImage() || canvas->sceneRect().isEmpty()) {
+        return;
+    }
+
+    const QRect fittedImageRect = canvas->mapFromScene(canvas->sceneRect()).boundingRect();
+    const int leftInset = qMax(0, fittedImageRect.left());
+
+    m_contentLayout->setContentsMargins(leftInset,
+                                        kFilmstripVerticalMargin,
+                                        kFilmstripRightMargin,
+                                        kFilmstripVerticalMargin);
+    m_alignmentLocked = true;
 }
