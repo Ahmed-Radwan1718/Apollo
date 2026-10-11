@@ -13,6 +13,7 @@
 #include <QPainter>
 #include <QResizeEvent>
 #include <QScrollBar>
+#include <QSizeF>
 #include <QUrl>
 #include <QWheelEvent>
 
@@ -24,11 +25,14 @@ namespace {
 class PhotoImageItem final : public QGraphicsItem
 {
 public:
-    void setImage(const QImage &image)
+    void setImage(const QImage &image, const QSizeF &logicalSize)
     {
         prepareGeometryChange();
         m_image = image;
         m_image.setDevicePixelRatio(1.0);
+        m_logicalSize = logicalSize.isValid() && !logicalSize.isEmpty()
+            ? logicalSize
+            : QSizeF(image.size());
         update();
     }
 
@@ -36,7 +40,7 @@ public:
 
     QRectF boundingRect() const override
     {
-        return QRectF(QPointF(0.0, 0.0), QSizeF(m_image.width(), m_image.height()));
+        return QRectF(QPointF(0.0, 0.0), m_logicalSize);
     }
 
     void paint(QPainter *painter,
@@ -53,6 +57,7 @@ public:
 
 private:
     QImage m_image;
+    QSizeF m_logicalSize;
 };
 
 PhotoImageItem *asPhotoItem(QGraphicsItem *item)
@@ -95,7 +100,7 @@ void PhotoCanvas::setImage(const QImage &image)
         return;
     }
 
-    asPhotoItem(m_imageItem)->setImage(image);
+    asPhotoItem(m_imageItem)->setImage(image, QSizeF(image.size()));
     m_scene->setSceneRect(m_imageItem->boundingRect());
     m_imageItem->setVisible(true);
 
@@ -113,21 +118,46 @@ void PhotoCanvas::replaceImage(const QImage &image)
     }
 
     const PhotoImageItem *currentItem = asPhotoItem(m_imageItem);
-    if (!hasImage() || currentItem->image().size() != image.size()) {
+    if (!hasImage() || currentItem->boundingRect().size() != QSizeF(image.size())) {
         setImage(image);
         return;
     }
 
-    asPhotoItem(m_imageItem)->setImage(image);
+    asPhotoItem(m_imageItem)->setImage(image, QSizeF(image.size()));
     m_scene->setSceneRect(m_imageItem->boundingRect());
     m_imageItem->setVisible(true);
     viewport()->update();
     updateCursor();
 }
 
+void PhotoCanvas::replacePreviewImage(const QImage &image,
+                                      const QSize &fullResolutionSize)
+{
+    if (image.isNull() || !fullResolutionSize.isValid() || fullResolutionSize.isEmpty()) {
+        return;
+    }
+
+    const QSizeF logicalSize(fullResolutionSize);
+    const PhotoImageItem *currentItem = asPhotoItem(m_imageItem);
+    const bool preserveView = hasImage()
+        && currentItem->boundingRect().size() == logicalSize;
+
+    asPhotoItem(m_imageItem)->setImage(image, logicalSize);
+    m_scene->setSceneRect(m_imageItem->boundingRect());
+    m_imageItem->setVisible(true);
+
+    if (!preserveView) {
+        m_zoomMode = ZoomMode::Fit;
+        fitToView();
+    } else {
+        viewport()->update();
+        updateCursor();
+    }
+}
+
 void PhotoCanvas::clearImage()
 {
-    asPhotoItem(m_imageItem)->setImage({});
+    asPhotoItem(m_imageItem)->setImage({}, {});
     m_imageItem->setVisible(false);
     m_scene->setSceneRect({});
     resetTransform();

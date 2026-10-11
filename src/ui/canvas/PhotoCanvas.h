@@ -3,6 +3,7 @@
 #include <QGraphicsView>
 #include <QImage>
 #include <QPointF>
+#include <QSize>
 
 class QDragEnterEvent;
 class QDropEvent;
@@ -24,10 +25,11 @@ public:
     explicit PhotoCanvas(QWidget *parent = nullptr);
     ~PhotoCanvas() override;
 
-    // The canvas consumes a display-ready preview. It never modifies image pixels;
-    // edits belong to the non-destructive render pipeline that produces this image.
+    // The canvas consumes display-ready renders. Interactive previews may contain
+    // fewer pixels than the full RAW while keeping the same logical photo size.
     void setImage(const QImage &image);
     void replaceImage(const QImage &image);
+    void replacePreviewImage(const QImage &image, const QSize &fullResolutionSize);
     void clearImage();
 
     [[nodiscard]] bool hasImage() const noexcept;

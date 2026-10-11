@@ -23,6 +23,8 @@ qt_add_executable(Nexus WIN32
     src/imaging/ImageLoader.cpp
     src/imaging/ImageLoader.h
     src/imaging/PhotoMetadata.h
+    src/imaging/TemperatureRenderService.cpp
+    src/imaging/TemperatureRenderService.h
     src/ui/canvas/PhotoCanvas.cpp
     src/ui/canvas/PhotoCanvas.h
     src/ui/histogram/HistogramWidget.cpp

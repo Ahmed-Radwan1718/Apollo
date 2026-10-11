@@ -251,7 +251,8 @@ bool sonyWhiteBalanceMultipliersForTemperature(
 QImage ArwDecoder::decode(const QString &filePath,
                           QString *error,
                           PhotoMetadata *metadata,
-                          int whiteBalanceTemperatureKelvin)
+                          int whiteBalanceTemperatureKelvin,
+                          bool halfSizePreview)
 {
     if (error != nullptr) {
         error->clear();
@@ -265,11 +266,13 @@ QImage ArwDecoder::decode(const QString &filePath,
     // Produce a display-ready rendering from the RAW data itself. LibRaw's normal
     // histogram-based auto brightness is intentionally left enabled so 8-bit output
     // uses a practical display range instead of appearing severely underexposed.
-    // The original ARW is never modified.
+    // Interactive Temp previews use LibRaw's half-size path to avoid a full
+    // demosaic on every slider position. The original ARW is never modified.
     processor.imgdata.params.use_camera_wb = 1;
     processor.imgdata.params.use_camera_matrix = 1;
     processor.imgdata.params.output_color = 1; // sRGB
     processor.imgdata.params.output_bps = 8;
+    processor.imgdata.params.half_size = halfSizePreview ? 1 : 0;
     processor.imgdata.params.gamm[0] = 1.0 / 2.4;
     processor.imgdata.params.gamm[1] = 12.92;
 
