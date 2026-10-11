@@ -7,6 +7,7 @@ struct PhotoMetadata {
     double aperture = 0.0;
     double iso = 0.0;
     double focalLengthMm = 0.0;
+    int whiteBalanceTemperatureKelvin = 0;
 };
 
 } // namespace imaging

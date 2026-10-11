@@ -61,8 +61,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_photoMetadata = new PhotoMetadataWidget(rightPanel);
     rightLayout->addWidget(m_photoMetadata);
 
-    auto *basicPanel = new BasicPanel(rightPanel);
-    rightLayout->addWidget(basicPanel);
+    m_basicPanel = new BasicPanel(rightPanel);
+    rightLayout->addWidget(m_basicPanel);
     rightLayout->addStretch(1);
 
     workspaceLayout->addWidget(rightPanel);
@@ -125,6 +125,7 @@ void MainWindow::openImage(const QString &filePath)
     m_navigator->setImage(result.image);
     m_histogram->setImage(result.image);
     m_photoMetadata->setMetadata(result.metadata);
+    m_basicPanel->setCameraTemperatureKelvin(result.metadata.whiteBalanceTemperatureKelvin);
     setWindowTitle(QStringLiteral("%1 — Nexus").arg(QFileInfo(filePath).fileName()));
 }
 

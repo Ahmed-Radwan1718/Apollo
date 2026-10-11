@@ -6,12 +6,29 @@
 #include <QColorSpace>
 #include <QFile>
 
+#include <algorithm>
+#include <cmath>
 #include <limits>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace imaging {
 namespace {
+
+constexpr int kSonyTemperatureMinimumKelvin = 2500;
+constexpr int kSonyTemperatureMaximumKelvin = 9900;
+constexpr int kSonyTemperatureStepKelvin = 100;
+
+struct WhiteBalanceRatios {
+    double redToGreen = 0.0;
+    double blueToGreen = 0.0;
+};
+
+struct TemperatureCalibration {
+    int kelvin = 0;
+    WhiteBalanceRatios ratios;
+};
 
 QString libRawError(const char *stage, int errorCode)
 {
@@ -39,6 +56,125 @@ void setError(QString *error, QString message)
     if (error != nullptr) {
         *error = std::move(message);
     }
+}
+
+bool logarithmicWhiteBalanceRatios(const float *coefficients,
+                                   WhiteBalanceRatios &ratios)
+{
+    const double red = coefficients[0];
+    const double green1 = coefficients[1];
+    const double blue = coefficients[2];
+    const double green2 = coefficients[3];
+
+    if (!(red > 0.0) || !(blue > 0.0)) {
+        return false;
+    }
+
+    const double green = green1 > 0.0 ? green1 : green2;
+    if (!(green > 0.0)) {
+        return false;
+    }
+
+    ratios.redToGreen = std::log(red / green);
+    ratios.blueToGreen = std::log(blue / green);
+    return std::isfinite(ratios.redToGreen) && std::isfinite(ratios.blueToGreen);
+}
+
+int sonyWhiteBalanceTemperatureKelvin(const libraw_colordata_t &color)
+{
+    WhiteBalanceRatios asShotRatios;
+    if (!logarithmicWhiteBalanceRatios(color.cam_mul, asShotRatios)) {
+        return 0;
+    }
+
+    std::vector<TemperatureCalibration> calibrations;
+    calibrations.reserve(64);
+
+    for (const auto &row : color.WBCT_Coeffs) {
+        const int kelvin = static_cast<int>(std::lround(row[0]));
+        if (kelvin < 2000 || kelvin > 20000) {
+            continue;
+        }
+
+        WhiteBalanceRatios ratios;
+        if (!logarithmicWhiteBalanceRatios(&row[1], ratios)) {
+            continue;
+        }
+
+        calibrations.push_back({kelvin, ratios});
+    }
+
+    std::sort(calibrations.begin(), calibrations.end(),
+              [](const TemperatureCalibration &left,
+                 const TemperatureCalibration &right) {
+                  return left.kelvin < right.kelvin;
+              });
+
+    calibrations.erase(
+        std::unique(calibrations.begin(), calibrations.end(),
+                    [](const TemperatureCalibration &left,
+                       const TemperatureCalibration &right) {
+                        return left.kelvin == right.kelvin;
+                    }),
+        calibrations.end());
+
+    if (calibrations.size() < 2) {
+        return 0;
+    }
+
+    int bestKelvin = 0;
+    double bestDistance = std::numeric_limits<double>::infinity();
+
+    // Sony records several camera-specific temperature/WB calibration points in
+    // the ARW. Interpolate those in reciprocal-temperature (mired) space and find
+    // the A7R III's nearest 100 K camera setting to the as-shot WB multipliers.
+    for (int kelvin = kSonyTemperatureMinimumKelvin;
+         kelvin <= kSonyTemperatureMaximumKelvin;
+         kelvin += kSonyTemperatureStepKelvin) {
+        const auto upper = std::lower_bound(
+            calibrations.begin(), calibrations.end(), kelvin,
+            [](const TemperatureCalibration &point, int value) {
+                return point.kelvin < value;
+            });
+
+        std::size_t lowerIndex = 0;
+        std::size_t upperIndex = 1;
+
+        if (upper == calibrations.begin()) {
+            lowerIndex = 0;
+            upperIndex = 1;
+        } else if (upper == calibrations.end()) {
+            lowerIndex = calibrations.size() - 2;
+            upperIndex = calibrations.size() - 1;
+        } else {
+            upperIndex = static_cast<std::size_t>(upper - calibrations.begin());
+            lowerIndex = upperIndex - 1;
+        }
+
+        const TemperatureCalibration &lower = calibrations[lowerIndex];
+        const TemperatureCalibration &higher = calibrations[upperIndex];
+
+        const double lowerMired = 1000000.0 / static_cast<double>(lower.kelvin);
+        const double higherMired = 1000000.0 / static_cast<double>(higher.kelvin);
+        const double candidateMired = 1000000.0 / static_cast<double>(kelvin);
+        const double blend = (candidateMired - lowerMired) / (higherMired - lowerMired);
+
+        const double predictedRed = lower.ratios.redToGreen
+            + blend * (higher.ratios.redToGreen - lower.ratios.redToGreen);
+        const double predictedBlue = lower.ratios.blueToGreen
+            + blend * (higher.ratios.blueToGreen - lower.ratios.blueToGreen);
+
+        const double redError = asShotRatios.redToGreen - predictedRed;
+        const double blueError = asShotRatios.blueToGreen - predictedBlue;
+        const double distance = redError * redError + blueError * blueError;
+
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestKelvin = kelvin;
+        }
+    }
+
+    return bestKelvin;
 }
 
 } // namespace
@@ -79,6 +215,8 @@ QImage ArwDecoder::decode(const QString &filePath,
         metadata->aperture = other.aperture;
         metadata->iso = other.iso_speed;
         metadata->focalLengthMm = other.focal_len;
+        metadata->whiteBalanceTemperatureKelvin =
+            sonyWhiteBalanceTemperatureKelvin(processor.imgdata.color);
     }
 
     result = processor.unpack();

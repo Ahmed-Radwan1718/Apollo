@@ -3,6 +3,7 @@
 #include <QMainWindow>
 
 class QAction;
+class BasicPanel;
 class HistogramWidget;
 class NavigatorPanel;
 class PhotoCanvas;
@@ -27,6 +28,7 @@ private:
     PhotoCanvas *m_canvas = nullptr;
     HistogramWidget *m_histogram = nullptr;
     PhotoMetadataWidget *m_photoMetadata = nullptr;
+    BasicPanel *m_basicPanel = nullptr;
 
     QAction *m_openAction = nullptr;
     QAction *m_fitAction = nullptr;
