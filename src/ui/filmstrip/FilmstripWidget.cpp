@@ -133,7 +133,7 @@ FilmstripWidget::FilmstripWidget(QWidget *parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setContentsMargins(0, 1, 0, 0);
     layout->setSpacing(0);
 
     m_scrollArea = new QScrollArea(this);
@@ -304,5 +304,5 @@ void FilmstripWidget::alignToDefaultPhotoBounds(bool updateWhileManual)
                                 - qRound(centeredInset + fittedWidth));
     }
 
-    layout()->setContentsMargins(leftInset, 0, rightInset, 0);
+    layout()->setContentsMargins(leftInset, 1, rightInset, 0);
 }
