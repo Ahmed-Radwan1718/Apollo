@@ -2,11 +2,16 @@
 
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QMetaObject>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QVBoxLayout>
+
+#include <functional>
+#include <utility>
 
 namespace {
 
@@ -18,18 +23,42 @@ constexpr int kThumbnailPreviewSize = 320;
 class FilmstripThumbnail final : public QWidget
 {
 public:
-    explicit FilmstripThumbnail(const QImage &image, QWidget *parent = nullptr)
+    explicit FilmstripThumbnail(const QImage &image,
+                                std::function<void()> activated,
+                                QWidget *parent = nullptr)
         : QWidget(parent)
         , m_thumbnail(image.scaled(kThumbnailPreviewSize,
                                    kThumbnailPreviewSize,
                                    Qt::KeepAspectRatio,
                                    Qt::SmoothTransformation))
+        , m_activated(std::move(activated))
     {
         setFixedSize(kThumbnailWidth, kThumbnailHeight);
-        setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        setCursor(Qt::PointingHandCursor);
+    }
+
+    void setSelected(bool selected)
+    {
+        if (m_selected == selected) {
+            return;
+        }
+
+        m_selected = selected;
+        update();
     }
 
 protected:
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton
+            && rect().contains(event->position().toPoint())
+            && m_activated) {
+            m_activated();
+        }
+
+        QWidget::mouseReleaseEvent(event);
+    }
+
     void paintEvent(QPaintEvent *event) override
     {
         Q_UNUSED(event);
@@ -50,12 +79,19 @@ protected:
             painter.drawImage(target, m_thumbnail);
         }
 
-        painter.setPen(QColor(48, 48, 48));
-        painter.drawRect(rect().adjusted(0, 0, -1, -1));
+        if (m_selected) {
+            painter.setPen(QPen(QColor(214, 214, 214), 2));
+            painter.drawRect(rect().adjusted(1, 1, -2, -2));
+        } else {
+            painter.setPen(QColor(48, 48, 48));
+            painter.drawRect(rect().adjusted(0, 0, -1, -1));
+        }
     }
 
 private:
     QImage m_thumbnail;
+    std::function<void()> m_activated;
+    bool m_selected = false;
 };
 
 } // namespace
@@ -118,11 +154,52 @@ FilmstripWidget::FilmstripWidget(QWidget *parent)
 
 void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
 {
-    if (filePath.isEmpty() || image.isNull() || m_importedPaths.contains(filePath)) {
+    if (filePath.isEmpty() || image.isNull()) {
         return;
     }
 
-    m_importedPaths.insert(filePath);
-    auto *thumbnail = new FilmstripThumbnail(image, m_content);
+    if (m_thumbnails.contains(filePath)) {
+        setCurrentPhoto(filePath);
+        return;
+    }
+
+    auto *thumbnail = new FilmstripThumbnail(
+        image,
+        [this, filePath]() {
+            activatePhoto(filePath);
+        },
+        m_content);
+
+    m_thumbnails.insert(filePath, thumbnail);
     m_contentLayout->insertWidget(m_contentLayout->count() - 1, thumbnail);
+    setCurrentPhoto(filePath);
+}
+
+void FilmstripWidget::activatePhoto(const QString &filePath)
+{
+    if (filePath.isEmpty() || filePath == m_currentFilePath) {
+        return;
+    }
+
+    QMetaObject::invokeMethod(window(),
+                              "openImage",
+                              Qt::QueuedConnection,
+                              Q_ARG(QString, filePath));
+}
+
+void FilmstripWidget::setCurrentPhoto(const QString &filePath)
+{
+    if (filePath == m_currentFilePath) {
+        return;
+    }
+
+    if (QWidget *previous = m_thumbnails.value(m_currentFilePath, nullptr)) {
+        static_cast<FilmstripThumbnail *>(previous)->setSelected(false);
+    }
+
+    m_currentFilePath = filePath;
+
+    if (QWidget *current = m_thumbnails.value(m_currentFilePath, nullptr)) {
+        static_cast<FilmstripThumbnail *>(current)->setSelected(true);
+    }
 }

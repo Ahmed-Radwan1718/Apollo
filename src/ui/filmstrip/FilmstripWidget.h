@@ -1,7 +1,7 @@
 #pragma once
 
+#include <QHash>
 #include <QImage>
-#include <QSet>
 #include <QString>
 #include <QWidget>
 
@@ -16,8 +16,12 @@ public:
     void addPhoto(const QString &filePath, const QImage &image);
 
 private:
+    void activatePhoto(const QString &filePath);
+    void setCurrentPhoto(const QString &filePath);
+
     QScrollArea *m_scrollArea = nullptr;
     QWidget *m_content = nullptr;
     QHBoxLayout *m_contentLayout = nullptr;
-    QSet<QString> m_importedPaths;
+    QHash<QString, QWidget *> m_thumbnails;
+    QString m_currentFilePath;
 };
