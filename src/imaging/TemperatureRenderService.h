@@ -20,12 +20,17 @@ public:
     explicit TemperatureRenderService(QObject *parent = nullptr);
     ~TemperatureRenderService() override;
 
-    void requestPreview(const QString &filePath, int kelvin);
-    void requestFullRender(const QString &filePath, int kelvin);
+    void requestPreview(const QString &filePath,
+                        int kelvin,
+                        int exposureHundredths);
+    void requestFullRender(const QString &filePath,
+                           int kelvin,
+                           int exposureHundredths);
 
 signals:
     void renderReady(const QString &filePath,
                      int kelvin,
+                     int exposureHundredths,
                      bool preview,
                      const QImage &image,
                      const QString &error);
@@ -34,6 +39,7 @@ private:
     struct Request {
         QString filePath;
         int kelvin = 0;
+        int exposureHundredths = 0;
     };
 
     void request(Request request, bool preview);

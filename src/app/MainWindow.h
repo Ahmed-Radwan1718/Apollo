@@ -5,12 +5,15 @@
 #include <QSize>
 #include <QString>
 
+#include <optional>
+
 class QAction;
 class BasicPanel;
 class HistogramWidget;
 class NavigatorPanel;
 class PhotoCanvas;
 class PhotoMetadataWidget;
+class QSlider;
 
 namespace imaging {
 class TemperatureRenderService;
@@ -26,29 +29,42 @@ public:
 private slots:
     void chooseAndOpenImage();
     void openImage(const QString &filePath);
-    void previewTemperature(int kelvin);
     void applyTemperature(int kelvin);
-    void handleTemperatureRender(const QString &filePath,
-                                 int kelvin,
-                                 bool preview,
-                                 const QImage &image,
-                                 const QString &error);
+    void handleDevelopRender(const QString &filePath,
+                             int temperatureKelvin,
+                             int exposureHundredths,
+                             bool preview,
+                             const QImage &image,
+                             const QString &error);
 
 private:
+    struct DevelopState {
+        int temperatureKelvin = 0;
+        int exposureHundredths = 0;
+
+        bool operator==(const DevelopState &) const = default;
+    };
+
     void createActions();
+    void previewTemperature(int kelvin);
+    void previewExposure(int exposureHundredths);
+    void applyExposure(int exposureHundredths);
+    void requestPreview(const DevelopState &state);
+    void requestFullRender(const DevelopState &state);
 
     NavigatorPanel *m_navigator = nullptr;
     PhotoCanvas *m_canvas = nullptr;
     HistogramWidget *m_histogram = nullptr;
     PhotoMetadataWidget *m_photoMetadata = nullptr;
     BasicPanel *m_basicPanel = nullptr;
-    imaging::TemperatureRenderService *m_temperatureRenderer = nullptr;
+    QSlider *m_exposureSlider = nullptr;
+    imaging::TemperatureRenderService *m_renderService = nullptr;
 
     QString m_currentFilePath;
     QSize m_fullImageSize;
-    int m_requestedTemperatureKelvin = 0;
-    int m_fullQualityTemperatureKelvin = 0;
-    bool m_settingCameraTemperature = false;
+    DevelopState m_requestedState;
+    std::optional<DevelopState> m_fullQualityState;
+    bool m_settingDevelopControls = false;
 
     QAction *m_openAction = nullptr;
     QAction *m_fitAction = nullptr;

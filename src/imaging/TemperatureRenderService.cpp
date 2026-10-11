@@ -29,14 +29,18 @@ TemperatureRenderService::~TemperatureRenderService()
     }
 }
 
-void TemperatureRenderService::requestPreview(const QString &filePath, int kelvin)
+void TemperatureRenderService::requestPreview(const QString &filePath,
+                                              int kelvin,
+                                              int exposureHundredths)
 {
-    request({filePath, kelvin}, true);
+    request({filePath, kelvin, exposureHundredths}, true);
 }
 
-void TemperatureRenderService::requestFullRender(const QString &filePath, int kelvin)
+void TemperatureRenderService::requestFullRender(const QString &filePath,
+                                                 int kelvin,
+                                                 int exposureHundredths)
 {
-    request({filePath, kelvin}, false);
+    request({filePath, kelvin, exposureHundredths}, false);
 }
 
 void TemperatureRenderService::request(Request request, bool preview)
@@ -51,9 +55,8 @@ void TemperatureRenderService::request(Request request, bool preview)
 
     {
         std::lock_guard lock(mutex);
-        // Keep only the newest slider position. A RAW render already in progress
-        // may finish, but queued obsolete positions are discarded instead of
-        // building a backlog while the user scrubs Temp quickly.
+        // Keep only the newest develop state. A RAW render already in progress may
+        // finish, but obsolete Temp/Exposure positions never build a queue.
         pending = std::move(request);
     }
 
@@ -88,6 +91,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                           &error,
                                           nullptr,
                                           request.kelvin,
+                                          request.exposureHundredths,
                                           preview);
 
         QMetaObject::invokeMethod(
@@ -99,6 +103,7 @@ void TemperatureRenderService::workerLoop(bool preview)
              preview]() mutable {
                 emit renderReady(request.filePath,
                                  request.kelvin,
+                                 request.exposureHundredths,
                                  preview,
                                  image,
                                  error);

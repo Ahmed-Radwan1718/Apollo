@@ -1,7 +1,7 @@
 #include "app/MainWindow.h"
 
-#include "imaging/ImageLoader.h"
 #include "imaging/TemperatureRenderService.h"
+#include "imaging/ImageLoader.h"
 #include "ui/canvas/PhotoCanvas.h"
 #include "ui/histogram/HistogramWidget.h"
 #include "ui/leftpanel/NavigatorPanel.h"
@@ -15,10 +15,59 @@
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
+#include <QList>
 #include <QMessageBox>
 #include <QSlider>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include <algorithm>
+#include <cmath>
+
+namespace {
+
+constexpr int kTemperatureMinimumKelvin = 2000;
+constexpr int kTemperatureMaximumKelvin = 20000;
+constexpr int kDefaultTemperatureKelvin = 6500;
+
+int temperatureKelvinFromSlider(const QSlider *slider, int position)
+{
+    if (!slider || slider->maximum() <= slider->minimum()) {
+        return kDefaultTemperatureKelvin;
+    }
+
+    const double normalized = std::clamp(
+        static_cast<double>(position - slider->minimum())
+            / static_cast<double>(slider->maximum() - slider->minimum()),
+        0.0,
+        1.0);
+    const double minimumReciprocal = 1.0 / static_cast<double>(kTemperatureMinimumKelvin);
+    const double maximumReciprocal = 1.0 / static_cast<double>(kTemperatureMaximumKelvin);
+    const double reciprocal = minimumReciprocal
+        - normalized * (minimumReciprocal - maximumReciprocal);
+
+    return std::clamp(static_cast<int>(std::lround(1.0 / reciprocal)),
+                      kTemperatureMinimumKelvin,
+                      kTemperatureMaximumKelvin);
+}
+
+QSlider *findExposureSlider(BasicPanel *panel)
+{
+    if (!panel) {
+        return nullptr;
+    }
+
+    const QList<QSlider *> sliders = panel->findChildren<QSlider *>();
+    for (QSlider *slider : sliders) {
+        if (slider->minimum() == -500 && slider->maximum() == 500) {
+            return slider;
+        }
+    }
+
+    return nullptr;
+}
+
+} // namespace
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -92,7 +141,8 @@ MainWindow::MainWindow(QWidget *parent)
         "  padding: 1px 2px 0 2px;"
         "}"));
 
-    m_temperatureRenderer = new imaging::TemperatureRenderService(this);
+    m_renderService = new imaging::TemperatureRenderService(this);
+    m_exposureSlider = findExposureSlider(m_basicPanel);
 
     createActions();
 
@@ -101,20 +151,41 @@ MainWindow::MainWindow(QWidget *parent)
 
     if (auto *temperatureSlider =
             m_basicPanel->findChild<QSlider *>(QStringLiteral("temperatureSlider"))) {
-        // The value label and preview request both update on every slider position.
-        // Rendering itself happens off the UI thread, so this connection stays cheap.
-        connect(temperatureSlider, &QSlider::valueChanged,
-                this, &MainWindow::previewTemperature);
+        connect(temperatureSlider, &QSlider::valueChanged, this,
+                [this, temperatureSlider](int position) {
+                    if (m_settingDevelopControls || !temperatureSlider->isSliderDown()) {
+                        return;
+                    }
+                    previewTemperature(temperatureKelvinFromSlider(temperatureSlider, position));
+                });
     }
 
-    // BasicPanel emits temperatureChanged when a drag is released (or when a
-    // non-drag change such as keyboard input is committed). That requests the
-    // full-quality render without blocking the UI.
     connect(m_basicPanel, &BasicPanel::temperatureChanged,
             this, &MainWindow::applyTemperature);
 
-    connect(m_temperatureRenderer, &imaging::TemperatureRenderService::renderReady,
-            this, &MainWindow::handleTemperatureRender);
+    if (m_exposureSlider) {
+        connect(m_exposureSlider, &QSlider::valueChanged, this,
+                [this](int exposureHundredths) {
+                    if (m_settingDevelopControls) {
+                        return;
+                    }
+
+                    if (m_exposureSlider->isSliderDown()) {
+                        previewExposure(exposureHundredths);
+                    } else {
+                        applyExposure(exposureHundredths);
+                    }
+                });
+        connect(m_exposureSlider, &QSlider::sliderReleased, this,
+                [this]() {
+                    if (!m_settingDevelopControls) {
+                        applyExposure(m_exposureSlider->value());
+                    }
+                });
+    }
+
+    connect(m_renderService, &imaging::TemperatureRenderService::renderReady,
+            this, &MainWindow::handleDevelopRender);
 }
 
 void MainWindow::chooseAndOpenImage()
@@ -144,38 +215,56 @@ void MainWindow::openImage(const QString &filePath)
 
     m_currentFilePath = QFileInfo(filePath).absoluteFilePath();
     m_fullImageSize = result.image.size();
-    m_requestedTemperatureKelvin = result.metadata.whiteBalanceTemperatureKelvin > 0
+    m_requestedState.temperatureKelvin = result.metadata.whiteBalanceTemperatureKelvin > 0
         ? result.metadata.whiteBalanceTemperatureKelvin
-        : 6500;
-    m_fullQualityTemperatureKelvin = m_requestedTemperatureKelvin;
+        : kDefaultTemperatureKelvin;
+    m_requestedState.exposureHundredths = 0;
+    m_fullQualityState = m_requestedState;
 
     m_canvas->setImage(result.image);
     m_navigator->setImage(result.image);
     m_histogram->setImage(result.image);
     m_photoMetadata->setMetadata(result.metadata);
 
-    m_settingCameraTemperature = true;
+    m_settingDevelopControls = true;
     m_basicPanel->setCameraTemperatureKelvin(result.metadata.whiteBalanceTemperatureKelvin);
-    m_settingCameraTemperature = false;
+    if (m_exposureSlider) {
+        m_exposureSlider->setValue(0);
+    }
+    m_settingDevelopControls = false;
 
     setWindowTitle(QStringLiteral("%1 — Nexus").arg(QFileInfo(filePath).fileName()));
 }
 
 void MainWindow::previewTemperature(int kelvin)
 {
-    if (m_settingCameraTemperature
-        || m_currentFilePath.isEmpty()
-        || QFileInfo(m_currentFilePath).suffix().compare(QStringLiteral("arw"),
-                                                        Qt::CaseInsensitive) != 0) {
-        return;
-    }
-
-    m_requestedTemperatureKelvin = kelvin;
-    m_fullQualityTemperatureKelvin = 0;
-    m_temperatureRenderer->requestPreview(m_currentFilePath, kelvin);
+    DevelopState state = m_requestedState;
+    state.temperatureKelvin = kelvin;
+    requestPreview(state);
 }
 
 void MainWindow::applyTemperature(int kelvin)
+{
+    DevelopState state = m_requestedState;
+    state.temperatureKelvin = kelvin;
+    requestFullRender(state);
+}
+
+void MainWindow::previewExposure(int exposureHundredths)
+{
+    DevelopState state = m_requestedState;
+    state.exposureHundredths = exposureHundredths;
+    requestPreview(state);
+}
+
+void MainWindow::applyExposure(int exposureHundredths)
+{
+    DevelopState state = m_requestedState;
+    state.exposureHundredths = exposureHundredths;
+    requestFullRender(state);
+}
+
+void MainWindow::requestPreview(const DevelopState &state)
 {
     if (m_currentFilePath.isEmpty()
         || QFileInfo(m_currentFilePath).suffix().compare(QStringLiteral("arw"),
@@ -183,46 +272,63 @@ void MainWindow::applyTemperature(int kelvin)
         return;
     }
 
-    m_requestedTemperatureKelvin = kelvin;
-    m_temperatureRenderer->requestFullRender(m_currentFilePath, kelvin);
+    m_requestedState = state;
+    m_fullQualityState.reset();
+    m_renderService->requestPreview(m_currentFilePath,
+                                    state.temperatureKelvin,
+                                    state.exposureHundredths);
 }
 
-void MainWindow::handleTemperatureRender(const QString &filePath,
-                                         int kelvin,
-                                         bool preview,
-                                         const QImage &image,
-                                         const QString &error)
+void MainWindow::requestFullRender(const DevelopState &state)
 {
-    // A worker may finish after the user has already scrubbed somewhere else or
-    // opened another photo. Ignore that stale result instead of flashing backwards.
-    if (filePath != m_currentFilePath || kelvin != m_requestedTemperatureKelvin) {
+    if (m_currentFilePath.isEmpty()
+        || QFileInfo(m_currentFilePath).suffix().compare(QStringLiteral("arw"),
+                                                        Qt::CaseInsensitive) != 0) {
+        return;
+    }
+
+    m_requestedState = state;
+    m_renderService->requestFullRender(m_currentFilePath,
+                                       state.temperatureKelvin,
+                                       state.exposureHundredths);
+}
+
+void MainWindow::handleDevelopRender(const QString &filePath,
+                                     int temperatureKelvin,
+                                     int exposureHundredths,
+                                     bool preview,
+                                     const QImage &image,
+                                     const QString &error)
+{
+    const DevelopState renderedState{
+        temperatureKelvin,
+        exposureHundredths,
+    };
+
+    if (filePath != m_currentFilePath || renderedState != m_requestedState) {
         return;
     }
 
     if (image.isNull()) {
-        // Preview failures should never interrupt a drag with modal UI. If the
-        // corresponding final render also fails, report that once on commit.
         if (!preview && !error.isEmpty()) {
             QMessageBox::critical(
                 this,
-                tr("Could not adjust temperature"),
-                tr("Nexus could not render the requested white balance:\n%1\n\n%2")
+                tr("Could not render adjustments"),
+                tr("Nexus could not render the requested RAW adjustments:\n%1\n\n%2")
                     .arg(QDir::toNativeSeparators(m_currentFilePath), error));
         }
         return;
     }
 
     if (preview) {
-        // If the full render for this exact Kelvin has already landed, never let
-        // a slower stale half-size preview replace it afterward.
-        if (m_fullQualityTemperatureKelvin == kelvin) {
+        if (m_fullQualityState && *m_fullQualityState == renderedState) {
             return;
         }
         m_canvas->replacePreviewImage(image, m_fullImageSize);
     } else {
         m_canvas->replaceImage(image);
         m_fullImageSize = image.size();
-        m_fullQualityTemperatureKelvin = kelvin;
+        m_fullQualityState = renderedState;
     }
 
     m_navigator->setImage(image);

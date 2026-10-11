@@ -16,6 +16,7 @@ public:
                                        QString *error = nullptr,
                                        PhotoMetadata *metadata = nullptr,
                                        int whiteBalanceTemperatureKelvin = 0,
+                                       int exposureHundredths = 0,
                                        bool halfSizePreview = false);
 };
 

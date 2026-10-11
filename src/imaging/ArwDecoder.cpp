@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <string>
 #include <utility>
@@ -19,6 +20,10 @@ namespace {
 constexpr int kSonyTemperatureMinimumKelvin = 2000;
 constexpr int kSonyTemperatureMaximumKelvin = 20000;
 constexpr int kSonyTemperatureStepKelvin = 100;
+constexpr int kExposureMinimumHundredths = -500;
+constexpr int kExposureMaximumHundredths = 500;
+constexpr int kLinearMaximum = 65535;
+constexpr double kAutoBrightnessClipFraction = 0.01;
 
 struct WhiteBalanceRatios {
     double redToGreen = 0.0;
@@ -88,7 +93,8 @@ std::vector<TemperatureCalibration> sonyTemperatureCalibrations(
 
     for (const auto &row : color.WBCT_Coeffs) {
         const int kelvin = static_cast<int>(std::lround(row[0]));
-        if (kelvin < 2000 || kelvin > 20000) {
+        if (kelvin < kSonyTemperatureMinimumKelvin
+            || kelvin > kSonyTemperatureMaximumKelvin) {
             continue;
         }
 
@@ -179,9 +185,6 @@ int sonyWhiteBalanceTemperatureKelvin(
     int bestKelvin = 0;
     double bestDistance = std::numeric_limits<double>::infinity();
 
-    // Match the camera-recorded WB multipliers against Sony's calibration table
-    // in reciprocal-temperature space. Nexus keeps a broad editor range rather
-    // than restricting Temp to the controls offered by any single camera body.
     for (int kelvin = kSonyTemperatureMinimumKelvin;
          kelvin <= kSonyTemperatureMaximumKelvin;
          kelvin += kSonyTemperatureStepKelvin) {
@@ -246,12 +249,112 @@ bool sonyWhiteBalanceMultipliersForTemperature(
     return true;
 }
 
+int autoBrightnessWhitePoint(const std::uint16_t *samples, std::size_t pixelCount)
+{
+    if (samples == nullptr || pixelCount == 0) {
+        return kLinearMaximum;
+    }
+
+    std::vector<std::uint32_t> histogram(kLinearMaximum + 1, 0);
+    for (std::size_t pixel = 0; pixel < pixelCount; ++pixel) {
+        const std::size_t offset = pixel * 3;
+        const std::uint16_t maximumChannel = std::max(
+            samples[offset], std::max(samples[offset + 1], samples[offset + 2]));
+        ++histogram[maximumChannel];
+    }
+
+    const std::uint64_t targetCount = static_cast<std::uint64_t>(std::ceil(
+        static_cast<double>(pixelCount) * (1.0 - kAutoBrightnessClipFraction)));
+    std::uint64_t cumulative = 0;
+    for (int value = 0; value <= kLinearMaximum; ++value) {
+        cumulative += histogram[static_cast<std::size_t>(value)];
+        if (cumulative >= targetCount) {
+            return std::max(1, value);
+        }
+    }
+
+    return kLinearMaximum;
+}
+
+std::uint8_t linearToSrgb8(double linear)
+{
+    linear = std::clamp(linear, 0.0, 1.0);
+    const double encoded = linear <= 0.0031308
+        ? 12.92 * linear
+        : 1.055 * std::pow(linear, 1.0 / 2.4) - 0.055;
+    return static_cast<std::uint8_t>(std::clamp(
+        static_cast<int>(std::lround(encoded * 255.0)), 0, 255));
+}
+
+QImage exposedSrgbImage(const libraw_processed_image_t &processed,
+                        int exposureHundredths,
+                        QString *error)
+{
+    if (processed.type != LIBRAW_IMAGE_BITMAP
+        || processed.width == 0
+        || processed.height == 0
+        || processed.colors != 3
+        || processed.bits != 16) {
+        setError(error, QStringLiteral("LibRaw returned an unsupported linear ARW bitmap format."));
+        return {};
+    }
+
+    const std::size_t pixelCount =
+        static_cast<std::size_t>(processed.width) * processed.height;
+    const std::size_t sampleCount = pixelCount * 3;
+    const std::size_t requiredBytes = sampleCount * sizeof(std::uint16_t);
+    if (processed.data_size < requiredBytes) {
+        setError(error, QStringLiteral("LibRaw returned an incomplete linear ARW bitmap."));
+        return {};
+    }
+
+    const auto *samples = reinterpret_cast<const std::uint16_t *>(processed.data);
+    const int whitePoint = autoBrightnessWhitePoint(samples, pixelCount);
+    const double baselineGain = static_cast<double>(kLinearMaximum)
+        / static_cast<double>(whitePoint);
+    const int clampedExposure = std::clamp(exposureHundredths,
+                                           kExposureMinimumHundredths,
+                                           kExposureMaximumHundredths);
+    const double exposureGain = std::exp2(static_cast<double>(clampedExposure) / 100.0);
+    const double totalGain = baselineGain * exposureGain;
+
+    std::vector<std::uint8_t> transferTable(kLinearMaximum + 1);
+    for (int value = 0; value <= kLinearMaximum; ++value) {
+        const double linear = static_cast<double>(value)
+            / static_cast<double>(kLinearMaximum);
+        transferTable[static_cast<std::size_t>(value)] = linearToSrgb8(linear * totalGain);
+    }
+
+    QImage image(processed.width, processed.height, QImage::Format_RGB888);
+    if (image.isNull()) {
+        setError(error, QStringLiteral("Not enough memory to create the ARW preview."));
+        return {};
+    }
+
+    for (int y = 0; y < processed.height; ++y) {
+        auto *destination = image.scanLine(y);
+        const std::size_t sourceRow = static_cast<std::size_t>(y) * processed.width * 3;
+        for (int x = 0; x < processed.width; ++x) {
+            const std::size_t source = sourceRow + static_cast<std::size_t>(x) * 3;
+            const int destinationOffset = x * 3;
+            destination[destinationOffset] = transferTable[samples[source]];
+            destination[destinationOffset + 1] = transferTable[samples[source + 1]];
+            destination[destinationOffset + 2] = transferTable[samples[source + 2]];
+        }
+    }
+
+    image.setDevicePixelRatio(1.0);
+    image.setColorSpace(QColorSpace(QColorSpace::SRgb));
+    return image;
+}
+
 } // namespace
 
 QImage ArwDecoder::decode(const QString &filePath,
                           QString *error,
                           PhotoMetadata *metadata,
                           int whiteBalanceTemperatureKelvin,
+                          int exposureHundredths,
                           bool halfSizePreview)
 {
     if (error != nullptr) {
@@ -263,18 +366,18 @@ QImage ArwDecoder::decode(const QString &filePath,
 
     LibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
 
-    // Produce a display-ready rendering from the RAW data itself. LibRaw's normal
-    // histogram-based auto brightness is intentionally left enabled so 8-bit output
-    // uses a practical display range instead of appearing severely underexposed.
-    // Interactive Temp previews use LibRaw's half-size path to avoid a full
-    // demosaic on every slider position. The original ARW is never modified.
+    // Ask LibRaw for a high-precision linear sRGB render. Nexus performs the
+    // final exposure multiplication and sRGB transfer itself so ±5 EV remains
+    // a true 2^EV linear-light adjustment instead of an 8-bit brightness filter.
     processor.imgdata.params.use_camera_wb = 1;
     processor.imgdata.params.use_camera_matrix = 1;
-    processor.imgdata.params.output_color = 1; // sRGB
-    processor.imgdata.params.output_bps = 8;
+    processor.imgdata.params.output_color = 1; // linear sRGB primaries
+    processor.imgdata.params.output_bps = 16;
+    processor.imgdata.params.no_auto_bright = 1;
+    processor.imgdata.params.adjust_maximum_thr = 0.0f;
     processor.imgdata.params.half_size = halfSizePreview ? 1 : 0;
-    processor.imgdata.params.gamm[0] = 1.0 / 2.4;
-    processor.imgdata.params.gamm[1] = 12.92;
+    processor.imgdata.params.gamm[0] = 1.0;
+    processor.imgdata.params.gamm[1] = 1.0;
 
     int result = openFile(processor, filePath);
     if (result != LIBRAW_SUCCESS) {
@@ -316,9 +419,6 @@ QImage ArwDecoder::decode(const QString &filePath,
             return {};
         }
 
-        // use_camera_wb is deliberately enabled while opening so LibRaw loads the
-        // normal Sony camera-color path. For an actual Temp edit, switch only the
-        // post-processing WB source to user_mul; otherwise camera WB would override it.
         processor.imgdata.params.use_camera_wb = 0;
         for (int channel = 0; channel < 4; ++channel) {
             processor.imgdata.params.user_mul[channel] = userMultipliers[channel];
@@ -337,42 +437,17 @@ QImage ArwDecoder::decode(const QString &filePath,
         return {};
     }
 
-    int width = 0;
-    int height = 0;
-    int colors = 0;
-    int bitsPerColor = 0;
-    processor.get_mem_image_format(&width, &height, &colors, &bitsPerColor);
-
-    if (width <= 0 || height <= 0 || colors != 3 || bitsPerColor != 8) {
-        setError(error, QStringLiteral("LibRaw returned an unsupported ARW bitmap format."));
+    int memoryResult = LIBRAW_SUCCESS;
+    libraw_processed_image_t *processed = processor.dcraw_make_mem_image(&memoryResult);
+    if (processed == nullptr) {
+        setError(error, memoryResult == LIBRAW_SUCCESS
+            ? QStringLiteral("LibRaw could not create a linear ARW bitmap.")
+            : libRawError("Copying ARW pixels", memoryResult));
         return {};
     }
 
-    QImage image(width, height, QImage::Format_RGB888);
-    if (image.isNull()) {
-        setError(error, QStringLiteral("Not enough memory to create the ARW preview."));
-        return {};
-    }
-
-    if (image.bytesPerLine() > std::numeric_limits<int>::max()) {
-        setError(error, QStringLiteral("The ARW image row is too large to render."));
-        return {};
-    }
-
-    // Copy directly into QImage using its native row stride. This avoids allocating
-    // a second full-resolution RGB buffer for large Sony files.
-    result = processor.copy_mem_image(
-        image.bits(),
-        static_cast<int>(image.bytesPerLine()),
-        0); // RGB order
-
-    if (result != LIBRAW_SUCCESS) {
-        setError(error, libRawError("Copying ARW pixels", result));
-        return {};
-    }
-
-    image.setDevicePixelRatio(1.0);
-    image.setColorSpace(QColorSpace(QColorSpace::SRgb));
+    QImage image = exposedSrgbImage(*processed, exposureHundredths, error);
+    LibRaw::dcraw_clear_mem(processed);
     return image;
 }
 
