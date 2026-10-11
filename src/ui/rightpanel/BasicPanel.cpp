@@ -11,6 +11,7 @@
 #include <QResizeEvent>
 #include <QSizePolicy>
 #include <QSlider>
+#include <QSpinBox>
 #include <QToolButton>
 #include <QVariantAnimation>
 #include <QVBoxLayout>
@@ -373,18 +374,44 @@ BasicSlider *addSliderControl(QVBoxLayout *layout,
     auto *label = new ResetLabel(labelText, slider, value, control);
     label->setObjectName(QStringLiteral("basicControlLabel"));
 
-    auto *valueLabel = new QLabel(formattedValue(value, format), control);
-    valueLabel->setObjectName(QStringLiteral("basicValueLabel"));
-    valueLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    QWidget *valueWidget = nullptr;
+    if (format == ValueFormat::Temperature) {
+        auto *valueEditor = new QSpinBox(control);
+        valueEditor->setObjectName(QStringLiteral("temperatureValueEditor"));
+        valueEditor->setRange(minimum, maximum);
+        valueEditor->setValue(value);
+        valueEditor->setButtonSymbols(QAbstractSpinBox::NoButtons);
+        valueEditor->setKeyboardTracking(false);
+        valueEditor->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        valueEditor->setCursor(Qt::IBeamCursor);
+        valueEditor->setFixedWidth(58);
+
+        QObject::connect(slider, &QSlider::valueChanged, valueEditor,
+                         [valueEditor](int currentValue) {
+                             valueEditor->setValue(currentValue);
+                         });
+        QObject::connect(valueEditor, &QSpinBox::editingFinished, slider,
+                         [valueEditor, slider]() {
+                             slider->setValue(valueEditor->value());
+                         });
+
+        valueWidget = valueEditor;
+    } else {
+        auto *valueLabel = new QLabel(formattedValue(value, format), control);
+        valueLabel->setObjectName(QStringLiteral("basicValueLabel"));
+        valueLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+        QObject::connect(slider, &QSlider::valueChanged, valueLabel,
+                         [valueLabel, format](int currentValue) {
+                             valueLabel->setText(formattedValue(currentValue, format));
+                         });
+
+        valueWidget = valueLabel;
+    }
 
     labelRow->addWidget(label);
     labelRow->addStretch(1);
-    labelRow->addWidget(valueLabel);
-
-    QObject::connect(slider, &QSlider::valueChanged, valueLabel,
-                     [valueLabel, format](int currentValue) {
-                         valueLabel->setText(formattedValue(currentValue, format));
-                     });
+    labelRow->addWidget(valueWidget);
 
     controlLayout->addLayout(labelRow);
     controlLayout->addWidget(slider);
@@ -566,6 +593,23 @@ BasicPanel::BasicPanel(QWidget *parent)
         "QLabel#basicValueLabel {"
         "  color: #9f9f9f;"
         "  font-size: 11px;"
+        "}"
+        "QSpinBox#temperatureValueEditor {"
+        "  color: #9f9f9f;"
+        "  background: transparent;"
+        "  border: 1px solid transparent;"
+        "  border-radius: 2px;"
+        "  padding: 0 2px;"
+        "  font-size: 11px;"
+        "}"
+        "QSpinBox#temperatureValueEditor:hover {"
+        "  color: #d8d8d8;"
+        "  background: #202020;"
+        "}"
+        "QSpinBox#temperatureValueEditor:focus {"
+        "  color: #ffffff;"
+        "  background: #242424;"
+        "  border: 1px solid #555555;"
         "}"
         "QSlider#basicSlider, QSlider#temperatureSlider, QSlider#tintSlider {"
         "  min-height: 14px;"
