@@ -21,6 +21,7 @@
 #include <QList>
 #include <QMessageBox>
 #include <QSlider>
+#include <QStringList>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -367,13 +368,13 @@ MainWindow::MainWindow(QWidget *parent)
 
 void MainWindow::chooseAndOpenImage()
 {
-    const QString filePath = QFileDialog::getOpenFileName(
+    const QStringList filePaths = QFileDialog::getOpenFileNames(
         this,
-        tr("Open Photo"),
+        tr("Open Photos"),
         {},
         imaging::ImageLoader::fileDialogFilter());
 
-    if (!filePath.isEmpty()) {
+    for (const QString &filePath : filePaths) {
         openImage(filePath);
     }
 }
