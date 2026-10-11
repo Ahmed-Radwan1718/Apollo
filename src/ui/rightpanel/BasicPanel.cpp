@@ -20,8 +20,8 @@
 namespace {
 
 constexpr int kPanelAnimationDurationMs = 220;
-constexpr int kTemperatureMinimumKelvin = 2500;
-constexpr int kTemperatureMaximumKelvin = 9900;
+constexpr int kTemperatureMinimumKelvin = 2000;
+constexpr int kTemperatureMaximumKelvin = 50000;
 constexpr int kDefaultTemperatureKelvin = 6500;
 
 enum class ValueFormat {

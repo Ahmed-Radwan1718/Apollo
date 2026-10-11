@@ -16,8 +16,8 @@
 namespace imaging {
 namespace {
 
-constexpr int kSonyTemperatureMinimumKelvin = 2500;
-constexpr int kSonyTemperatureMaximumKelvin = 9900;
+constexpr int kSonyTemperatureMinimumKelvin = 2000;
+constexpr int kSonyTemperatureMaximumKelvin = 50000;
 constexpr int kSonyTemperatureStepKelvin = 100;
 
 struct WhiteBalanceRatios {
@@ -179,9 +179,9 @@ int sonyWhiteBalanceTemperatureKelvin(
     int bestKelvin = 0;
     double bestDistance = std::numeric_limits<double>::infinity();
 
-    // Sony's A7R III exposes 2500-9900 K. Match the camera-recorded WB
-    // multipliers against Sony's calibration table in reciprocal-temperature
-    // space so the UI starts at the closest camera-style Kelvin value.
+    // Match the camera-recorded WB multipliers against Sony's calibration table
+    // in reciprocal-temperature space. Nexus keeps a broad editor range rather
+    // than restricting Temp to the controls offered by any single camera body.
     for (int kelvin = kSonyTemperatureMinimumKelvin;
          kelvin <= kSonyTemperatureMaximumKelvin;
          kelvin += kSonyTemperatureStepKelvin) {
