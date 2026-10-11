@@ -105,6 +105,26 @@ void PhotoCanvas::setImage(const QImage &image)
     updateCursor();
 }
 
+void PhotoCanvas::replaceImage(const QImage &image)
+{
+    if (image.isNull()) {
+        clearImage();
+        return;
+    }
+
+    const PhotoImageItem *currentItem = asPhotoItem(m_imageItem);
+    if (!hasImage() || currentItem->image().size() != image.size()) {
+        setImage(image);
+        return;
+    }
+
+    asPhotoItem(m_imageItem)->setImage(image);
+    m_scene->setSceneRect(m_imageItem->boundingRect());
+    m_imageItem->setVisible(true);
+    viewport()->update();
+    updateCursor();
+}
+
 void PhotoCanvas::clearImage()
 {
     asPhotoItem(m_imageItem)->setImage({});

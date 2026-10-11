@@ -15,9 +15,14 @@
 #include <QVariantAnimation>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 namespace {
 
 constexpr int kPanelAnimationDurationMs = 220;
+constexpr int kTemperatureMinimumKelvin = 2500;
+constexpr int kTemperatureMaximumKelvin = 9900;
+constexpr int kDefaultTemperatureKelvin = 6500;
 
 enum class ValueFormat {
     Temperature,
@@ -316,7 +321,8 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent *event) override
     {
         if (event->button() == Qt::LeftButton && m_slider) {
-            m_slider->setValue(m_resetValue);
+            const QVariant overrideValue = m_slider->property("resetValue");
+            m_slider->setValue(overrideValue.isValid() ? overrideValue.toInt() : m_resetValue);
             event->accept();
             return;
         }
@@ -336,15 +342,15 @@ QLabel *sectionLabel(const QString &text, QWidget *parent)
     return label;
 }
 
-void addSliderControl(QVBoxLayout *layout,
-                      const QString &labelText,
-                      int minimum,
-                      int maximum,
-                      int value,
-                      ValueFormat format,
-                      bool showNeutralMarker,
-                      const QString &sliderObjectName,
-                      QWidget *parent)
+BasicSlider *addSliderControl(QVBoxLayout *layout,
+                              const QString &labelText,
+                              int minimum,
+                              int maximum,
+                              int value,
+                              ValueFormat format,
+                              bool showNeutralMarker,
+                              const QString &sliderObjectName,
+                              QWidget *parent)
 {
     auto *control = new QWidget(parent);
     control->setObjectName(QStringLiteral("basicControl"));
@@ -383,6 +389,7 @@ void addSliderControl(QVBoxLayout *layout,
     controlLayout->addLayout(labelRow);
     controlLayout->addWidget(slider);
     layout->addWidget(control);
+    return slider;
 }
 
 void addSectionSpacing(QVBoxLayout *layout)
@@ -437,9 +444,15 @@ BasicPanel::BasicPanel(QWidget *parent)
     auto *whiteBalanceLabel = sectionLabel(tr("White Balance"), content);
     whiteBalanceLabel->setStyleSheet(QStringLiteral("color: transparent;"));
     contentLayout->addWidget(whiteBalanceLabel);
-    addSliderControl(contentLayout, tr("Temp"), 2000, 50000, 6500,
-                     ValueFormat::Temperature, false,
-                     QStringLiteral("temperatureSlider"), content);
+    m_temperatureSlider = addSliderControl(contentLayout,
+                                           tr("Temp"),
+                                           kTemperatureMinimumKelvin,
+                                           kTemperatureMaximumKelvin,
+                                           kDefaultTemperatureKelvin,
+                                           ValueFormat::Temperature,
+                                           false,
+                                           QStringLiteral("temperatureSlider"),
+                                           content);
     addSliderControl(contentLayout, tr("Tint"), -150, 150, 0,
                      ValueFormat::SignedInteger, true,
                      QStringLiteral("tintSlider"), content);
@@ -504,6 +517,19 @@ BasicPanel::BasicPanel(QWidget *parent)
     connect(chevronButton, &QToolButton::clicked, titleButton,
             [titleButton]() {
                 titleButton->toggle();
+            });
+
+    connect(m_temperatureSlider, &QSlider::valueChanged, this,
+            [this](int kelvin) {
+                if (!m_settingCameraTemperature && !m_temperatureSlider->isSliderDown()) {
+                    emit temperatureChanged(kelvin);
+                }
+            });
+    connect(m_temperatureSlider, &QSlider::sliderReleased, this,
+            [this]() {
+                if (!m_settingCameraTemperature) {
+                    emit temperatureChanged(m_temperatureSlider->value());
+                }
             });
 
     setStyleSheet(QStringLiteral(
@@ -584,4 +610,22 @@ BasicPanel::BasicPanel(QWidget *parent)
         "QSlider#tintSlider::handle:horizontal:hover { background: #ffffff; }"));
 
     revealContainer->refreshExpandedHeight();
+}
+
+void BasicPanel::setCameraTemperatureKelvin(int kelvin)
+{
+    if (!m_temperatureSlider) {
+        return;
+    }
+
+    const int cameraKelvin = std::clamp(
+        kelvin > 0 ? kelvin : kDefaultTemperatureKelvin,
+        m_temperatureSlider->minimum(),
+        m_temperatureSlider->maximum());
+
+    m_temperatureSlider->setProperty("resetValue", cameraKelvin);
+
+    m_settingCameraTemperature = true;
+    m_temperatureSlider->setValue(cameraKelvin);
+    m_settingCameraTemperature = false;
 }

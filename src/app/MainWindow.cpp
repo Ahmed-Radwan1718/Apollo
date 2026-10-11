@@ -94,6 +94,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_canvas, &PhotoCanvas::fileDropped,
             this, &MainWindow::openImage);
+    connect(m_basicPanel, &BasicPanel::temperatureChanged,
+            this, &MainWindow::applyTemperature);
 }
 
 void MainWindow::chooseAndOpenImage()
@@ -121,12 +123,38 @@ void MainWindow::openImage(const QString &filePath)
         return;
     }
 
+    m_currentFilePath = QFileInfo(filePath).absoluteFilePath();
+
     m_canvas->setImage(result.image);
     m_navigator->setImage(result.image);
     m_histogram->setImage(result.image);
     m_photoMetadata->setMetadata(result.metadata);
     m_basicPanel->setCameraTemperatureKelvin(result.metadata.whiteBalanceTemperatureKelvin);
     setWindowTitle(QStringLiteral("%1 — Nexus").arg(QFileInfo(filePath).fileName()));
+}
+
+void MainWindow::applyTemperature(int kelvin)
+{
+    if (m_currentFilePath.isEmpty()
+        || QFileInfo(m_currentFilePath).suffix().compare(QStringLiteral("arw"),
+                                                        Qt::CaseInsensitive) != 0) {
+        return;
+    }
+
+    const imaging::ImageLoadResult result = imaging::ImageLoader::load(m_currentFilePath,
+                                                                        kelvin);
+    if (!result.succeeded()) {
+        QMessageBox::critical(
+            this,
+            tr("Could not adjust temperature"),
+            tr("Nexus could not render the requested white balance:\n%1\n\n%2")
+                .arg(QDir::toNativeSeparators(m_currentFilePath), result.error));
+        return;
+    }
+
+    m_canvas->replaceImage(result.image);
+    m_navigator->setImage(result.image);
+    m_histogram->setImage(result.image);
 }
 
 void MainWindow::createActions()

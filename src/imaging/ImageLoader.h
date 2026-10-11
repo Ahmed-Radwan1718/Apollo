@@ -21,7 +21,8 @@ public:
     ImageLoader() = delete;
 
     // Loads Sony ARW through LibRaw and regular raster formats through Qt.
-    [[nodiscard]] static ImageLoadResult load(const QString &filePath);
+    [[nodiscard]] static ImageLoadResult load(const QString &filePath,
+                                              int whiteBalanceTemperatureKelvin = 0);
     [[nodiscard]] static QString fileDialogFilter();
 };
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QString>
 
 class QAction;
 class BasicPanel;
@@ -8,7 +9,6 @@ class HistogramWidget;
 class NavigatorPanel;
 class PhotoCanvas;
 class PhotoMetadataWidget;
-class QString;
 
 class MainWindow final : public QMainWindow
 {
@@ -20,6 +20,7 @@ public:
 private slots:
     void chooseAndOpenImage();
     void openImage(const QString &filePath);
+    void applyTemperature(int kelvin);
 
 private:
     void createActions();
@@ -29,6 +30,8 @@ private:
     HistogramWidget *m_histogram = nullptr;
     PhotoMetadataWidget *m_photoMetadata = nullptr;
     BasicPanel *m_basicPanel = nullptr;
+
+    QString m_currentFilePath;
 
     QAction *m_openAction = nullptr;
     QAction *m_fitAction = nullptr;

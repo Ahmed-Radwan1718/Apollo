@@ -27,6 +27,7 @@ public:
     // The canvas consumes a display-ready preview. It never modifies image pixels;
     // edits belong to the non-destructive render pipeline that produces this image.
     void setImage(const QImage &image);
+    void replaceImage(const QImage &image);
     void clearImage();
 
     [[nodiscard]] bool hasImage() const noexcept;

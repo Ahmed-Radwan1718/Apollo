@@ -80,13 +80,9 @@ bool logarithmicWhiteBalanceRatios(const float *coefficients,
     return std::isfinite(ratios.redToGreen) && std::isfinite(ratios.blueToGreen);
 }
 
-int sonyWhiteBalanceTemperatureKelvin(const libraw_colordata_t &color)
+std::vector<TemperatureCalibration> sonyTemperatureCalibrations(
+    const libraw_colordata_t &color)
 {
-    WhiteBalanceRatios asShotRatios;
-    if (!logarithmicWhiteBalanceRatios(color.cam_mul, asShotRatios)) {
-        return 0;
-    }
-
     std::vector<TemperatureCalibration> calibrations;
     calibrations.reserve(64);
 
@@ -118,54 +114,84 @@ int sonyWhiteBalanceTemperatureKelvin(const libraw_colordata_t &color)
                     }),
         calibrations.end());
 
-    if (calibrations.size() < 2) {
+    return calibrations;
+}
+
+bool whiteBalanceRatiosAtKelvin(const std::vector<TemperatureCalibration> &calibrations,
+                                int kelvin,
+                                WhiteBalanceRatios &ratios)
+{
+    if (calibrations.size() < 2 || kelvin <= 0) {
+        return false;
+    }
+
+    const auto upper = std::lower_bound(
+        calibrations.begin(), calibrations.end(), kelvin,
+        [](const TemperatureCalibration &point, int value) {
+            return point.kelvin < value;
+        });
+
+    std::size_t lowerIndex = 0;
+    std::size_t upperIndex = 1;
+
+    if (upper == calibrations.begin()) {
+        lowerIndex = 0;
+        upperIndex = 1;
+    } else if (upper == calibrations.end()) {
+        lowerIndex = calibrations.size() - 2;
+        upperIndex = calibrations.size() - 1;
+    } else {
+        upperIndex = static_cast<std::size_t>(upper - calibrations.begin());
+        lowerIndex = upperIndex - 1;
+    }
+
+    const TemperatureCalibration &lower = calibrations[lowerIndex];
+    const TemperatureCalibration &higher = calibrations[upperIndex];
+
+    const double lowerMired = 1000000.0 / static_cast<double>(lower.kelvin);
+    const double higherMired = 1000000.0 / static_cast<double>(higher.kelvin);
+    const double targetMired = 1000000.0 / static_cast<double>(kelvin);
+    const double denominator = higherMired - lowerMired;
+
+    if (std::abs(denominator) <= std::numeric_limits<double>::epsilon()) {
+        return false;
+    }
+
+    const double blend = (targetMired - lowerMired) / denominator;
+    ratios.redToGreen = lower.ratios.redToGreen
+        + blend * (higher.ratios.redToGreen - lower.ratios.redToGreen);
+    ratios.blueToGreen = lower.ratios.blueToGreen
+        + blend * (higher.ratios.blueToGreen - lower.ratios.blueToGreen);
+
+    return std::isfinite(ratios.redToGreen) && std::isfinite(ratios.blueToGreen);
+}
+
+int sonyWhiteBalanceTemperatureKelvin(
+    const libraw_colordata_t &color,
+    const std::vector<TemperatureCalibration> &calibrations)
+{
+    WhiteBalanceRatios asShotRatios;
+    if (!logarithmicWhiteBalanceRatios(color.cam_mul, asShotRatios)
+        || calibrations.size() < 2) {
         return 0;
     }
 
     int bestKelvin = 0;
     double bestDistance = std::numeric_limits<double>::infinity();
 
-    // Sony records several camera-specific temperature/WB calibration points in
-    // the ARW. Interpolate those in reciprocal-temperature (mired) space and find
-    // the A7R III's nearest 100 K camera setting to the as-shot WB multipliers.
+    // Sony's A7R III exposes 2500-9900 K. Match the camera-recorded WB
+    // multipliers against Sony's calibration table in reciprocal-temperature
+    // space so the UI starts at the closest camera-style Kelvin value.
     for (int kelvin = kSonyTemperatureMinimumKelvin;
          kelvin <= kSonyTemperatureMaximumKelvin;
          kelvin += kSonyTemperatureStepKelvin) {
-        const auto upper = std::lower_bound(
-            calibrations.begin(), calibrations.end(), kelvin,
-            [](const TemperatureCalibration &point, int value) {
-                return point.kelvin < value;
-            });
-
-        std::size_t lowerIndex = 0;
-        std::size_t upperIndex = 1;
-
-        if (upper == calibrations.begin()) {
-            lowerIndex = 0;
-            upperIndex = 1;
-        } else if (upper == calibrations.end()) {
-            lowerIndex = calibrations.size() - 2;
-            upperIndex = calibrations.size() - 1;
-        } else {
-            upperIndex = static_cast<std::size_t>(upper - calibrations.begin());
-            lowerIndex = upperIndex - 1;
+        WhiteBalanceRatios predicted;
+        if (!whiteBalanceRatiosAtKelvin(calibrations, kelvin, predicted)) {
+            continue;
         }
 
-        const TemperatureCalibration &lower = calibrations[lowerIndex];
-        const TemperatureCalibration &higher = calibrations[upperIndex];
-
-        const double lowerMired = 1000000.0 / static_cast<double>(lower.kelvin);
-        const double higherMired = 1000000.0 / static_cast<double>(higher.kelvin);
-        const double candidateMired = 1000000.0 / static_cast<double>(kelvin);
-        const double blend = (candidateMired - lowerMired) / (higherMired - lowerMired);
-
-        const double predictedRed = lower.ratios.redToGreen
-            + blend * (higher.ratios.redToGreen - lower.ratios.redToGreen);
-        const double predictedBlue = lower.ratios.blueToGreen
-            + blend * (higher.ratios.blueToGreen - lower.ratios.blueToGreen);
-
-        const double redError = asShotRatios.redToGreen - predictedRed;
-        const double blueError = asShotRatios.blueToGreen - predictedBlue;
+        const double redError = asShotRatios.redToGreen - predicted.redToGreen;
+        const double blueError = asShotRatios.blueToGreen - predicted.blueToGreen;
         const double distance = redError * redError + blueError * blueError;
 
         if (distance < bestDistance) {
@@ -177,11 +203,55 @@ int sonyWhiteBalanceTemperatureKelvin(const libraw_colordata_t &color)
     return bestKelvin;
 }
 
+bool sonyWhiteBalanceMultipliersForTemperature(
+    const libraw_colordata_t &color,
+    const std::vector<TemperatureCalibration> &calibrations,
+    int cameraKelvin,
+    int targetKelvin,
+    float (&multipliers)[4])
+{
+    WhiteBalanceRatios asShotRatios;
+    WhiteBalanceRatios cameraCurveRatios;
+    WhiteBalanceRatios targetCurveRatios;
+
+    if (!logarithmicWhiteBalanceRatios(color.cam_mul, asShotRatios)
+        || !whiteBalanceRatiosAtKelvin(calibrations, cameraKelvin, cameraCurveRatios)
+        || !whiteBalanceRatiosAtKelvin(calibrations, targetKelvin, targetCurveRatios)) {
+        return false;
+    }
+
+    // Move along Sony's own temperature calibration curve while retaining the
+    // as-shot offset from that curve. That preserves the camera's green/magenta
+    // bias so Temp changes temperature only; Tint remains a separate future edit.
+    const double redToGreen = targetCurveRatios.redToGreen
+        + (asShotRatios.redToGreen - cameraCurveRatios.redToGreen);
+    const double blueToGreen = targetCurveRatios.blueToGreen
+        + (asShotRatios.blueToGreen - cameraCurveRatios.blueToGreen);
+
+    const double red = std::exp(redToGreen);
+    const double blue = std::exp(blueToGreen);
+    const double green2 = color.cam_mul[1] > 0.0f && color.cam_mul[3] > 0.0f
+        ? static_cast<double>(color.cam_mul[3] / color.cam_mul[1])
+        : 1.0;
+
+    if (!std::isfinite(red) || !std::isfinite(blue) || !std::isfinite(green2)
+        || !(red > 0.0) || !(blue > 0.0) || !(green2 > 0.0)) {
+        return false;
+    }
+
+    multipliers[0] = static_cast<float>(red);
+    multipliers[1] = 1.0f;
+    multipliers[2] = static_cast<float>(blue);
+    multipliers[3] = static_cast<float>(green2);
+    return true;
+}
+
 } // namespace
 
 QImage ArwDecoder::decode(const QString &filePath,
                           QString *error,
-                          PhotoMetadata *metadata)
+                          PhotoMetadata *metadata,
+                          int whiteBalanceTemperatureKelvin)
 {
     if (error != nullptr) {
         error->clear();
@@ -209,14 +279,47 @@ QImage ArwDecoder::decode(const QString &filePath,
         return {};
     }
 
+    const std::vector<TemperatureCalibration> calibrations =
+        sonyTemperatureCalibrations(processor.imgdata.color);
+    const int cameraTemperatureKelvin =
+        sonyWhiteBalanceTemperatureKelvin(processor.imgdata.color, calibrations);
+
     if (metadata != nullptr) {
         const libraw_imgother_t &other = processor.imgdata.other;
         metadata->shutterSeconds = other.shutter;
         metadata->aperture = other.aperture;
         metadata->iso = other.iso_speed;
         metadata->focalLengthMm = other.focal_len;
-        metadata->whiteBalanceTemperatureKelvin =
-            sonyWhiteBalanceTemperatureKelvin(processor.imgdata.color);
+        metadata->whiteBalanceTemperatureKelvin = cameraTemperatureKelvin;
+    }
+
+    const int requestedTemperatureKelvin = whiteBalanceTemperatureKelvin > 0
+        ? std::clamp(whiteBalanceTemperatureKelvin,
+                     kSonyTemperatureMinimumKelvin,
+                     kSonyTemperatureMaximumKelvin)
+        : 0;
+
+    if (requestedTemperatureKelvin > 0
+        && requestedTemperatureKelvin != cameraTemperatureKelvin) {
+        float userMultipliers[4] = {};
+        if (cameraTemperatureKelvin <= 0
+            || !sonyWhiteBalanceMultipliersForTemperature(processor.imgdata.color,
+                                                          calibrations,
+                                                          cameraTemperatureKelvin,
+                                                          requestedTemperatureKelvin,
+                                                          userMultipliers)) {
+            setError(error,
+                     QStringLiteral("Sony white-balance calibration data is unavailable for this RAW file."));
+            return {};
+        }
+
+        // use_camera_wb is deliberately enabled while opening so LibRaw loads the
+        // normal Sony camera-color path. For an actual Temp edit, switch only the
+        // post-processing WB source to user_mul; otherwise camera WB would override it.
+        processor.imgdata.params.use_camera_wb = 0;
+        for (int channel = 0; channel < 4; ++channel) {
+            processor.imgdata.params.user_mul[channel] = userMultipliers[channel];
+        }
     }
 
     result = processor.unpack();

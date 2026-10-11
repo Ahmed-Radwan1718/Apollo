@@ -14,7 +14,8 @@ public:
 
     [[nodiscard]] static QImage decode(const QString &filePath,
                                        QString *error = nullptr,
-                                       PhotoMetadata *metadata = nullptr);
+                                       PhotoMetadata *metadata = nullptr,
+                                       int whiteBalanceTemperatureKelvin = 0);
 };
 
 } // namespace imaging

@@ -11,12 +11,16 @@
 
 namespace imaging {
 
-ImageLoadResult ImageLoader::load(const QString &filePath)
+ImageLoadResult ImageLoader::load(const QString &filePath,
+                                  int whiteBalanceTemperatureKelvin)
 {
     if (QFileInfo(filePath).suffix().compare(QStringLiteral("arw"), Qt::CaseInsensitive) == 0) {
         QString error;
         PhotoMetadata metadata;
-        QImage image = ArwDecoder::decode(filePath, &error, &metadata);
+        QImage image = ArwDecoder::decode(filePath,
+                                          &error,
+                                          &metadata,
+                                          whiteBalanceTemperatureKelvin);
         return {std::move(image), metadata, std::move(error)};
     }
 
