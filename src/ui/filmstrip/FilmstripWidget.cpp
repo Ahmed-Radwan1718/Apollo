@@ -1,5 +1,7 @@
 #include "ui/filmstrip/FilmstripWidget.h"
 
+#include <QFileInfo>
+#include <QFont>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QMetaObject>
@@ -15,15 +17,18 @@
 
 namespace {
 
-constexpr int kFilmstripHeight = 116;
+constexpr int kFilmstripHeight = 128;
 constexpr int kThumbnailWidth = 112;
-constexpr int kThumbnailHeight = 78;
+constexpr int kThumbnailImageHeight = 78;
+constexpr int kThumbnailLabelHeight = 18;
+constexpr int kThumbnailHeight = kThumbnailImageHeight + kThumbnailLabelHeight;
 constexpr int kThumbnailPreviewSize = 320;
 
 class FilmstripThumbnail final : public QWidget
 {
 public:
-    explicit FilmstripThumbnail(const QImage &image,
+    explicit FilmstripThumbnail(const QString &filePath,
+                                const QImage &image,
                                 std::function<void()> activated,
                                 QWidget *parent = nullptr)
         : QWidget(parent)
@@ -31,6 +36,7 @@ public:
                                    kThumbnailPreviewSize,
                                    Qt::KeepAspectRatio,
                                    Qt::SmoothTransformation))
+        , m_fileName(QFileInfo(filePath).fileName())
         , m_activated(std::move(activated))
     {
         setFixedSize(kThumbnailWidth, kThumbnailHeight);
@@ -64,12 +70,15 @@ protected:
         Q_UNUSED(event);
 
         QPainter painter(this);
-        painter.fillRect(rect(), QColor(17, 17, 17));
+        painter.fillRect(rect(), QColor(21, 21, 21));
+
+        const QRect imageRect(0, 0, width(), kThumbnailImageHeight);
+        painter.fillRect(imageRect, QColor(17, 17, 17));
 
         if (!m_thumbnail.isNull()) {
             painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
-            const QRect available = rect().adjusted(4, 4, -4, -4);
+            const QRect available = imageRect.adjusted(4, 4, -4, -4);
             const QSize drawnSize = m_thumbnail.size().scaled(available.size(),
                                                               Qt::KeepAspectRatio);
             const QRect target(available.center().x() - drawnSize.width() / 2,
@@ -81,15 +90,31 @@ protected:
 
         if (m_selected) {
             painter.setPen(QPen(QColor(214, 214, 214), 2));
-            painter.drawRect(rect().adjusted(1, 1, -2, -2));
+            painter.drawRect(imageRect.adjusted(1, 1, -2, -2));
         } else {
             painter.setPen(QColor(48, 48, 48));
-            painter.drawRect(rect().adjusted(0, 0, -1, -1));
+            painter.drawRect(imageRect.adjusted(0, 0, -1, -1));
         }
+
+        QFont fileNameFont = painter.font();
+        fileNameFont.setPointSizeF(7.5);
+        painter.setFont(fileNameFont);
+        painter.setPen(QColor(166, 166, 166));
+
+        const QRect labelRect(2,
+                              kThumbnailImageHeight + 1,
+                              width() - 4,
+                              kThumbnailLabelHeight - 1);
+        const QString displayName = painter.fontMetrics().elidedText(
+            m_fileName, Qt::ElideMiddle, labelRect.width());
+        painter.drawText(labelRect,
+                         Qt::AlignHCenter | Qt::AlignVCenter,
+                         displayName);
     }
 
 private:
     QImage m_thumbnail;
+    QString m_fileName;
     std::function<void()> m_activated;
     bool m_selected = false;
 };
@@ -164,6 +189,7 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
     }
 
     auto *thumbnail = new FilmstripThumbnail(
+        filePath,
         image,
         [this, filePath]() {
             activatePhoto(filePath);
