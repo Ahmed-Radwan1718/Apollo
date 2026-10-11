@@ -1,9 +1,12 @@
 #include "ui/rightpanel/BasicPanel.h"
 
 #include <QEasingCurve>
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
@@ -16,6 +19,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 
 namespace {
 
@@ -48,6 +52,37 @@ QString formattedValue(int value, ValueFormat format)
     }
 
     return {};
+}
+
+bool sliderValueFromText(const QString &text,
+                         ValueFormat format,
+                         int minimum,
+                         int maximum,
+                         int &value)
+{
+    bool ok = false;
+
+    if (format == ValueFormat::Exposure) {
+        const double stops = text.trimmed().toDouble(&ok);
+        const double minimumStops = static_cast<double>(minimum) / 100.0;
+        const double maximumStops = static_cast<double>(maximum) / 100.0;
+        if (!ok || !std::isfinite(stops)
+            || stops < minimumStops || stops > maximumStops) {
+            return false;
+        }
+
+        value = std::clamp(static_cast<int>(std::lround(stops * 100.0)),
+                           minimum, maximum);
+        return true;
+    }
+
+    const int parsedValue = text.trimmed().toInt(&ok);
+    if (!ok || parsedValue < minimum || parsedValue > maximum) {
+        return false;
+    }
+
+    value = parsedValue;
+    return true;
 }
 
 class BasicTitleButton final : public QToolButton
@@ -335,6 +370,115 @@ private:
     int m_resetValue = 0;
 };
 
+class EditableValueLabel final : public QLabel
+{
+public:
+    EditableValueLabel(QSlider *slider, ValueFormat format, QWidget *parent = nullptr)
+        : QLabel(formattedValue(slider->value(), format), parent)
+        , m_slider(slider)
+        , m_format(format)
+        , m_editor(new QLineEdit(this))
+    {
+        setObjectName(QStringLiteral("basicValueLabel"));
+        setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+        m_editor->setFrame(false);
+        m_editor->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        m_editor->setTextMargins(0, 0, 0, 0);
+        m_editor->setStyleSheet(QStringLiteral(
+            "QLineEdit {"
+            "  color: #9f9f9f;"
+            "  background: #181818;"
+            "  border: 0;"
+            "  margin: 0;"
+            "  padding: 0;"
+            "  font-size: 11px;"
+            "  selection-color: #9f9f9f;"
+            "  selection-background-color: #181818;"
+            "}"));
+        m_editor->hide();
+        m_editor->installEventFilter(this);
+
+        connect(m_slider, &QSlider::valueChanged, this,
+                [this](int currentValue) {
+                    setText(formattedValue(currentValue, m_format));
+                });
+        connect(m_editor, &QLineEdit::editingFinished, this,
+                [this]() {
+                    if (m_editor->isVisible()) {
+                        commitEditing();
+                    }
+                });
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton) {
+            beginEditing();
+            event->accept();
+            return;
+        }
+
+        QLabel::mousePressEvent(event);
+    }
+
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QLabel::resizeEvent(event);
+        m_editor->setGeometry(rect());
+    }
+
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (watched == m_editor && event->type() == QEvent::KeyPress) {
+            const auto *keyEvent = static_cast<QKeyEvent *>(event);
+            if (keyEvent->key() == Qt::Key_Escape) {
+                cancelEditing();
+                return true;
+            }
+        }
+
+        return QLabel::eventFilter(watched, event);
+    }
+
+private:
+    void beginEditing()
+    {
+        m_editor->setGeometry(rect());
+        m_editor->setText(formattedValue(m_slider->value(), m_format));
+        m_editor->show();
+        m_editor->raise();
+        m_editor->setFocus(Qt::MouseFocusReason);
+        m_editor->selectAll();
+    }
+
+    void commitEditing()
+    {
+        int sliderValue = m_slider->value();
+        if (sliderValueFromText(m_editor->text(), m_format,
+                                m_slider->minimum(), m_slider->maximum(),
+                                sliderValue)) {
+            m_slider->setValue(sliderValue);
+        }
+
+        setText(formattedValue(m_slider->value(), m_format));
+        m_editor->hide();
+    }
+
+    void cancelEditing()
+    {
+        const bool signalsWereBlocked = m_editor->blockSignals(true);
+        m_editor->hide();
+        m_editor->blockSignals(signalsWereBlocked);
+        m_editor->setText(formattedValue(m_slider->value(), m_format));
+    }
+
+    QSlider *m_slider = nullptr;
+    ValueFormat m_format = ValueFormat::SignedInteger;
+    QLineEdit *m_editor = nullptr;
+};
+
 QLabel *sectionLabel(const QString &text, QWidget *parent)
 {
     auto *label = new QLabel(text, parent);
@@ -373,18 +517,11 @@ BasicSlider *addSliderControl(QVBoxLayout *layout,
     auto *label = new ResetLabel(labelText, slider, value, control);
     label->setObjectName(QStringLiteral("basicControlLabel"));
 
-    auto *valueLabel = new QLabel(formattedValue(value, format), control);
-    valueLabel->setObjectName(QStringLiteral("basicValueLabel"));
-    valueLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    auto *valueLabel = new EditableValueLabel(slider, format, control);
 
     labelRow->addWidget(label);
     labelRow->addStretch(1);
     labelRow->addWidget(valueLabel);
-
-    QObject::connect(slider, &QSlider::valueChanged, valueLabel,
-                     [valueLabel, format](int currentValue) {
-                         valueLabel->setText(formattedValue(currentValue, format));
-                     });
 
     controlLayout->addLayout(labelRow);
     controlLayout->addWidget(slider);
