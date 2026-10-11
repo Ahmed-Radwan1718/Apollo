@@ -77,23 +77,20 @@ void HistogramWidget::paintEvent(QPaintEvent *event)
     painter.fillRect(rect(), QColor(24, 24, 24));
 
     const QRectF plotRect = QRectF(rect()).adjusted(1.0, 3.0, -1.0, -2.0);
-
-    painter.setPen(QPen(QColor(38, 38, 38), 1.0));
-    for (int division = 1; division < 4; ++division) {
-        const qreal x = plotRect.left()
-            + (plotRect.width() * static_cast<qreal>(division) / 4.0);
-        painter.drawLine(QPointF(x, plotRect.top()), QPointF(x, plotRect.bottom()));
-    }
-    painter.drawLine(plotRect.bottomLeft(), plotRect.bottomRight());
+    const QRectF frameRect = plotRect.adjusted(0.5, 0.5, -0.5, -0.5);
 
     if (m_histogram.isEmpty()) {
         painter.setPen(QColor(105, 105, 105));
         painter.drawText(plotRect, Qt::AlignCenter, QStringLiteral("No image"));
+        painter.setPen(QPen(QColor(48, 48, 48), 1.0));
+        painter.drawRect(frameRect);
         return;
     }
 
     const quint64 peak = m_histogram.peak();
     if (peak == 0) {
+        painter.setPen(QPen(QColor(48, 48, 48), 1.0));
+        painter.drawRect(frameRect);
         return;
     }
 
@@ -110,4 +107,7 @@ void HistogramWidget::paintEvent(QPaintEvent *event)
     painter.fillPath(bluePath, QColor(70, 115, 255, 78));
 
     painter.restore();
+
+    painter.setPen(QPen(QColor(48, 48, 48), 1.0));
+    painter.drawRect(frameRect);
 }
