@@ -24,6 +24,7 @@ public:
                         int kelvin,
                         int tint,
                         int exposureHundredths,
+                        int highlights,
                         int contrast,
                         int saturation,
                         int vibrance);
@@ -31,6 +32,7 @@ public:
                            int kelvin,
                            int tint,
                            int exposureHundredths,
+                           int highlights,
                            int contrast,
                            int saturation,
                            int vibrance);
@@ -40,6 +42,7 @@ signals:
                      int kelvin,
                      int tint,
                      int exposureHundredths,
+                     int highlights,
                      int contrast,
                      int saturation,
                      int vibrance,
@@ -53,6 +56,7 @@ private:
         int kelvin = 0;
         int tint = 0;
         int exposureHundredths = 0;
+        int highlights = 0;
         int contrast = 0;
         int saturation = 0;
         int vibrance = 0;

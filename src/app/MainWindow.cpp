@@ -213,6 +213,7 @@ MainWindow::MainWindow(QWidget *parent)
         m_basicPanel->findChild<QSlider *>(QStringLiteral("temperatureSlider"));
     m_tintSlider = m_basicPanel->findChild<QSlider *>(QStringLiteral("tintSlider"));
     m_exposureSlider = findExposureSlider(m_basicPanel);
+    m_highlightsSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Highlights"));
     m_contrastSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Contrast"));
     m_saturationSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Saturation"));
     m_vibranceSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Vibrance"));
@@ -280,6 +281,27 @@ MainWindow::MainWindow(QWidget *parent)
                 [this]() {
                     if (!m_settingDevelopControls) {
                         applyExposure(m_exposureSlider->value());
+                    }
+                });
+    }
+
+    if (m_highlightsSlider) {
+        connect(m_highlightsSlider, &QSlider::valueChanged, this,
+                [this](int highlights) {
+                    if (m_settingDevelopControls) {
+                        return;
+                    }
+
+                    if (m_highlightsSlider->isSliderDown()) {
+                        previewHighlights(highlights);
+                    } else {
+                        applyHighlights(highlights);
+                    }
+                });
+        connect(m_highlightsSlider, &QSlider::sliderReleased, this,
+                [this]() {
+                    if (!m_settingDevelopControls) {
+                        applyHighlights(m_highlightsSlider->value());
                     }
                 });
     }
@@ -398,6 +420,7 @@ void MainWindow::openImage(const QString &filePath)
         : kDefaultTemperatureKelvin;
     m_requestedState.tint = 0;
     m_requestedState.exposureHundredths = 0;
+    m_requestedState.highlights = 0;
     m_requestedState.contrast = 0;
     m_requestedState.saturation = 0;
     m_requestedState.vibrance = 0;
@@ -419,6 +442,9 @@ void MainWindow::openImage(const QString &filePath)
     }
     if (m_exposureSlider) {
         m_exposureSlider->setValue(0);
+    }
+    if (m_highlightsSlider) {
+        m_highlightsSlider->setValue(0);
     }
     if (m_contrastSlider) {
         m_contrastSlider->setValue(0);
@@ -476,6 +502,20 @@ void MainWindow::applyExposure(int exposureHundredths)
     requestFullRender(state);
 }
 
+void MainWindow::previewHighlights(int highlights)
+{
+    DevelopState state = m_requestedState;
+    state.highlights = highlights;
+    requestPreview(state);
+}
+
+void MainWindow::applyHighlights(int highlights)
+{
+    DevelopState state = m_requestedState;
+    state.highlights = highlights;
+    requestFullRender(state);
+}
+
 void MainWindow::previewContrast(int contrast)
 {
     DevelopState state = m_requestedState;
@@ -530,6 +570,7 @@ void MainWindow::requestPreview(const DevelopState &state)
                                     state.temperatureKelvin,
                                     state.tint,
                                     state.exposureHundredths,
+                                    state.highlights,
                                     state.contrast,
                                     state.saturation,
                                     state.vibrance);
@@ -546,6 +587,7 @@ void MainWindow::requestFullRender(const DevelopState &state)
                                        state.temperatureKelvin,
                                        state.tint,
                                        state.exposureHundredths,
+                                       state.highlights,
                                        state.contrast,
                                        state.saturation,
                                        state.vibrance);
@@ -555,6 +597,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
                                      int temperatureKelvin,
                                      int tint,
                                      int exposureHundredths,
+                                     int highlights,
                                      int contrast,
                                      int saturation,
                                      int vibrance,
@@ -566,6 +609,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
         temperatureKelvin,
         tint,
         exposureHundredths,
+        highlights,
         contrast,
         saturation,
         vibrance,
