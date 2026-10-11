@@ -25,8 +25,9 @@ namespace {
 
 constexpr int kPanelAnimationDurationMs = 220;
 constexpr int kTemperatureMinimumKelvin = 2000;
-constexpr int kTemperatureMaximumKelvin = 50000;
+constexpr int kTemperatureMaximumKelvin = 20000;
 constexpr int kDefaultTemperatureKelvin = 6500;
+constexpr int kTemperatureSliderResolution = 1000000;
 
 enum class ValueFormat {
     Temperature,
@@ -83,6 +84,38 @@ bool sliderValueFromText(const QString &text,
 
     value = parsedValue;
     return true;
+}
+
+int temperatureSliderPositionForKelvin(int kelvin, int minimum, int maximum)
+{
+    const int clampedKelvin = std::clamp(kelvin, minimum, maximum);
+    const double minimumReciprocal = 1.0 / static_cast<double>(minimum);
+    const double maximumReciprocal = 1.0 / static_cast<double>(maximum);
+    const double kelvinReciprocal = 1.0 / static_cast<double>(clampedKelvin);
+    const double normalized = std::clamp(
+        (minimumReciprocal - kelvinReciprocal)
+            / (minimumReciprocal - maximumReciprocal),
+        0.0,
+        1.0);
+
+    return static_cast<int>(std::lround(
+        normalized * static_cast<double>(kTemperatureSliderResolution)));
+}
+
+int temperatureKelvinForSliderPosition(int position, int minimum, int maximum)
+{
+    const double normalized = std::clamp(
+        static_cast<double>(position) / static_cast<double>(kTemperatureSliderResolution),
+        0.0,
+        1.0);
+    const double minimumReciprocal = 1.0 / static_cast<double>(minimum);
+    const double maximumReciprocal = 1.0 / static_cast<double>(maximum);
+    const double reciprocal = minimumReciprocal
+        - normalized * (minimumReciprocal - maximumReciprocal);
+
+    return std::clamp(static_cast<int>(std::lround(1.0 / reciprocal)),
+                      minimum,
+                      maximum);
 }
 
 class BasicTitleButton final : public QToolButton
@@ -315,10 +348,58 @@ private:
 class BasicSlider final : public QSlider
 {
 public:
-    BasicSlider(bool showNeutralMarker, QWidget *parent = nullptr)
+    BasicSlider(bool showNeutralMarker,
+                ValueFormat format,
+                QWidget *parent = nullptr)
         : QSlider(Qt::Horizontal, parent)
         , m_showNeutralMarker(showNeutralMarker)
+        , m_format(format)
     {
+    }
+
+    void setLogicalRange(int minimum, int maximum)
+    {
+        m_logicalMinimum = minimum;
+        m_logicalMaximum = maximum;
+
+        if (m_format == ValueFormat::Temperature) {
+            QSlider::setRange(0, kTemperatureSliderResolution);
+            return;
+        }
+
+        QSlider::setRange(minimum, maximum);
+    }
+
+    void setLogicalValue(int value)
+    {
+        const int clampedValue = std::clamp(value, m_logicalMinimum, m_logicalMaximum);
+        if (m_format == ValueFormat::Temperature) {
+            QSlider::setValue(temperatureSliderPositionForKelvin(
+                clampedValue, m_logicalMinimum, m_logicalMaximum));
+            return;
+        }
+
+        QSlider::setValue(clampedValue);
+    }
+
+    int logicalValue() const
+    {
+        if (m_format == ValueFormat::Temperature) {
+            return temperatureKelvinForSliderPosition(
+                QSlider::value(), m_logicalMinimum, m_logicalMaximum);
+        }
+
+        return QSlider::value();
+    }
+
+    int logicalMinimum() const
+    {
+        return m_logicalMinimum;
+    }
+
+    int logicalMaximum() const
+    {
+        return m_logicalMaximum;
     }
 
 protected:
@@ -340,12 +421,18 @@ protected:
 
 private:
     bool m_showNeutralMarker = false;
+    ValueFormat m_format = ValueFormat::SignedInteger;
+    int m_logicalMinimum = 0;
+    int m_logicalMaximum = 0;
 };
 
 class ResetLabel final : public QLabel
 {
 public:
-    ResetLabel(const QString &text, QSlider *slider, int resetValue, QWidget *parent = nullptr)
+    ResetLabel(const QString &text,
+               BasicSlider *slider,
+               int resetValue,
+               QWidget *parent = nullptr)
         : QLabel(text, parent)
         , m_slider(slider)
         , m_resetValue(resetValue)
@@ -357,7 +444,8 @@ protected:
     {
         if (event->button() == Qt::LeftButton && m_slider) {
             const QVariant overrideValue = m_slider->property("resetValue");
-            m_slider->setValue(overrideValue.isValid() ? overrideValue.toInt() : m_resetValue);
+            m_slider->setLogicalValue(
+                overrideValue.isValid() ? overrideValue.toInt() : m_resetValue);
             event->accept();
             return;
         }
@@ -366,15 +454,17 @@ protected:
     }
 
 private:
-    QSlider *m_slider = nullptr;
+    BasicSlider *m_slider = nullptr;
     int m_resetValue = 0;
 };
 
 class EditableValueLabel final : public QLabel
 {
 public:
-    EditableValueLabel(QSlider *slider, ValueFormat format, QWidget *parent = nullptr)
-        : QLabel(formattedValue(slider->value(), format), parent)
+    EditableValueLabel(BasicSlider *slider,
+                       ValueFormat format,
+                       QWidget *parent = nullptr)
+        : QLabel(formattedValue(slider->logicalValue(), format), parent)
         , m_slider(slider)
         , m_format(format)
         , m_editor(new QLineEdit(this))
@@ -400,8 +490,8 @@ public:
         m_editor->installEventFilter(this);
 
         connect(m_slider, &QSlider::valueChanged, this,
-                [this](int currentValue) {
-                    setText(formattedValue(currentValue, m_format));
+                [this](int) {
+                    setText(formattedValue(m_slider->logicalValue(), m_format));
                 });
         connect(m_editor, &QLineEdit::editingFinished, this,
                 [this]() {
@@ -446,7 +536,7 @@ private:
     void beginEditing()
     {
         m_editor->setGeometry(rect());
-        m_editor->setText(formattedValue(m_slider->value(), m_format));
+        m_editor->setText(formattedValue(m_slider->logicalValue(), m_format));
         m_editor->show();
         m_editor->raise();
         m_editor->setFocus(Qt::MouseFocusReason);
@@ -455,14 +545,14 @@ private:
 
     void commitEditing()
     {
-        int sliderValue = m_slider->value();
+        int sliderValue = m_slider->logicalValue();
         if (sliderValueFromText(m_editor->text(), m_format,
-                                m_slider->minimum(), m_slider->maximum(),
+                                m_slider->logicalMinimum(), m_slider->logicalMaximum(),
                                 sliderValue)) {
-            m_slider->setValue(sliderValue);
+            m_slider->setLogicalValue(sliderValue);
         }
 
-        setText(formattedValue(m_slider->value(), m_format));
+        setText(formattedValue(m_slider->logicalValue(), m_format));
         m_editor->hide();
     }
 
@@ -471,10 +561,10 @@ private:
         const bool signalsWereBlocked = m_editor->blockSignals(true);
         m_editor->hide();
         m_editor->blockSignals(signalsWereBlocked);
-        m_editor->setText(formattedValue(m_slider->value(), m_format));
+        m_editor->setText(formattedValue(m_slider->logicalValue(), m_format));
     }
 
-    QSlider *m_slider = nullptr;
+    BasicSlider *m_slider = nullptr;
     ValueFormat m_format = ValueFormat::SignedInteger;
     QLineEdit *m_editor = nullptr;
 };
@@ -507,10 +597,10 @@ BasicSlider *addSliderControl(QVBoxLayout *layout,
     labelRow->setContentsMargins(0, 0, 0, 0);
     labelRow->setSpacing(8);
 
-    auto *slider = new BasicSlider(showNeutralMarker, control);
+    auto *slider = new BasicSlider(showNeutralMarker, format, control);
     slider->setObjectName(sliderObjectName);
-    slider->setRange(minimum, maximum);
-    slider->setValue(value);
+    slider->setLogicalRange(minimum, maximum);
+    slider->setLogicalValue(value);
     slider->setTracking(true);
     slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
@@ -581,15 +671,16 @@ BasicPanel::BasicPanel(QWidget *parent)
     auto *whiteBalanceLabel = sectionLabel(tr("White Balance"), content);
     whiteBalanceLabel->setStyleSheet(QStringLiteral("color: transparent;"));
     contentLayout->addWidget(whiteBalanceLabel);
-    m_temperatureSlider = addSliderControl(contentLayout,
-                                           tr("Temp"),
-                                           kTemperatureMinimumKelvin,
-                                           kTemperatureMaximumKelvin,
-                                           kDefaultTemperatureKelvin,
-                                           ValueFormat::Temperature,
-                                           false,
-                                           QStringLiteral("temperatureSlider"),
-                                           content);
+    auto *temperatureSlider = addSliderControl(contentLayout,
+                                               tr("Temp"),
+                                               kTemperatureMinimumKelvin,
+                                               kTemperatureMaximumKelvin,
+                                               kDefaultTemperatureKelvin,
+                                               ValueFormat::Temperature,
+                                               false,
+                                               QStringLiteral("temperatureSlider"),
+                                               content);
+    m_temperatureSlider = temperatureSlider;
     addSliderControl(contentLayout, tr("Tint"), -150, 150, 0,
                      ValueFormat::SignedInteger, true,
                      QStringLiteral("tintSlider"), content);
@@ -656,16 +747,16 @@ BasicPanel::BasicPanel(QWidget *parent)
                 titleButton->toggle();
             });
 
-    connect(m_temperatureSlider, &QSlider::valueChanged, this,
-            [this](int kelvin) {
-                if (!m_settingCameraTemperature && !m_temperatureSlider->isSliderDown()) {
-                    emit temperatureChanged(kelvin);
+    connect(temperatureSlider, &QSlider::valueChanged, this,
+            [this, temperatureSlider](int) {
+                if (!m_settingCameraTemperature && !temperatureSlider->isSliderDown()) {
+                    emit temperatureChanged(temperatureSlider->logicalValue());
                 }
             });
-    connect(m_temperatureSlider, &QSlider::sliderReleased, this,
-            [this]() {
+    connect(temperatureSlider, &QSlider::sliderReleased, this,
+            [this, temperatureSlider]() {
                 if (!m_settingCameraTemperature) {
-                    emit temperatureChanged(m_temperatureSlider->value());
+                    emit temperatureChanged(temperatureSlider->logicalValue());
                 }
             });
 
@@ -755,14 +846,15 @@ void BasicPanel::setCameraTemperatureKelvin(int kelvin)
         return;
     }
 
+    auto *temperatureSlider = static_cast<BasicSlider *>(m_temperatureSlider);
     const int cameraKelvin = std::clamp(
         kelvin > 0 ? kelvin : kDefaultTemperatureKelvin,
-        m_temperatureSlider->minimum(),
-        m_temperatureSlider->maximum());
+        temperatureSlider->logicalMinimum(),
+        temperatureSlider->logicalMaximum());
 
-    m_temperatureSlider->setProperty("resetValue", cameraKelvin);
+    temperatureSlider->setProperty("resetValue", cameraKelvin);
 
     m_settingCameraTemperature = true;
-    m_temperatureSlider->setValue(cameraKelvin);
+    temperatureSlider->setLogicalValue(cameraKelvin);
     m_settingCameraTemperature = false;
 }
