@@ -21,6 +21,7 @@ public:
         : QToolButton(parent)
         , m_pulseAnimation(new QVariantAnimation(this))
     {
+        setObjectName(QStringLiteral("beforeAfterToggle"));
         setText(QStringLiteral("Before / After"));
         setCheckable(true);
         setEnabled(false);
