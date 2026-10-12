@@ -28,6 +28,7 @@ public:
                         int shadows,
                         int whites,
                         int contrast,
+                        int texture,
                         int saturation,
                         int vibrance);
     void requestFullRender(const QString &filePath,
@@ -38,6 +39,7 @@ public:
                            int shadows,
                            int whites,
                            int contrast,
+                           int texture,
                            int saturation,
                            int vibrance);
 
@@ -50,6 +52,7 @@ signals:
                      int shadows,
                      int whites,
                      int contrast,
+                     int texture,
                      int saturation,
                      int vibrance,
                      bool preview,
@@ -66,6 +69,7 @@ private:
         int shadows = 0;
         int whites = 0;
         int contrast = 0;
+        int texture = 0;
         int saturation = 0;
         int vibrance = 0;
     };

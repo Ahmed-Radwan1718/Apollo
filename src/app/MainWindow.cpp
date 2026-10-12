@@ -235,6 +235,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_shadowsSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Shadows"));
     m_whitesSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Whites"));
     m_contrastSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Contrast"));
+    m_textureSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Texture"));
     m_saturationSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Saturation"));
     m_vibranceSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Vibrance"));
     m_whiteBalancePickerController =
@@ -387,6 +388,27 @@ MainWindow::MainWindow(QWidget *parent)
                 [this]() {
                     if (!m_settingDevelopControls) {
                         applyContrast(m_contrastSlider->value());
+                    }
+                });
+    }
+
+    if (m_textureSlider) {
+        connect(m_textureSlider, &QSlider::valueChanged, this,
+                [this](int texture) {
+                    if (m_settingDevelopControls) {
+                        return;
+                    }
+
+                    if (m_textureSlider->isSliderDown()) {
+                        previewTexture(texture);
+                    } else {
+                        applyTexture(texture);
+                    }
+                });
+        connect(m_textureSlider, &QSlider::sliderReleased, this,
+                [this]() {
+                    if (!m_settingDevelopControls) {
+                        applyTexture(m_textureSlider->value());
                     }
                 });
     }
@@ -622,6 +644,21 @@ void MainWindow::applyContrast(int contrast)
                       tr("Contrast %1").arg(signedHistoryValue(contrast)));
 }
 
+void MainWindow::previewTexture(int texture)
+{
+    DevelopState state = m_requestedState;
+    state.texture = texture;
+    requestPreview(state);
+}
+
+void MainWindow::applyTexture(int texture)
+{
+    DevelopState state = m_requestedState;
+    state.texture = texture;
+    requestFullRender(state,
+                      tr("Texture %1").arg(signedHistoryValue(texture)));
+}
+
 void MainWindow::previewSaturation(int saturation)
 {
     DevelopState state = m_requestedState;
@@ -668,6 +705,7 @@ void MainWindow::requestPreview(const DevelopState &state)
                                     state.shadows,
                                     state.whites,
                                     state.contrast,
+                                    state.texture,
                                     state.saturation,
                                     state.vibrance);
 }
@@ -693,6 +731,7 @@ void MainWindow::requestFullRender(const DevelopState &state, const QString &his
                                        state.shadows,
                                        state.whites,
                                        state.contrast,
+                                       state.texture,
                                        state.saturation,
                                        state.vibrance);
 }
@@ -705,6 +744,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
                                      int shadows,
                                      int whites,
                                      int contrast,
+                                     int texture,
                                      int saturation,
                                      int vibrance,
                                      bool preview,
@@ -719,6 +759,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
         shadows,
         whites,
         contrast,
+        texture,
         saturation,
         vibrance,
     };
@@ -830,6 +871,9 @@ void MainWindow::setDevelopControlsFromState(const DevelopState &state)
     }
     if (m_contrastSlider) {
         m_contrastSlider->setValue(state.contrast);
+    }
+    if (m_textureSlider) {
+        m_textureSlider->setValue(state.texture);
     }
     if (m_saturationSlider) {
         m_saturationSlider->setValue(state.saturation);

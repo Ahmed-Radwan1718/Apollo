@@ -34,6 +34,7 @@ public:
                                        int shadows = 0,
                                        int whites = 0,
                                        int contrast = 0,
+                                       int texture = 0,
                                        int saturation = 0,
                                        int vibrance = 0,
                                        bool halfSizePreview = false);

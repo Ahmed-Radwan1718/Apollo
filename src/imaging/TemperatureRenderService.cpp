@@ -37,11 +37,12 @@ void TemperatureRenderService::requestPreview(const QString &filePath,
                                               int shadows,
                                               int whites,
                                               int contrast,
+                                              int texture,
                                               int saturation,
                                               int vibrance)
 {
     request({filePath, kelvin, tint, exposureHundredths, highlights, shadows,
-             whites, contrast, saturation, vibrance},
+             whites, contrast, texture, saturation, vibrance},
             true);
 }
 
@@ -53,11 +54,12 @@ void TemperatureRenderService::requestFullRender(const QString &filePath,
                                                  int shadows,
                                                  int whites,
                                                  int contrast,
+                                                 int texture,
                                                  int saturation,
                                                  int vibrance)
 {
     request({filePath, kelvin, tint, exposureHundredths, highlights, shadows,
-             whites, contrast, saturation, vibrance},
+             whites, contrast, texture, saturation, vibrance},
             false);
 }
 
@@ -115,6 +117,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                           request.shadows,
                                           request.whites,
                                           request.contrast,
+                                          request.texture,
                                           request.saturation,
                                           request.vibrance,
                                           preview);
@@ -134,6 +137,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                  request.shadows,
                                  request.whites,
                                  request.contrast,
+                                 request.texture,
                                  request.saturation,
                                  request.vibrance,
                                  preview,

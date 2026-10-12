@@ -45,6 +45,7 @@ private slots:
                              int shadows,
                              int whites,
                              int contrast,
+                             int texture,
                              int saturation,
                              int vibrance,
                              bool preview,
@@ -71,6 +72,8 @@ private:
     void applyWhites(int whites);
     void previewContrast(int contrast);
     void applyContrast(int contrast);
+    void previewTexture(int texture);
+    void applyTexture(int texture);
     void previewSaturation(int saturation);
     void applySaturation(int saturation);
     void previewVibrance(int vibrance);
@@ -94,6 +97,7 @@ private:
     QSlider *m_shadowsSlider = nullptr;
     QSlider *m_whitesSlider = nullptr;
     QSlider *m_contrastSlider = nullptr;
+    QSlider *m_textureSlider = nullptr;
     QSlider *m_saturationSlider = nullptr;
     QSlider *m_vibranceSlider = nullptr;
     imaging::TemperatureRenderService *m_renderService = nullptr;

@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <new>
 #include <string>
 #include <utility>
 #include <vector>
@@ -47,6 +48,17 @@ constexpr double kWhitesMaximumExpansion = 0.65;
 constexpr int kContrastMinimum = -100;
 constexpr int kContrastMaximum = 100;
 constexpr double kContrastPivot = kSceneMiddleGray;
+constexpr int kTextureMinimum = -100;
+constexpr int kTextureMaximum = 100;
+constexpr double kTextureReferenceShortSide = 4000.0;
+constexpr double kTextureSmallRadiusAtReference = 1.0;
+constexpr double kTextureLargeRadiusAtReference = 4.0;
+constexpr double kTextureMaximumBandGain = 0.9;
+constexpr double kTextureMaximumAdjustmentEv = 0.35;
+constexpr double kTextureShadowProtectionStartEv = -5.0;
+constexpr double kTextureShadowProtectionFullEv = -2.5;
+constexpr double kTextureHighlightProtectionStartEv = 2.0;
+constexpr double kTextureHighlightProtectionEndEv = 3.5;
 constexpr int kSaturationMinimum = -100;
 constexpr int kSaturationMaximum = 100;
 constexpr int kVibranceMinimum = -100;
@@ -719,6 +731,258 @@ void applyLinearWhites(double &red,
     blue *= gain;
 }
 
+double linearLuminance(const LinearRgb &rgb)
+{
+    return rgb.red * kLinearSrgbRedLuminance
+        + rgb.green * kLinearSrgbGreenLuminance
+        + rgb.blue * kLinearSrgbBlueLuminance;
+}
+
+LinearRgb toneAdjustedLinearRgb(const std::uint16_t *samples,
+                                std::size_t source,
+                                double sampleScale,
+                                int highlights,
+                                int shadows,
+                                int whites,
+                                int contrast)
+{
+    LinearRgb rgb{
+        static_cast<double>(samples[source]) * sampleScale,
+        static_cast<double>(samples[source + 1]) * sampleScale,
+        static_cast<double>(samples[source + 2]) * sampleScale,
+    };
+
+    if (highlights != 0) {
+        applyLinearHighlights(rgb.red, rgb.green, rgb.blue, highlights);
+    }
+    if (shadows != 0) {
+        applyLinearShadows(rgb.red, rgb.green, rgb.blue, shadows);
+    }
+    if (whites != 0) {
+        applyLinearWhites(rgb.red, rgb.green, rgb.blue, whites);
+    }
+    if (contrast != 0) {
+        applyLinearContrast(rgb.red, rgb.green, rgb.blue, contrast);
+    }
+
+    return rgb;
+}
+
+void horizontalBoxBlur(const std::vector<float> &source,
+                       std::vector<float> &destination,
+                       int width,
+                       int height,
+                       int radius)
+{
+    for (int y = 0; y < height; ++y) {
+        const std::size_t row = static_cast<std::size_t>(y) * width;
+        int left = 0;
+        int right = std::min(width - 1, radius);
+        int count = right + 1;
+        double sum = 0.0;
+        for (int x = left; x <= right; ++x) {
+            sum += source[row + static_cast<std::size_t>(x)];
+        }
+
+        for (int x = 0; x < width; ++x) {
+            destination[row + static_cast<std::size_t>(x)] =
+                static_cast<float>(sum / static_cast<double>(count));
+
+            const int remove = x - radius;
+            const int add = x + radius + 1;
+            if (remove >= 0) {
+                sum -= source[row + static_cast<std::size_t>(remove)];
+                --count;
+            }
+            if (add < width) {
+                sum += source[row + static_cast<std::size_t>(add)];
+                ++count;
+            }
+        }
+    }
+}
+
+void verticalBoxBlur(const std::vector<float> &source,
+                     std::vector<float> &destination,
+                     int width,
+                     int height,
+                     int radius)
+{
+    for (int x = 0; x < width; ++x) {
+        int top = 0;
+        int bottom = std::min(height - 1, radius);
+        int count = bottom + 1;
+        double sum = 0.0;
+        for (int y = top; y <= bottom; ++y) {
+            sum += source[static_cast<std::size_t>(y) * width + x];
+        }
+
+        for (int y = 0; y < height; ++y) {
+            const std::size_t index = static_cast<std::size_t>(y) * width + x;
+            destination[index] = static_cast<float>(sum / static_cast<double>(count));
+
+            const int remove = y - radius;
+            const int add = y + radius + 1;
+            if (remove >= 0) {
+                sum -= source[static_cast<std::size_t>(remove) * width + x];
+                --count;
+            }
+            if (add < height) {
+                sum += source[static_cast<std::size_t>(add) * width + x];
+                ++count;
+            }
+        }
+    }
+}
+
+void verticalBoxBlurDifference(const std::vector<float> &source,
+                               std::vector<float> &smallAndBand,
+                               int width,
+                               int height,
+                               int radius)
+{
+    for (int x = 0; x < width; ++x) {
+        int top = 0;
+        int bottom = std::min(height - 1, radius);
+        int count = bottom + 1;
+        double sum = 0.0;
+        for (int y = top; y <= bottom; ++y) {
+            sum += source[static_cast<std::size_t>(y) * width + x];
+        }
+
+        for (int y = 0; y < height; ++y) {
+            const std::size_t index = static_cast<std::size_t>(y) * width + x;
+            const double largeScale = sum / static_cast<double>(count);
+            smallAndBand[index] = static_cast<float>(
+                static_cast<double>(smallAndBand[index]) - largeScale);
+
+            const int remove = y - radius;
+            const int add = y + radius + 1;
+            if (remove >= 0) {
+                sum -= source[static_cast<std::size_t>(remove) * width + x];
+                --count;
+            }
+            if (add < height) {
+                sum += source[static_cast<std::size_t>(add) * width + x];
+                ++count;
+            }
+        }
+    }
+}
+
+std::pair<int, int> textureRadii(int width, int height)
+{
+    const int shortSide = std::max(1, std::min(width, height));
+    const double scale = static_cast<double>(shortSide) / kTextureReferenceShortSide;
+    const int smallRadius = std::clamp(
+        static_cast<int>(std::lround(kTextureSmallRadiusAtReference * scale)), 1, 3);
+    const int largeRadius = std::clamp(
+        static_cast<int>(std::lround(kTextureLargeRadiusAtReference * scale)),
+        smallRadius + 1,
+        12);
+    return {smallRadius, largeRadius};
+}
+
+bool buildTextureBand(const std::uint16_t *samples,
+                      std::size_t pixelCount,
+                      int width,
+                      int height,
+                      double sampleScale,
+                      int highlights,
+                      int shadows,
+                      int whites,
+                      int contrast,
+                      std::vector<float> &textureBand,
+                      std::vector<float> &scratch,
+                      QString *error)
+{
+    try {
+        textureBand.resize(pixelCount);
+        scratch.resize(pixelCount);
+    } catch (const std::bad_alloc &) {
+        setError(error, QStringLiteral("Not enough memory to calculate the RAW texture adjustment."));
+        return false;
+    }
+
+    constexpr double minimumLuminance = 1e-8;
+    for (std::size_t pixel = 0; pixel < pixelCount; ++pixel) {
+        const LinearRgb rgb = toneAdjustedLinearRgb(samples,
+                                                    pixel * 3,
+                                                    sampleScale,
+                                                    highlights,
+                                                    shadows,
+                                                    whites,
+                                                    contrast);
+        textureBand[pixel] = static_cast<float>(
+            std::log2(std::max(linearLuminance(rgb), minimumLuminance)));
+    }
+
+    const auto [smallRadius, largeRadius] = textureRadii(width, height);
+
+    // A difference of two compact, resolution-scaled blurs isolates the
+    // mid-spatial-frequency structure associated with texture. Blurring once at
+    // the fine scale also suppresses single-pixel noise before the band is formed.
+    horizontalBoxBlur(textureBand, scratch, width, height, smallRadius);
+    verticalBoxBlur(scratch, textureBand, width, height, smallRadius);
+    horizontalBoxBlur(textureBand, scratch, width, height, largeRadius);
+    verticalBoxBlurDifference(scratch, textureBand, width, height, largeRadius);
+    return true;
+}
+
+double textureToneWeight(double luminance)
+{
+    if (luminance <= std::numeric_limits<double>::epsilon()) {
+        return 0.0;
+    }
+
+    const double sceneEv = std::log2(luminance / kSceneMiddleGray);
+    const double shadowWeight = smoothstep01(
+        (sceneEv - kTextureShadowProtectionStartEv)
+        / (kTextureShadowProtectionFullEv - kTextureShadowProtectionStartEv));
+    const double highlightWeight = 1.0 - smoothstep01(
+        (sceneEv - kTextureHighlightProtectionStartEv)
+        / (kTextureHighlightProtectionEndEv - kTextureHighlightProtectionStartEv));
+    return shadowWeight * highlightWeight;
+}
+
+void applyLinearTexture(double &red,
+                        double &green,
+                        double &blue,
+                        int texture,
+                        float bandEv)
+{
+    const int clampedTexture = std::clamp(texture,
+                                           kTextureMinimum,
+                                           kTextureMaximum);
+    if (clampedTexture == 0) {
+        return;
+    }
+
+    const LinearRgb rgb{red, green, blue};
+    const double luminance = linearLuminance(rgb);
+    const double toneWeight = textureToneWeight(luminance);
+    if (toneWeight <= 0.0) {
+        return;
+    }
+
+    const double amount = static_cast<double>(clampedTexture) / 100.0;
+    const double requestedAdjustmentEv = amount
+        * kTextureMaximumBandGain
+        * static_cast<double>(bandEv)
+        * toneWeight;
+    const double adjustmentEv = std::clamp(requestedAdjustmentEv,
+                                            -kTextureMaximumAdjustmentEv,
+                                            kTextureMaximumAdjustmentEv);
+    const double gain = std::exp2(adjustmentEv);
+
+    // Texture is derived only from luminance, then applied as one gain to all
+    // channels. Positive values increase mid-frequency local contrast; negative
+    // values reduce it, without changing the pixel's RGB ratios or global tone.
+    red *= gain;
+    green *= gain;
+    blue *= gain;
+}
+
 Oklab linearSrgbToOklab(const LinearRgb &rgb)
 {
     const double l = 0.4122214708 * rgb.red
@@ -883,6 +1147,7 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                           int shadows,
                           int whites,
                           int contrast,
+                          int texture,
                           int saturation,
                           int vibrance,
                           QString *error)
@@ -926,6 +1191,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
     const int clampedContrast = std::clamp(contrast,
                                            kContrastMinimum,
                                            kContrastMaximum);
+    const int clampedTexture = std::clamp(texture,
+                                          kTextureMinimum,
+                                          kTextureMaximum);
     const int clampedSaturation = std::clamp(saturation,
                                              kSaturationMinimum,
                                              kSaturationMaximum);
@@ -940,9 +1208,10 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
     }
 
     if (clampedHighlights == 0 && clampedShadows == 0 && clampedWhites == 0
-        && clampedContrast == 0 && clampedSaturation == 0 && clampedVibrance == 0) {
+        && clampedContrast == 0 && clampedTexture == 0
+        && clampedSaturation == 0 && clampedVibrance == 0) {
         // Keep the neutral path byte-for-byte equivalent to the existing exposure
-        // render and avoid per-pixel floating-point work when tonal/color controls are 0.
+        // render and avoid per-pixel floating-point work when develop controls are 0.
         std::vector<std::uint8_t> transferTable(kLinearMaximum + 1);
         for (int value = 0; value <= kLinearMaximum; ++value) {
             const double linear = static_cast<double>(value)
@@ -964,40 +1233,58 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
     } else {
         const double chromaScale = saturationChromaScale(clampedSaturation);
         const double sampleScale = totalGain / static_cast<double>(kLinearMaximum);
+        std::vector<float> textureBand;
+        std::vector<float> textureScratch;
+
+        if (clampedTexture != 0
+            && !buildTextureBand(samples,
+                                 pixelCount,
+                                 static_cast<int>(processed.width),
+                                 static_cast<int>(processed.height),
+                                 sampleScale,
+                                 clampedHighlights,
+                                 clampedShadows,
+                                 clampedWhites,
+                                 clampedContrast,
+                                 textureBand,
+                                 textureScratch,
+                                 error)) {
+            return {};
+        }
 
         for (int y = 0; y < processed.height; ++y) {
             auto *destination = image.scanLine(y);
             const std::size_t sourceRow = static_cast<std::size_t>(y) * processed.width * 3;
             for (int x = 0; x < processed.width; ++x) {
+                const std::size_t pixel = static_cast<std::size_t>(y) * processed.width + x;
                 const std::size_t source = sourceRow + static_cast<std::size_t>(x) * 3;
                 const int destinationOffset = x * 3;
 
-                double red = static_cast<double>(samples[source]) * sampleScale;
-                double green = static_cast<double>(samples[source + 1]) * sampleScale;
-                double blue = static_cast<double>(samples[source + 2]) * sampleScale;
+                LinearRgb rgb = toneAdjustedLinearRgb(samples,
+                                                       source,
+                                                       sampleScale,
+                                                       clampedHighlights,
+                                                       clampedShadows,
+                                                       clampedWhites,
+                                                       clampedContrast);
 
-                if (clampedHighlights != 0) {
-                    applyLinearHighlights(red, green, blue, clampedHighlights);
-                }
-                if (clampedShadows != 0) {
-                    applyLinearShadows(red, green, blue, clampedShadows);
-                }
-                if (clampedWhites != 0) {
-                    applyLinearWhites(red, green, blue, clampedWhites);
-                }
-                if (clampedContrast != 0) {
-                    applyLinearContrast(red, green, blue, clampedContrast);
+                if (clampedTexture != 0) {
+                    applyLinearTexture(rgb.red,
+                                       rgb.green,
+                                       rgb.blue,
+                                       clampedTexture,
+                                       textureBand[pixel]);
                 }
                 if (clampedVibrance != 0) {
-                    applyOklabVibrance(red, green, blue, clampedVibrance);
+                    applyOklabVibrance(rgb.red, rgb.green, rgb.blue, clampedVibrance);
                 }
                 if (clampedSaturation != 0) {
-                    applyLinearSaturation(red, green, blue, chromaScale);
+                    applyLinearSaturation(rgb.red, rgb.green, rgb.blue, chromaScale);
                 }
 
-                destination[destinationOffset] = linearToSrgb8(red);
-                destination[destinationOffset + 1] = linearToSrgb8(green);
-                destination[destinationOffset + 2] = linearToSrgb8(blue);
+                destination[destinationOffset] = linearToSrgb8(rgb.red);
+                destination[destinationOffset + 1] = linearToSrgb8(rgb.green);
+                destination[destinationOffset + 2] = linearToSrgb8(rgb.blue);
             }
         }
     }
@@ -1019,6 +1306,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                           int shadows,
                           int whites,
                           int contrast,
+                          int texture,
                           int saturation,
                           int vibrance,
                           bool halfSizePreview)
@@ -1033,9 +1321,9 @@ QImage ArwDecoder::decode(const QString &filePath,
     LibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
 
     // Ask LibRaw for a high-precision linear sRGB render. Nexus performs the
-    // final exposure, scene-referred highlights, shadows and whites, midtone
-    // contrast, perceptual vibrance, saturation, and sRGB transfer itself instead
-    // of editing an already rendered 8-bit image.
+    // final exposure, scene-referred tonal controls, local texture contrast,
+    // perceptual vibrance, saturation, and sRGB transfer itself instead of
+    // editing an already rendered 8-bit image.
     processor.imgdata.params.use_camera_wb = 1;
     processor.imgdata.params.use_camera_matrix = 1;
     processor.imgdata.params.output_color = 1; // linear sRGB primaries
@@ -1121,6 +1409,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                                       shadows,
                                       whites,
                                       contrast,
+                                      texture,
                                       saturation,
                                       vibrance,
                                       error);
