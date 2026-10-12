@@ -10,6 +10,7 @@
 #include <QPaintEvent>
 #include <QShowEvent>
 #include <QSignalBlocker>
+#include <QSizePolicy>
 #include <QVBoxLayout>
 
 #include <cmath>
@@ -86,6 +87,7 @@ NavigatorPanel::NavigatorPanel(QWidget *parent)
     : QWidget(parent)
 {
     setObjectName(QStringLiteral("navigatorPanel"));
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(14, 14, 14, 12);
