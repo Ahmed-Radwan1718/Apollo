@@ -38,6 +38,12 @@ constexpr double kShadowsMaskStartEv = -1.0;
 constexpr double kShadowsMaskFullEv = -3.0;
 constexpr double kShadowsMaximumLiftCompression = 0.8;
 constexpr double kShadowsMaximumDeepenExpansion = 0.5;
+constexpr int kWhitesMinimum = -100;
+constexpr int kWhitesMaximum = 100;
+constexpr double kWhitesMaskStartEv = 1.75;
+constexpr double kWhitesMaskFullEv = 2.75;
+constexpr double kWhitesMaximumCompression = 0.9;
+constexpr double kWhitesMaximumExpansion = 0.65;
 constexpr int kContrastMinimum = -100;
 constexpr int kContrastMaximum = 100;
 constexpr double kContrastPivot = kSceneMiddleGray;
@@ -657,6 +663,62 @@ void applyLinearShadows(double &red,
     blue *= gain;
 }
 
+double integratedWhitesWeightEv(double sceneEv)
+{
+    if (sceneEv <= kWhitesMaskStartEv) {
+        return 0.0;
+    }
+
+    const double width = kWhitesMaskFullEv - kWhitesMaskStartEv;
+    if (sceneEv >= kWhitesMaskFullEv) {
+        return 0.5 * width + (sceneEv - kWhitesMaskFullEv);
+    }
+
+    const double x = (sceneEv - kWhitesMaskStartEv) / width;
+    return width * (x * x * x - 0.5 * x * x * x * x);
+}
+
+void applyLinearWhites(double &red,
+                       double &green,
+                       double &blue,
+                       int whites)
+{
+    const int clampedWhites = std::clamp(whites,
+                                          kWhitesMinimum,
+                                          kWhitesMaximum);
+    if (clampedWhites == 0) {
+        return;
+    }
+
+    const double luminance = red * kLinearSrgbRedLuminance
+        + green * kLinearSrgbGreenLuminance
+        + blue * kLinearSrgbBlueLuminance;
+    if (luminance <= std::numeric_limits<double>::epsilon()) {
+        return;
+    }
+
+    // Whites is a narrower upper-tone control than Highlights. It starts near
+    // the display-white region (+1.75 EV above middle gray) and reaches full
+    // influence by +2.75 EV. Changing slope in EV space moves the white point
+    // without adding a flat brightness offset, while keeping the mapping monotonic.
+    const double sceneEv = std::log2(luminance / kSceneMiddleGray);
+    const double weightedEv = integratedWhitesWeightEv(sceneEv);
+    if (weightedEv <= 0.0) {
+        return;
+    }
+
+    const double amount = std::abs(static_cast<double>(clampedWhites)) / 100.0;
+    const double slopeChange = clampedWhites < 0
+        ? -kWhitesMaximumCompression * amount
+        : kWhitesMaximumExpansion * amount;
+    const double gain = std::exp2(slopeChange * weightedEv);
+
+    // Preserve channel ratios so the white-point adjustment does not create a hue shift.
+    red *= gain;
+    green *= gain;
+    blue *= gain;
+}
+
 Oklab linearSrgbToOklab(const LinearRgb &rgb)
 {
     const double l = 0.4122214708 * rgb.red
@@ -819,6 +881,7 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                           int exposureHundredths,
                           int highlights,
                           int shadows,
+                          int whites,
                           int contrast,
                           int saturation,
                           int vibrance,
@@ -857,6 +920,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
     const int clampedShadows = std::clamp(shadows,
                                            kShadowsMinimum,
                                            kShadowsMaximum);
+    const int clampedWhites = std::clamp(whites,
+                                         kWhitesMinimum,
+                                         kWhitesMaximum);
     const int clampedContrast = std::clamp(contrast,
                                            kContrastMinimum,
                                            kContrastMaximum);
@@ -873,8 +939,8 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
         return {};
     }
 
-    if (clampedHighlights == 0 && clampedShadows == 0 && clampedContrast == 0
-        && clampedSaturation == 0 && clampedVibrance == 0) {
+    if (clampedHighlights == 0 && clampedShadows == 0 && clampedWhites == 0
+        && clampedContrast == 0 && clampedSaturation == 0 && clampedVibrance == 0) {
         // Keep the neutral path byte-for-byte equivalent to the existing exposure
         // render and avoid per-pixel floating-point work when tonal/color controls are 0.
         std::vector<std::uint8_t> transferTable(kLinearMaximum + 1);
@@ -916,6 +982,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                 if (clampedShadows != 0) {
                     applyLinearShadows(red, green, blue, clampedShadows);
                 }
+                if (clampedWhites != 0) {
+                    applyLinearWhites(red, green, blue, clampedWhites);
+                }
                 if (clampedContrast != 0) {
                     applyLinearContrast(red, green, blue, clampedContrast);
                 }
@@ -948,6 +1017,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                           int exposureHundredths,
                           int highlights,
                           int shadows,
+                          int whites,
                           int contrast,
                           int saturation,
                           int vibrance,
@@ -963,9 +1033,9 @@ QImage ArwDecoder::decode(const QString &filePath,
     LibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
 
     // Ask LibRaw for a high-precision linear sRGB render. Nexus performs the
-    // final exposure, scene-referred highlights and shadows, midtone contrast,
-    // perceptual vibrance, saturation, and sRGB transfer itself instead of
-    // editing an already rendered 8-bit image.
+    // final exposure, scene-referred highlights, shadows and whites, midtone
+    // contrast, perceptual vibrance, saturation, and sRGB transfer itself instead
+    // of editing an already rendered 8-bit image.
     processor.imgdata.params.use_camera_wb = 1;
     processor.imgdata.params.use_camera_matrix = 1;
     processor.imgdata.params.output_color = 1; // linear sRGB primaries
@@ -1049,6 +1119,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                                       exposureHundredths,
                                       highlights,
                                       shadows,
+                                      whites,
                                       contrast,
                                       saturation,
                                       vibrance,

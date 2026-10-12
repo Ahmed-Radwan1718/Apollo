@@ -32,6 +32,7 @@ public:
                                        int exposureHundredths = 0,
                                        int highlights = 0,
                                        int shadows = 0,
+                                       int whites = 0,
                                        int contrast = 0,
                                        int saturation = 0,
                                        int vibrance = 0,

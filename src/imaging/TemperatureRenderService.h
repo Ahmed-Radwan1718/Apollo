@@ -26,6 +26,7 @@ public:
                         int exposureHundredths,
                         int highlights,
                         int shadows,
+                        int whites,
                         int contrast,
                         int saturation,
                         int vibrance);
@@ -35,6 +36,7 @@ public:
                            int exposureHundredths,
                            int highlights,
                            int shadows,
+                           int whites,
                            int contrast,
                            int saturation,
                            int vibrance);
@@ -46,6 +48,7 @@ signals:
                      int exposureHundredths,
                      int highlights,
                      int shadows,
+                     int whites,
                      int contrast,
                      int saturation,
                      int vibrance,
@@ -61,6 +64,7 @@ private:
         int exposureHundredths = 0;
         int highlights = 0;
         int shadows = 0;
+        int whites = 0;
         int contrast = 0;
         int saturation = 0;
         int vibrance = 0;

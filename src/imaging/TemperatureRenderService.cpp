@@ -35,12 +35,13 @@ void TemperatureRenderService::requestPreview(const QString &filePath,
                                               int exposureHundredths,
                                               int highlights,
                                               int shadows,
+                                              int whites,
                                               int contrast,
                                               int saturation,
                                               int vibrance)
 {
     request({filePath, kelvin, tint, exposureHundredths, highlights, shadows,
-             contrast, saturation, vibrance},
+             whites, contrast, saturation, vibrance},
             true);
 }
 
@@ -50,12 +51,13 @@ void TemperatureRenderService::requestFullRender(const QString &filePath,
                                                  int exposureHundredths,
                                                  int highlights,
                                                  int shadows,
+                                                 int whites,
                                                  int contrast,
                                                  int saturation,
                                                  int vibrance)
 {
     request({filePath, kelvin, tint, exposureHundredths, highlights, shadows,
-             contrast, saturation, vibrance},
+             whites, contrast, saturation, vibrance},
             false);
 }
 
@@ -111,6 +113,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                           request.exposureHundredths,
                                           request.highlights,
                                           request.shadows,
+                                          request.whites,
                                           request.contrast,
                                           request.saturation,
                                           request.vibrance,
@@ -129,6 +132,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                  request.exposureHundredths,
                                  request.highlights,
                                  request.shadows,
+                                 request.whites,
                                  request.contrast,
                                  request.saturation,
                                  request.vibrance,
