@@ -1,5 +1,7 @@
 #include "ui/canvas/PhotoCanvas.h"
 
+#include "ui/canvas/BeforeAfterToggle.h"
+
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QEvent>
@@ -65,6 +67,28 @@ PhotoImageItem *asPhotoItem(QGraphicsItem *item)
     return static_cast<PhotoImageItem *>(item);
 }
 
+BeforeAfterToggle *beforeAfterToggle(const PhotoCanvas *canvas)
+{
+    return canvas && canvas->viewport()
+        ? canvas->viewport()->findChild<BeforeAfterToggle *>(
+              QString(), Qt::FindDirectChildrenOnly)
+        : nullptr;
+}
+
+void positionBeforeAfterToggle(PhotoCanvas *canvas)
+{
+    BeforeAfterToggle *toggle = beforeAfterToggle(canvas);
+    if (!toggle || !canvas || !canvas->viewport()) {
+        return;
+    }
+
+    constexpr int rightMargin = 12;
+    constexpr int bottomMargin = 6;
+    toggle->move(qMax(0, canvas->viewport()->width() - toggle->width() - rightMargin),
+                 qMax(0, canvas->viewport()->height() - toggle->height() - bottomMargin));
+    toggle->raise();
+}
+
 } // namespace
 
 PhotoCanvas::PhotoCanvas(QWidget *parent)
@@ -88,6 +112,31 @@ PhotoCanvas::PhotoCanvas(QWidget *parent)
     setAcceptDrops(true);
     viewport()->setAcceptDrops(true);
 
+    auto *toggle = new BeforeAfterToggle(viewport());
+    toggle->setDisplayCallback(
+        [this](const QImage &image, const QSizeF &logicalSize) {
+            if (image.isNull()) {
+                return;
+            }
+
+            const PhotoImageItem *currentItem = asPhotoItem(m_imageItem);
+            const bool preserveView = hasImage()
+                && currentItem->boundingRect().size() == logicalSize;
+
+            asPhotoItem(m_imageItem)->setImage(image, logicalSize);
+            m_scene->setSceneRect(m_imageItem->boundingRect());
+            m_imageItem->setVisible(true);
+
+            if (!preserveView) {
+                m_zoomMode = ZoomMode::Fit;
+                fitToView();
+            } else {
+                viewport()->update();
+                updateCursor();
+            }
+        });
+    positionBeforeAfterToggle(this);
+
     updateCursor();
 }
 
@@ -98,6 +147,10 @@ void PhotoCanvas::setImage(const QImage &image)
     if (image.isNull()) {
         clearImage();
         return;
+    }
+
+    if (BeforeAfterToggle *toggle = beforeAfterToggle(this)) {
+        toggle->setOriginalImage(image);
     }
 
     asPhotoItem(m_imageItem)->setImage(image, QSizeF(image.size()));
@@ -117,9 +170,22 @@ void PhotoCanvas::replaceImage(const QImage &image)
         return;
     }
 
+    if (BeforeAfterToggle *toggle = beforeAfterToggle(this)) {
+        toggle->setCurrentImage(image, QSizeF(image.size()));
+        if (toggle->showingBefore()) {
+            return;
+        }
+    }
+
     const PhotoImageItem *currentItem = asPhotoItem(m_imageItem);
     if (!hasImage() || currentItem->boundingRect().size() != QSizeF(image.size())) {
-        setImage(image);
+        asPhotoItem(m_imageItem)->setImage(image, QSizeF(image.size()));
+        m_scene->setSceneRect(m_imageItem->boundingRect());
+        m_imageItem->setVisible(true);
+        m_zoomMode = ZoomMode::Fit;
+        fitToView();
+        viewport()->update();
+        updateCursor();
         return;
     }
 
@@ -138,6 +204,13 @@ void PhotoCanvas::replacePreviewImage(const QImage &image,
     }
 
     const QSizeF logicalSize(fullResolutionSize);
+    if (BeforeAfterToggle *toggle = beforeAfterToggle(this)) {
+        toggle->setCurrentImage(image, logicalSize);
+        if (toggle->showingBefore()) {
+            return;
+        }
+    }
+
     const PhotoImageItem *currentItem = asPhotoItem(m_imageItem);
     const bool preserveView = hasImage()
         && currentItem->boundingRect().size() == logicalSize;
@@ -157,6 +230,10 @@ void PhotoCanvas::replacePreviewImage(const QImage &image,
 
 void PhotoCanvas::clearImage()
 {
+    if (BeforeAfterToggle *toggle = beforeAfterToggle(this)) {
+        toggle->clearImages();
+    }
+
     asPhotoItem(m_imageItem)->setImage({}, {});
     m_imageItem->setVisible(false);
     m_scene->setSceneRect({});
@@ -283,6 +360,7 @@ void PhotoCanvas::paintEvent(QPaintEvent *event)
 void PhotoCanvas::resizeEvent(QResizeEvent *event)
 {
     QGraphicsView::resizeEvent(event);
+    positionBeforeAfterToggle(this);
 
     if (hasImage() && m_zoomMode == ZoomMode::Fit) {
         fitToView();
