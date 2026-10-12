@@ -8,12 +8,30 @@
 #include <QSizePolicy>
 
 #include <array>
+#include <cmath>
 
 namespace {
 
+qreal normalizedHistogramHeight(quint64 count,
+                                quint64 peak,
+                                bool logarithmicScale)
+{
+    if (count == 0 || peak == 0) {
+        return 0.0;
+    }
+
+    if (logarithmicScale) {
+        return std::log1p(static_cast<qreal>(count))
+            / std::log1p(static_cast<qreal>(peak));
+    }
+
+    return static_cast<qreal>(count) / static_cast<qreal>(peak);
+}
+
 QPainterPath histogramPath(const std::array<quint64, imaging::HistogramData::kBinCount> &bins,
                            quint64 peak,
-                           const QRectF &rect)
+                           const QRectF &rect,
+                           bool logarithmicScale)
 {
     QPainterPath path;
     if (peak == 0 || rect.isEmpty()) {
@@ -26,8 +44,8 @@ QPainterPath histogramPath(const std::array<quint64, imaging::HistogramData::kBi
     for (int bin = 0; bin < imaging::HistogramData::kBinCount; ++bin) {
         const qreal x = rect.left()
             + (static_cast<qreal>(bin) / lastBin) * rect.width();
-        const qreal normalized = static_cast<qreal>(bins[static_cast<std::size_t>(bin)])
-            / static_cast<qreal>(peak);
+        const qreal normalized = normalizedHistogramHeight(
+            bins[static_cast<std::size_t>(bin)], peak, logarithmicScale);
         const qreal y = rect.bottom() - (normalized * rect.height());
         path.lineTo(x, y);
     }
@@ -37,24 +55,11 @@ QPainterPath histogramPath(const std::array<quint64, imaging::HistogramData::kBi
     return path;
 }
 
-void drawHighlightClippingWall(
-    QPainter &painter,
-    const std::array<quint64, imaging::HistogramData::kBinCount> &bins,
-    quint64 peak,
-    const QRectF &rect,
-    const QColor &color)
+quint64 largestEdgeBin(const imaging::HistogramData &histogram)
 {
-    if (peak == 0 || rect.isEmpty() || bins.back() == 0) {
-        return;
-    }
-
-    const qreal normalized = static_cast<qreal>(bins.back())
-        / static_cast<qreal>(peak);
-    const qreal top = rect.bottom() - (normalized * rect.height());
-    const qreal x = rect.right() - 1.5;
-
-    painter.setPen(QPen(color, 3.0, Qt::SolidLine, Qt::SquareCap));
-    painter.drawLine(QPointF(x, rect.bottom()), QPointF(x, top));
+    return std::max({histogram.red.front(), histogram.red.back(),
+                     histogram.green.front(), histogram.green.back(),
+                     histogram.blue.front(), histogram.blue.back()});
 }
 
 } // namespace
@@ -114,9 +119,23 @@ void HistogramWidget::paintEvent(QPaintEvent *event)
         return;
     }
 
-    const QPainterPath redPath = histogramPath(m_histogram.red, peak, plotRect);
-    const QPainterPath greenPath = histogramPath(m_histogram.green, peak, plotRect);
-    const QPainterPath bluePath = histogramPath(m_histogram.blue, peak, plotRect);
+    // A dominant pure-black or pure-white bin can otherwise flatten every
+    // other tone into the baseline. Compress the vertical scale only for that
+    // edge-clipping case so the underlying tonal distribution stays readable.
+    const qreal edgePeakRatio = static_cast<qreal>(largestEdgeBin(m_histogram))
+        / static_cast<qreal>(peak);
+    const bool logarithmicScale = edgePeakRatio >= 0.75;
+
+    // Keep bins 0 and 255 just inside the frame so real clipping peaks remain
+    // visible as part of the histogram instead of disappearing under the border.
+    const QRectF dataRect = plotRect.adjusted(2.0, 0.0, -2.0, 0.0);
+
+    const QPainterPath redPath = histogramPath(
+        m_histogram.red, peak, dataRect, logarithmicScale);
+    const QPainterPath greenPath = histogramPath(
+        m_histogram.green, peak, dataRect, logarithmicScale);
+    const QPainterPath bluePath = histogramPath(
+        m_histogram.blue, peak, dataRect, logarithmicScale);
 
     painter.save();
     painter.setClipRect(plotRect);
@@ -125,22 +144,6 @@ void HistogramWidget::paintEvent(QPaintEvent *event)
     painter.fillPath(redPath, QColor(255, 55, 55, 78));
     painter.fillPath(greenPath, QColor(55, 255, 95, 78));
     painter.fillPath(bluePath, QColor(70, 115, 255, 78));
-
-    drawHighlightClippingWall(painter,
-                              m_histogram.red,
-                              peak,
-                              plotRect,
-                              QColor(255, 55, 55, 150));
-    drawHighlightClippingWall(painter,
-                              m_histogram.green,
-                              peak,
-                              plotRect,
-                              QColor(55, 255, 95, 150));
-    drawHighlightClippingWall(painter,
-                              m_histogram.blue,
-                              peak,
-                              plotRect,
-                              QColor(70, 115, 255, 150));
 
     painter.restore();
 
