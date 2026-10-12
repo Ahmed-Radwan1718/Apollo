@@ -236,6 +236,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_whitesSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Whites"));
     m_contrastSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Contrast"));
     m_textureSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Texture"));
+    m_dehazeSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Dehaze"));
     m_saturationSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Saturation"));
     m_vibranceSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Vibrance"));
     m_whiteBalancePickerController =
@@ -409,6 +410,27 @@ MainWindow::MainWindow(QWidget *parent)
                 [this]() {
                     if (!m_settingDevelopControls) {
                         applyTexture(m_textureSlider->value());
+                    }
+                });
+    }
+
+    if (m_dehazeSlider) {
+        connect(m_dehazeSlider, &QSlider::valueChanged, this,
+                [this](int dehaze) {
+                    if (m_settingDevelopControls) {
+                        return;
+                    }
+
+                    if (m_dehazeSlider->isSliderDown()) {
+                        previewDehaze(dehaze);
+                    } else {
+                        applyDehaze(dehaze);
+                    }
+                });
+        connect(m_dehazeSlider, &QSlider::sliderReleased, this,
+                [this]() {
+                    if (!m_settingDevelopControls) {
+                        applyDehaze(m_dehazeSlider->value());
                     }
                 });
     }
@@ -659,6 +681,21 @@ void MainWindow::applyTexture(int texture)
                       tr("Texture %1").arg(signedHistoryValue(texture)));
 }
 
+void MainWindow::previewDehaze(int dehaze)
+{
+    DevelopState state = m_requestedState;
+    state.dehaze = dehaze;
+    requestPreview(state);
+}
+
+void MainWindow::applyDehaze(int dehaze)
+{
+    DevelopState state = m_requestedState;
+    state.dehaze = dehaze;
+    requestFullRender(state,
+                      tr("Dehaze %1").arg(signedHistoryValue(dehaze)));
+}
+
 void MainWindow::previewSaturation(int saturation)
 {
     DevelopState state = m_requestedState;
@@ -706,6 +743,7 @@ void MainWindow::requestPreview(const DevelopState &state)
                                     state.whites,
                                     state.contrast,
                                     state.texture,
+                                    state.dehaze,
                                     state.saturation,
                                     state.vibrance);
 }
@@ -732,6 +770,7 @@ void MainWindow::requestFullRender(const DevelopState &state, const QString &his
                                        state.whites,
                                        state.contrast,
                                        state.texture,
+                                       state.dehaze,
                                        state.saturation,
                                        state.vibrance);
 }
@@ -745,6 +784,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
                                      int whites,
                                      int contrast,
                                      int texture,
+                                     int dehaze,
                                      int saturation,
                                      int vibrance,
                                      bool preview,
@@ -760,6 +800,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
         whites,
         contrast,
         texture,
+        dehaze,
         saturation,
         vibrance,
     };
@@ -874,6 +915,9 @@ void MainWindow::setDevelopControlsFromState(const DevelopState &state)
     }
     if (m_textureSlider) {
         m_textureSlider->setValue(state.texture);
+    }
+    if (m_dehazeSlider) {
+        m_dehazeSlider->setValue(state.dehaze);
     }
     if (m_saturationSlider) {
         m_saturationSlider->setValue(state.saturation);

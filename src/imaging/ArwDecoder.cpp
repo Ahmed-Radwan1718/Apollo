@@ -7,6 +7,7 @@
 #include <QFile>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -59,6 +60,22 @@ constexpr double kTextureShadowProtectionStartEv = -5.0;
 constexpr double kTextureShadowProtectionFullEv = -2.5;
 constexpr double kTextureHighlightProtectionStartEv = 2.0;
 constexpr double kTextureHighlightProtectionEndEv = 3.5;
+constexpr int kDehazeMinimum = -100;
+constexpr int kDehazeMaximum = 100;
+constexpr int kDehazeAirlightHistogramBins = 512;
+constexpr double kDehazeAirlightPercentile = 0.995;
+constexpr double kDehazeAirlightMinimumEv = -8.0;
+constexpr double kDehazeAirlightMaximumEv = 8.0;
+constexpr double kDehazeAirlightNeutralityStrength = 3.0;
+constexpr double kDehazeAirlightChannelFloor = 0.10;
+constexpr double kDehazeAirlightChannelCeiling = 4.0;
+constexpr double kDehazePositiveMaximumRemoval = 0.72;
+constexpr double kDehazeMinimumTransmission = 0.30;
+constexpr double kDehazeNegativeMaximumVeil = 0.45;
+constexpr double kDehazeShadowProtectionStartEv = -4.5;
+constexpr double kDehazeShadowProtectionFullEv = -1.5;
+constexpr double kDehazeHighlightProtectionStartEv = 1.5;
+constexpr double kDehazeHighlightProtectionEndEv = 3.2;
 constexpr int kSaturationMinimum = -100;
 constexpr int kSaturationMaximum = 100;
 constexpr int kVibranceMinimum = -100;
@@ -983,6 +1000,199 @@ void applyLinearTexture(double &red,
     blue *= gain;
 }
 
+LinearRgb estimateDehazeAirlight(const std::uint16_t *samples,
+                                 std::size_t pixelCount,
+                                 double sampleScale,
+                                 int highlights,
+                                 int shadows,
+                                 int whites,
+                                 int contrast)
+{
+    std::array<std::uint64_t, kDehazeAirlightHistogramBins> histogram{};
+    constexpr double minimumLuminance = 1e-8;
+    const double histogramEvRange =
+        kDehazeAirlightMaximumEv - kDehazeAirlightMinimumEv;
+
+    auto histogramBinForLuminance = [histogramEvRange, minimumLuminance](double luminance) {
+        const double sceneEv = std::log2(
+            std::max(luminance, minimumLuminance) / kSceneMiddleGray);
+        const double normalized = std::clamp(
+            (sceneEv - kDehazeAirlightMinimumEv) / histogramEvRange,
+            0.0,
+            1.0);
+        return std::min(
+            kDehazeAirlightHistogramBins - 1,
+            static_cast<int>(normalized * kDehazeAirlightHistogramBins));
+    };
+
+    for (std::size_t pixel = 0; pixel < pixelCount; ++pixel) {
+        const LinearRgb rgb = toneAdjustedLinearRgb(samples,
+                                                    pixel * 3,
+                                                    sampleScale,
+                                                    highlights,
+                                                    shadows,
+                                                    whites,
+                                                    contrast);
+        ++histogram[static_cast<std::size_t>(histogramBinForLuminance(
+            linearLuminance(rgb)))];
+    }
+
+    const std::uint64_t targetCount = static_cast<std::uint64_t>(std::ceil(
+        static_cast<double>(pixelCount) * kDehazeAirlightPercentile));
+    std::uint64_t cumulative = 0;
+    int thresholdBin = kDehazeAirlightHistogramBins - 1;
+    for (int bin = 0; bin < kDehazeAirlightHistogramBins; ++bin) {
+        cumulative += histogram[static_cast<std::size_t>(bin)];
+        if (cumulative >= targetCount) {
+            thresholdBin = bin;
+            break;
+        }
+    }
+
+    const double thresholdEv = kDehazeAirlightMinimumEv
+        + histogramEvRange
+            * (static_cast<double>(thresholdBin)
+               / static_cast<double>(kDehazeAirlightHistogramBins));
+    const double thresholdLuminance = std::max(
+        minimumLuminance,
+        kSceneMiddleGray * std::exp2(thresholdEv));
+
+    LinearRgb weightedSum;
+    double totalWeight = 0.0;
+    for (std::size_t pixel = 0; pixel < pixelCount; ++pixel) {
+        const LinearRgb rgb = toneAdjustedLinearRgb(samples,
+                                                    pixel * 3,
+                                                    sampleScale,
+                                                    highlights,
+                                                    shadows,
+                                                    whites,
+                                                    contrast);
+        const double luminance = linearLuminance(rgb);
+        if (luminance < thresholdLuminance) {
+            continue;
+        }
+
+        const double maximumChannel = std::max({rgb.red, rgb.green, rgb.blue});
+        const double minimumChannel = std::min({rgb.red, rgb.green, rgb.blue});
+        const double relativeChroma = maximumChannel > minimumLuminance
+            ? (maximumChannel - minimumChannel) / maximumChannel
+            : 0.0;
+        const double neutralityWeight = 1.0
+            / (1.0 + kDehazeAirlightNeutralityStrength * relativeChroma);
+        const double brightnessWeight = std::sqrt(std::clamp(
+            luminance / thresholdLuminance, 1.0, 4.0));
+        const double weight = neutralityWeight * brightnessWeight;
+
+        weightedSum.red += rgb.red * weight;
+        weightedSum.green += rgb.green * weight;
+        weightedSum.blue += rgb.blue * weight;
+        totalWeight += weight;
+    }
+
+    LinearRgb airlight;
+    if (totalWeight > std::numeric_limits<double>::epsilon()) {
+        airlight.red = weightedSum.red / totalWeight;
+        airlight.green = weightedSum.green / totalWeight;
+        airlight.blue = weightedSum.blue / totalWeight;
+    } else {
+        airlight = {thresholdLuminance, thresholdLuminance, thresholdLuminance};
+    }
+
+    double airlightLuminance = linearLuminance(airlight);
+    if (!std::isfinite(airlightLuminance)
+        || airlightLuminance <= std::numeric_limits<double>::epsilon()) {
+        airlight = {1.0, 1.0, 1.0};
+        airlightLuminance = 1.0;
+    }
+
+    const double channelFloor = std::max(
+        minimumLuminance,
+        airlightLuminance * kDehazeAirlightChannelFloor);
+    const double channelCeiling = std::max(
+        channelFloor,
+        airlightLuminance * kDehazeAirlightChannelCeiling);
+    airlight.red = std::clamp(airlight.red, channelFloor, channelCeiling);
+    airlight.green = std::clamp(airlight.green, channelFloor, channelCeiling);
+    airlight.blue = std::clamp(airlight.blue, channelFloor, channelCeiling);
+    return airlight;
+}
+
+double dehazeToneWeight(double luminance)
+{
+    if (luminance <= std::numeric_limits<double>::epsilon()) {
+        return 0.0;
+    }
+
+    const double sceneEv = std::log2(luminance / kSceneMiddleGray);
+    const double shadowWeight = smoothstep01(
+        (sceneEv - kDehazeShadowProtectionStartEv)
+        / (kDehazeShadowProtectionFullEv - kDehazeShadowProtectionStartEv));
+    const double highlightWeight = 1.0 - smoothstep01(
+        (sceneEv - kDehazeHighlightProtectionStartEv)
+        / (kDehazeHighlightProtectionEndEv - kDehazeHighlightProtectionStartEv));
+    return shadowWeight * highlightWeight;
+}
+
+void applyLinearDehaze(double &red,
+                       double &green,
+                       double &blue,
+                       int dehaze,
+                       const LinearRgb &airlight)
+{
+    const int clampedDehaze = std::clamp(dehaze,
+                                          kDehazeMinimum,
+                                          kDehazeMaximum);
+    if (clampedDehaze == 0) {
+        return;
+    }
+
+    const double amount = std::abs(static_cast<double>(clampedDehaze)) / 100.0;
+
+    if (clampedDehaze < 0) {
+        // Negative Dehaze deliberately adds a physically motivated veiling-light
+        // layer: attenuate the scene and blend it toward the estimated atmospheric
+        // light. This lowers contrast and chroma together instead of applying blur.
+        const double veil = kDehazeNegativeMaximumVeil * amount;
+        const double transmission = 1.0 - veil;
+        red = red * transmission + airlight.red * veil;
+        green = green * transmission + airlight.green * veil;
+        blue = blue * transmission + airlight.blue * veil;
+        return;
+    }
+
+    const LinearRgb rgb{red, green, blue};
+    const double luminance = linearLuminance(rgb);
+    const double toneWeight = dehazeToneWeight(luminance);
+    if (toneWeight <= 0.0) {
+        return;
+    }
+
+    constexpr double minimumAirlight = 1e-8;
+    const double normalizedMinimum = std::min({
+        red / std::max(airlight.red, minimumAirlight),
+        green / std::max(airlight.green, minimumAirlight),
+        blue / std::max(airlight.blue, minimumAirlight),
+    });
+    const double hazeEvidence = smoothstep01(normalizedMinimum);
+    if (hazeEvidence <= 0.0) {
+        return;
+    }
+
+    const double removal = kDehazePositiveMaximumRemoval * amount * toneWeight;
+    const double transmission = std::clamp(
+        1.0 - removal * hazeEvidence,
+        kDehazeMinimumTransmission,
+        1.0);
+    const double veil = 1.0 - transmission;
+
+    // Invert the atmospheric-scattering equation I = J*t + A*(1-t). The
+    // min-channel haze estimate guarantees the subtraction remains non-negative
+    // for removal <= 1, while highlight/shadow protection keeps extremes stable.
+    red = std::max(0.0, (red - airlight.red * veil) / transmission);
+    green = std::max(0.0, (green - airlight.green * veil) / transmission);
+    blue = std::max(0.0, (blue - airlight.blue * veil) / transmission);
+}
+
 Oklab linearSrgbToOklab(const LinearRgb &rgb)
 {
     const double l = 0.4122214708 * rgb.red
@@ -1148,6 +1358,7 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                           int whites,
                           int contrast,
                           int texture,
+                          int dehaze,
                           int saturation,
                           int vibrance,
                           QString *error)
@@ -1194,6 +1405,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
     const int clampedTexture = std::clamp(texture,
                                           kTextureMinimum,
                                           kTextureMaximum);
+    const int clampedDehaze = std::clamp(dehaze,
+                                         kDehazeMinimum,
+                                         kDehazeMaximum);
     const int clampedSaturation = std::clamp(saturation,
                                              kSaturationMinimum,
                                              kSaturationMaximum);
@@ -1208,7 +1422,7 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
     }
 
     if (clampedHighlights == 0 && clampedShadows == 0 && clampedWhites == 0
-        && clampedContrast == 0 && clampedTexture == 0
+        && clampedContrast == 0 && clampedTexture == 0 && clampedDehaze == 0
         && clampedSaturation == 0 && clampedVibrance == 0) {
         // Keep the neutral path byte-for-byte equivalent to the existing exposure
         // render and avoid per-pixel floating-point work when develop controls are 0.
@@ -1252,6 +1466,17 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
             return {};
         }
 
+        LinearRgb dehazeAirlight{1.0, 1.0, 1.0};
+        if (clampedDehaze != 0) {
+            dehazeAirlight = estimateDehazeAirlight(samples,
+                                                    pixelCount,
+                                                    sampleScale,
+                                                    clampedHighlights,
+                                                    clampedShadows,
+                                                    clampedWhites,
+                                                    clampedContrast);
+        }
+
         for (int y = 0; y < processed.height; ++y) {
             auto *destination = image.scanLine(y);
             const std::size_t sourceRow = static_cast<std::size_t>(y) * processed.width * 3;
@@ -1274,6 +1499,13 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                                        rgb.blue,
                                        clampedTexture,
                                        textureBand[pixel]);
+                }
+                if (clampedDehaze != 0) {
+                    applyLinearDehaze(rgb.red,
+                                      rgb.green,
+                                      rgb.blue,
+                                      clampedDehaze,
+                                      dehazeAirlight);
                 }
                 if (clampedVibrance != 0) {
                     applyOklabVibrance(rgb.red, rgb.green, rgb.blue, clampedVibrance);
@@ -1307,6 +1539,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                           int whites,
                           int contrast,
                           int texture,
+                          int dehaze,
                           int saturation,
                           int vibrance,
                           bool halfSizePreview)
@@ -1322,8 +1555,8 @@ QImage ArwDecoder::decode(const QString &filePath,
 
     // Ask LibRaw for a high-precision linear sRGB render. Nexus performs the
     // final exposure, scene-referred tonal controls, local texture contrast,
-    // perceptual vibrance, saturation, and sRGB transfer itself instead of
-    // editing an already rendered 8-bit image.
+    // atmospheric dehaze, perceptual vibrance, saturation, and sRGB transfer
+    // itself instead of editing an already rendered 8-bit image.
     processor.imgdata.params.use_camera_wb = 1;
     processor.imgdata.params.use_camera_matrix = 1;
     processor.imgdata.params.output_color = 1; // linear sRGB primaries
@@ -1410,6 +1643,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                                       whites,
                                       contrast,
                                       texture,
+                                      dehaze,
                                       saturation,
                                       vibrance,
                                       error);
