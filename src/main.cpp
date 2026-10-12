@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
     auto *menuBar = window.menuBar();
     auto *fileMenu = menuBar->addMenu(QObject::tr("&File"));
     auto *editMenu = menuBar->addMenu(QObject::tr("&Edit"));
-    menuBar->addMenu(QObject::tr("&Photo"));
+    auto *photoMenu = menuBar->addMenu(QObject::tr("&Photo"));
     auto *viewMenu = menuBar->addMenu(QObject::tr("&View"));
     menuBar->addMenu(QObject::tr("&Help"));
 
@@ -117,6 +117,27 @@ int main(int argc, char *argv[])
 
     editMenu->addSeparator();
     addPlaceholderAction(editMenu, QObject::tr("Preferences…"));
+
+    addPlaceholderAction(photoMenu, QObject::tr("Reset Photo"));
+    addPlaceholderAction(photoMenu, QObject::tr("Revert to Original"));
+
+    photoMenu->addSeparator();
+    addPlaceholderAction(photoMenu, QObject::tr("Rotate Left"));
+    addPlaceholderAction(photoMenu, QObject::tr("Rotate Right"));
+    addPlaceholderAction(photoMenu, QObject::tr("Flip Horizontal"));
+    addPlaceholderAction(photoMenu, QObject::tr("Flip Vertical"));
+
+    photoMenu->addSeparator();
+    addPlaceholderAction(photoMenu, QObject::tr("Crop…"));
+    addPlaceholderAction(photoMenu, QObject::tr("Straighten…"));
+
+    photoMenu->addSeparator();
+    addPlaceholderAction(photoMenu, QObject::tr("Before / After"));
+    addPlaceholderAction(photoMenu, QObject::tr("Show Original"));
+
+    photoMenu->addSeparator();
+    addPlaceholderAction(photoMenu, QObject::tr("Copy Photo Path"));
+    addPlaceholderAction(photoMenu, QObject::tr("Show in Filmstrip"));
 
     if (QAction *fitAction = findWindowAction(QObject::tr("Fit to View"))) {
         viewMenu->addAction(fitAction);
