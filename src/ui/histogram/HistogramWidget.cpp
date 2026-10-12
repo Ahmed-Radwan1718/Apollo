@@ -37,6 +37,26 @@ QPainterPath histogramPath(const std::array<quint64, imaging::HistogramData::kBi
     return path;
 }
 
+void drawHighlightClippingWall(
+    QPainter &painter,
+    const std::array<quint64, imaging::HistogramData::kBinCount> &bins,
+    quint64 peak,
+    const QRectF &rect,
+    const QColor &color)
+{
+    if (peak == 0 || rect.isEmpty() || bins.back() == 0) {
+        return;
+    }
+
+    const qreal normalized = static_cast<qreal>(bins.back())
+        / static_cast<qreal>(peak);
+    const qreal top = rect.bottom() - (normalized * rect.height());
+    const qreal x = rect.right() - 1.5;
+
+    painter.setPen(QPen(color, 3.0, Qt::SolidLine, Qt::SquareCap));
+    painter.drawLine(QPointF(x, rect.bottom()), QPointF(x, top));
+}
+
 } // namespace
 
 HistogramWidget::HistogramWidget(QWidget *parent)
@@ -105,6 +125,22 @@ void HistogramWidget::paintEvent(QPaintEvent *event)
     painter.fillPath(redPath, QColor(255, 55, 55, 78));
     painter.fillPath(greenPath, QColor(55, 255, 95, 78));
     painter.fillPath(bluePath, QColor(70, 115, 255, 78));
+
+    drawHighlightClippingWall(painter,
+                              m_histogram.red,
+                              peak,
+                              plotRect,
+                              QColor(255, 55, 55, 150));
+    drawHighlightClippingWall(painter,
+                              m_histogram.green,
+                              peak,
+                              plotRect,
+                              QColor(55, 255, 95, 150));
+    drawHighlightClippingWall(painter,
+                              m_histogram.blue,
+                              peak,
+                              plotRect,
+                              QColor(70, 115, 255, 150));
 
     painter.restore();
 
