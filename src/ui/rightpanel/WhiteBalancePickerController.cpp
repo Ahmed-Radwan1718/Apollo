@@ -61,9 +61,15 @@ protected:
         painter.setBrush(Qt::NoBrush);
         painter.translate(width() / 2.0, height() / 2.0);
         painter.rotate(-45.0);
-        painter.drawRoundedRect(QRectF(-2.5, -7.0, 5.0, 9.0), 1.2, 1.2);
-        painter.drawLine(QPointF(0.0, 2.0), QPointF(0.0, 6.3));
-        painter.drawLine(QPointF(-1.8, 6.3), QPointF(1.8, 6.3));
+
+        // Familiar eyedropper silhouette: rounded squeeze bulb, collar,
+        // tapered glass tube, and a pointed sampling tip.
+        painter.drawRoundedRect(QRectF(-3.1, -6.7, 6.2, 5.0), 1.5, 1.5);
+        painter.drawLine(QPointF(-2.7, -1.3), QPointF(2.7, -1.3));
+        painter.drawLine(QPointF(-1.75, -1.3), QPointF(-1.05, 3.6));
+        painter.drawLine(QPointF(1.75, -1.3), QPointF(1.05, 3.6));
+        painter.drawLine(QPointF(-1.05, 3.6), QPointF(0.0, 6.5));
+        painter.drawLine(QPointF(1.05, 3.6), QPointF(0.0, 6.5));
     }
 };
 
