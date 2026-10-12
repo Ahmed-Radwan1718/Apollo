@@ -153,6 +153,22 @@ int main(int argc, char *argv[])
         viewMenu->addAction(zoomOutAction);
     }
 
+    viewMenu->addSeparator();
+    addPlaceholderAction(viewMenu, QObject::tr("Navigator"));
+    addPlaceholderAction(viewMenu, QObject::tr("History"));
+    addPlaceholderAction(viewMenu, QObject::tr("Histogram"));
+    addPlaceholderAction(viewMenu, QObject::tr("Filmstrip"));
+    addPlaceholderAction(viewMenu, QObject::tr("Basic Panel"));
+
+    viewMenu->addSeparator();
+    addPlaceholderAction(viewMenu, QObject::tr("Show Clipping Warnings"));
+    addPlaceholderAction(viewMenu, QObject::tr("Show Grid"));
+
+    viewMenu->addSeparator();
+    addPlaceholderAction(viewMenu,
+                         QObject::tr("Full Screen"),
+                         QKeySequence(QStringLiteral("F11")));
+
     window.show();
 
     return app.exec();
