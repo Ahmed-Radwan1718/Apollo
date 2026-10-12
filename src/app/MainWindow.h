@@ -44,6 +44,7 @@ private slots:
                              int highlights,
                              int shadows,
                              int whites,
+                             int blacks,
                              int contrast,
                              int texture,
                              int clarity,
@@ -72,6 +73,8 @@ private:
     void applyShadows(int shadows);
     void previewWhites(int whites);
     void applyWhites(int whites);
+    void previewBlacks(int blacks);
+    void applyBlacks(int blacks);
     void previewContrast(int contrast);
     void applyContrast(int contrast);
     void previewTexture(int texture);
@@ -102,6 +105,7 @@ private:
     QSlider *m_highlightsSlider = nullptr;
     QSlider *m_shadowsSlider = nullptr;
     QSlider *m_whitesSlider = nullptr;
+    QSlider *m_blacksSlider = nullptr;
     QSlider *m_contrastSlider = nullptr;
     QSlider *m_textureSlider = nullptr;
     QSlider *m_claritySlider = nullptr;

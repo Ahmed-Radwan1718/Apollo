@@ -234,6 +234,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_highlightsSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Highlights"));
     m_shadowsSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Shadows"));
     m_whitesSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Whites"));
+    m_blacksSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Blacks"));
     m_contrastSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Contrast"));
     m_textureSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Texture"));
     m_claritySlider = findLabeledSlider(m_basicPanel, QStringLiteral("Clarity"));
@@ -369,6 +370,27 @@ MainWindow::MainWindow(QWidget *parent)
                 [this]() {
                     if (!m_settingDevelopControls) {
                         applyWhites(m_whitesSlider->value());
+                    }
+                });
+    }
+
+    if (m_blacksSlider) {
+        connect(m_blacksSlider, &QSlider::valueChanged, this,
+                [this](int blacks) {
+                    if (m_settingDevelopControls) {
+                        return;
+                    }
+
+                    if (m_blacksSlider->isSliderDown()) {
+                        previewBlacks(blacks);
+                    } else {
+                        applyBlacks(blacks);
+                    }
+                });
+        connect(m_blacksSlider, &QSlider::sliderReleased, this,
+                [this]() {
+                    if (!m_settingDevelopControls) {
+                        applyBlacks(m_blacksSlider->value());
                     }
                 });
     }
@@ -673,6 +695,21 @@ void MainWindow::applyWhites(int whites)
                       tr("Whites %1").arg(signedHistoryValue(whites)));
 }
 
+void MainWindow::previewBlacks(int blacks)
+{
+    DevelopState state = m_requestedState;
+    state.blacks = blacks;
+    requestPreview(state);
+}
+
+void MainWindow::applyBlacks(int blacks)
+{
+    DevelopState state = m_requestedState;
+    state.blacks = blacks;
+    requestFullRender(state,
+                      tr("Blacks %1").arg(signedHistoryValue(blacks)));
+}
+
 void MainWindow::previewContrast(int contrast)
 {
     DevelopState state = m_requestedState;
@@ -778,6 +815,7 @@ void MainWindow::requestPreview(const DevelopState &state)
                                     state.highlights,
                                     state.shadows,
                                     state.whites,
+                                    state.blacks,
                                     state.contrast,
                                     state.texture,
                                     state.clarity,
@@ -806,6 +844,7 @@ void MainWindow::requestFullRender(const DevelopState &state, const QString &his
                                        state.highlights,
                                        state.shadows,
                                        state.whites,
+                                       state.blacks,
                                        state.contrast,
                                        state.texture,
                                        state.clarity,
@@ -821,6 +860,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
                                      int highlights,
                                      int shadows,
                                      int whites,
+                                     int blacks,
                                      int contrast,
                                      int texture,
                                      int clarity,
@@ -838,6 +878,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
         highlights,
         shadows,
         whites,
+        blacks,
         contrast,
         texture,
         clarity,
@@ -950,6 +991,9 @@ void MainWindow::setDevelopControlsFromState(const DevelopState &state)
     }
     if (m_whitesSlider) {
         m_whitesSlider->setValue(state.whites);
+    }
+    if (m_blacksSlider) {
+        m_blacksSlider->setValue(state.blacks);
     }
     if (m_contrastSlider) {
         m_contrastSlider->setValue(state.contrast);

@@ -46,6 +46,12 @@ constexpr double kWhitesMaskStartEv = 1.75;
 constexpr double kWhitesMaskFullEv = 2.75;
 constexpr double kWhitesMaximumCompression = 0.9;
 constexpr double kWhitesMaximumExpansion = 0.65;
+constexpr int kBlacksMinimum = -100;
+constexpr int kBlacksMaximum = 100;
+constexpr double kBlacksMaskStartEv = -2.0;
+constexpr double kBlacksMaskFullEv = -4.0;
+constexpr double kBlacksMaximumLiftCompression = 0.9;
+constexpr double kBlacksMaximumDeepenExpansion = 0.65;
 constexpr int kContrastMinimum = -100;
 constexpr int kContrastMaximum = 100;
 constexpr double kContrastPivot = kSceneMiddleGray;
@@ -760,6 +766,64 @@ void applyLinearWhites(double &red,
     blue *= gain;
 }
 
+double integratedBlacksWeightEv(double sceneEv)
+{
+    if (sceneEv >= kBlacksMaskStartEv) {
+        return 0.0;
+    }
+
+    const double width = kBlacksMaskStartEv - kBlacksMaskFullEv;
+    if (sceneEv <= kBlacksMaskFullEv) {
+        return 0.5 * width + (kBlacksMaskFullEv - sceneEv);
+    }
+
+    const double x = (kBlacksMaskStartEv - sceneEv) / width;
+    return width * (x * x * x - 0.5 * x * x * x * x);
+}
+
+void applyLinearBlacks(double &red,
+                       double &green,
+                       double &blue,
+                       int blacks)
+{
+    const int clampedBlacks = std::clamp(blacks,
+                                          kBlacksMinimum,
+                                          kBlacksMaximum);
+    if (clampedBlacks == 0) {
+        return;
+    }
+
+    const double luminance = red * kLinearSrgbRedLuminance
+        + green * kLinearSrgbGreenLuminance
+        + blue * kLinearSrgbBlueLuminance;
+    if (luminance <= std::numeric_limits<double>::epsilon()) {
+        return;
+    }
+
+    // Blacks is narrower and deeper than Shadows. It starts below -2 EV from
+    // 18% middle gray and reaches full influence by -4 EV, so it reshapes the
+    // black-point region without turning into a broad exposure or shadow control.
+    // The integrated smoothstep changes tonal slope continuously and keeps the
+    // mapping monotonic even at the ends of the slider range.
+    const double sceneEv = std::log2(luminance / kSceneMiddleGray);
+    const double weightedEv = integratedBlacksWeightEv(sceneEv);
+    if (weightedEv <= 0.0) {
+        return;
+    }
+
+    const double amount = std::abs(static_cast<double>(clampedBlacks)) / 100.0;
+    const double slopeChange = clampedBlacks > 0
+        ? kBlacksMaximumLiftCompression * amount
+        : -kBlacksMaximumDeepenExpansion * amount;
+    const double gain = std::exp2(slopeChange * weightedEv);
+
+    // Apply a common linear-light gain so setting the black point preserves RGB
+    // ratios instead of deliberately introducing a hue shift in dark colors.
+    red *= gain;
+    green *= gain;
+    blue *= gain;
+}
+
 double linearLuminance(const LinearRgb &rgb)
 {
     return rgb.red * kLinearSrgbRedLuminance
@@ -773,6 +837,7 @@ LinearRgb toneAdjustedLinearRgb(const std::uint16_t *samples,
                                 int highlights,
                                 int shadows,
                                 int whites,
+                                int blacks,
                                 int contrast)
 {
     LinearRgb rgb{
@@ -789,6 +854,9 @@ LinearRgb toneAdjustedLinearRgb(const std::uint16_t *samples,
     }
     if (whites != 0) {
         applyLinearWhites(rgb.red, rgb.green, rgb.blue, whites);
+    }
+    if (blacks != 0) {
+        applyLinearBlacks(rgb.red, rgb.green, rgb.blue, blacks);
     }
     if (contrast != 0) {
         applyLinearContrast(rgb.red, rgb.green, rgb.blue, contrast);
@@ -920,6 +988,7 @@ bool buildTextureBand(const std::uint16_t *samples,
                       int highlights,
                       int shadows,
                       int whites,
+                      int blacks,
                       int contrast,
                       std::vector<float> &textureBand,
                       std::vector<float> &scratch,
@@ -941,6 +1010,7 @@ bool buildTextureBand(const std::uint16_t *samples,
                                                     highlights,
                                                     shadows,
                                                     whites,
+                                                    blacks,
                                                     contrast);
         textureBand[pixel] = static_cast<float>(
             std::log2(std::max(linearLuminance(rgb), minimumLuminance)));
@@ -1033,6 +1103,7 @@ bool buildClarityBand(const std::uint16_t *samples,
                       int highlights,
                       int shadows,
                       int whites,
+                      int blacks,
                       int contrast,
                       std::vector<float> &clarityBand,
                       std::vector<float> &scratch,
@@ -1054,6 +1125,7 @@ bool buildClarityBand(const std::uint16_t *samples,
                                                     highlights,
                                                     shadows,
                                                     whites,
+                                                    blacks,
                                                     contrast);
         clarityBand[pixel] = static_cast<float>(
             std::log2(std::max(linearLuminance(rgb), minimumLuminance)));
@@ -1137,6 +1209,7 @@ LinearRgb estimateDehazeAirlight(const std::uint16_t *samples,
                                  int highlights,
                                  int shadows,
                                  int whites,
+                                 int blacks,
                                  int contrast)
 {
     std::array<std::uint64_t, kDehazeAirlightHistogramBins> histogram{};
@@ -1163,6 +1236,7 @@ LinearRgb estimateDehazeAirlight(const std::uint16_t *samples,
                                                     highlights,
                                                     shadows,
                                                     whites,
+                                                    blacks,
                                                     contrast);
         ++histogram[static_cast<std::size_t>(histogramBinForLuminance(
             linearLuminance(rgb)))];
@@ -1197,6 +1271,7 @@ LinearRgb estimateDehazeAirlight(const std::uint16_t *samples,
                                                     highlights,
                                                     shadows,
                                                     whites,
+                                                    blacks,
                                                     contrast);
         const double luminance = linearLuminance(rgb);
         if (luminance < thresholdLuminance) {
@@ -1487,6 +1562,7 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                           int highlights,
                           int shadows,
                           int whites,
+                          int blacks,
                           int contrast,
                           int texture,
                           int clarity,
@@ -1531,6 +1607,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
     const int clampedWhites = std::clamp(whites,
                                          kWhitesMinimum,
                                          kWhitesMaximum);
+    const int clampedBlacks = std::clamp(blacks,
+                                         kBlacksMinimum,
+                                         kBlacksMaximum);
     const int clampedContrast = std::clamp(contrast,
                                            kContrastMinimum,
                                            kContrastMaximum);
@@ -1557,8 +1636,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
     }
 
     if (clampedHighlights == 0 && clampedShadows == 0 && clampedWhites == 0
-        && clampedContrast == 0 && clampedTexture == 0 && clampedClarity == 0
-        && clampedDehaze == 0 && clampedSaturation == 0 && clampedVibrance == 0) {
+        && clampedBlacks == 0 && clampedContrast == 0 && clampedTexture == 0
+        && clampedClarity == 0 && clampedDehaze == 0
+        && clampedSaturation == 0 && clampedVibrance == 0) {
         // Keep the neutral path byte-for-byte equivalent to the existing exposure
         // render and avoid per-pixel floating-point work when develop controls are 0.
         std::vector<std::uint8_t> transferTable(kLinearMaximum + 1);
@@ -1596,6 +1676,7 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                                  clampedHighlights,
                                  clampedShadows,
                                  clampedWhites,
+                                 clampedBlacks,
                                  clampedContrast,
                                  textureBand,
                                  textureScratch,
@@ -1612,6 +1693,7 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                                  clampedHighlights,
                                  clampedShadows,
                                  clampedWhites,
+                                 clampedBlacks,
                                  clampedContrast,
                                  clarityBand,
                                  clarityScratch,
@@ -1627,6 +1709,7 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                                                     clampedHighlights,
                                                     clampedShadows,
                                                     clampedWhites,
+                                                    clampedBlacks,
                                                     clampedContrast);
         }
 
@@ -1644,6 +1727,7 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                                                        clampedHighlights,
                                                        clampedShadows,
                                                        clampedWhites,
+                                                       clampedBlacks,
                                                        clampedContrast);
 
                 if (clampedTexture != 0) {
@@ -1697,6 +1781,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                           int highlights,
                           int shadows,
                           int whites,
+                          int blacks,
                           int contrast,
                           int texture,
                           int clarity,
@@ -1715,9 +1800,9 @@ QImage ArwDecoder::decode(const QString &filePath,
     LibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
 
     // Ask LibRaw for a high-precision linear sRGB render. Nexus performs the
-    // final exposure, scene-referred tonal controls, texture and clarity local
-    // contrast, atmospheric dehaze, perceptual vibrance, saturation, and sRGB
-    // transfer itself instead of editing an already rendered 8-bit image.
+    // final exposure, scene-referred tonal and black-point controls, texture and
+    // clarity local contrast, atmospheric dehaze, perceptual vibrance, saturation,
+    // and sRGB transfer itself instead of editing an already rendered 8-bit image.
     processor.imgdata.params.use_camera_wb = 1;
     processor.imgdata.params.use_camera_matrix = 1;
     processor.imgdata.params.output_color = 1; // linear sRGB primaries
@@ -1802,6 +1887,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                                       highlights,
                                       shadows,
                                       whites,
+                                      blacks,
                                       contrast,
                                       texture,
                                       clarity,
