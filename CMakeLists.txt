@@ -14,6 +14,9 @@ nexus_add_libraw()
 
 qt_add_executable(Nexus WIN32
     src/main.cpp
+    src/app/DevelopState.h
+    src/app/HistoryModel.cpp
+    src/app/HistoryModel.h
     src/app/MainWindow.cpp
     src/app/MainWindow.h
     src/imaging/ArwDecoder.cpp
@@ -33,6 +36,8 @@ qt_add_executable(Nexus WIN32
     src/ui/filmstrip/FilmstripWidget.h
     src/ui/histogram/HistogramWidget.cpp
     src/ui/histogram/HistogramWidget.h
+    src/ui/leftpanel/HistoryPanel.cpp
+    src/ui/leftpanel/HistoryPanel.h
     src/ui/leftpanel/NavigatorPanel.cpp
     src/ui/leftpanel/NavigatorPanel.h
     src/ui/rightpanel/BasicPanel.cpp

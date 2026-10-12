@@ -6,6 +6,7 @@
 #include "ui/canvas/PhotoCanvas.h"
 #include "ui/filmstrip/FilmstripWidget.h"
 #include "ui/histogram/HistogramWidget.h"
+#include "ui/leftpanel/HistoryPanel.h"
 #include "ui/leftpanel/NavigatorPanel.h"
 #include "ui/rightpanel/BasicPanel.h"
 #include "ui/rightpanel/PhotoMetadataWidget.h"
@@ -39,6 +40,21 @@ bool isArwPath(const QString &filePath)
     return !filePath.isEmpty()
         && QFileInfo(filePath).suffix().compare(QStringLiteral("arw"),
                                                Qt::CaseInsensitive) == 0;
+}
+
+QString signedHistoryValue(int value)
+{
+    return value > 0
+        ? QStringLiteral("+%1").arg(value)
+        : QString::number(value);
+}
+
+QString exposureHistoryValue(int hundredths)
+{
+    const double stops = static_cast<double>(hundredths) / 100.0;
+    return QStringLiteral("%1%2")
+        .arg(stops >= 0.0 ? QStringLiteral("+") : QString(),
+             QString::number(stops, 'f', 2));
 }
 
 int temperatureKelvinFromSlider(const QSlider *slider, int position)
@@ -142,7 +158,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_navigator = new NavigatorPanel(leftPanel);
     leftLayout->addWidget(m_navigator);
-    leftLayout->addStretch(1);
+
+    m_historyPanel = new HistoryPanel(leftPanel);
+    leftLayout->addWidget(m_historyPanel, 1);
 
     workspaceLayout->addWidget(leftPanel);
 
@@ -224,6 +242,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_canvas, &PhotoCanvas::fileDropped,
             this, &MainWindow::openImage);
+    connect(m_historyPanel, &HistoryPanel::entryActivated,
+            this, &MainWindow::handleHistoryEntryActivated);
 
     if (m_temperatureSlider) {
         connect(m_temperatureSlider, &QSlider::valueChanged, this,
@@ -413,18 +433,25 @@ void MainWindow::openImage(const QString &filePath)
         return;
     }
 
-    m_currentFilePath = QFileInfo(filePath).absoluteFilePath();
-    m_fullImageSize = result.image.size();
-    m_requestedState.temperatureKelvin = result.metadata.whiteBalanceTemperatureKelvin > 0
+    const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
+    DevelopState originalState;
+    originalState.temperatureKelvin = result.metadata.whiteBalanceTemperatureKelvin > 0
         ? result.metadata.whiteBalanceTemperatureKelvin
         : kDefaultTemperatureKelvin;
-    m_requestedState.tint = 0;
-    m_requestedState.exposureHundredths = 0;
-    m_requestedState.highlights = 0;
-    m_requestedState.contrast = 0;
-    m_requestedState.saturation = 0;
-    m_requestedState.vibrance = 0;
-    m_fullQualityState = m_requestedState;
+
+    m_historyModel.initializePhoto(absoluteFilePath, originalState);
+    const std::optional<DevelopState> savedState =
+        m_historyModel.currentState(absoluteFilePath);
+
+    m_currentFilePath = absoluteFilePath;
+    m_originalImage = result.image;
+    m_fullImageSize = result.image.size();
+    m_requestedState = savedState.value_or(originalState);
+
+    const bool showingOriginal = m_historyModel.currentIndex(m_currentFilePath) == 0;
+    m_fullQualityState = showingOriginal
+        ? std::optional<DevelopState>(m_requestedState)
+        : std::nullopt;
 
     m_whiteBalancePickerController->setActive(false);
     m_whiteBalancePickerController->setEnabled(isArwPath(m_currentFilePath));
@@ -435,29 +462,15 @@ void MainWindow::openImage(const QString &filePath)
     m_photoMetadata->setMetadata(result.metadata);
     m_filmstrip->addPhoto(m_currentFilePath, result.image);
 
-    m_settingDevelopControls = true;
     m_basicPanel->setCameraTemperatureKelvin(result.metadata.whiteBalanceTemperatureKelvin);
-    if (m_tintSlider) {
-        m_tintSlider->setValue(0);
-    }
-    if (m_exposureSlider) {
-        m_exposureSlider->setValue(0);
-    }
-    if (m_highlightsSlider) {
-        m_highlightsSlider->setValue(0);
-    }
-    if (m_contrastSlider) {
-        m_contrastSlider->setValue(0);
-    }
-    if (m_saturationSlider) {
-        m_saturationSlider->setValue(0);
-    }
-    if (m_vibranceSlider) {
-        m_vibranceSlider->setValue(0);
-    }
-    m_settingDevelopControls = false;
+    setDevelopControlsFromState(m_requestedState);
+    refreshHistoryPanel();
 
     setWindowTitle(QStringLiteral("%1 — Nexus").arg(QFileInfo(filePath).fileName()));
+
+    if (!showingOriginal && isArwPath(m_currentFilePath)) {
+        requestFullRender(m_requestedState);
+    }
 }
 
 void MainWindow::previewTemperature(int kelvin)
@@ -471,7 +484,8 @@ void MainWindow::applyTemperature(int kelvin)
 {
     DevelopState state = m_requestedState;
     state.temperatureKelvin = kelvin;
-    requestFullRender(state);
+    requestFullRender(state,
+                      tr("Temperature %1").arg(kelvin));
 }
 
 void MainWindow::previewTint(int tint)
@@ -485,7 +499,8 @@ void MainWindow::applyTint(int tint)
 {
     DevelopState state = m_requestedState;
     state.tint = tint;
-    requestFullRender(state);
+    requestFullRender(state,
+                      tr("Tint %1").arg(signedHistoryValue(tint)));
 }
 
 void MainWindow::previewExposure(int exposureHundredths)
@@ -499,7 +514,8 @@ void MainWindow::applyExposure(int exposureHundredths)
 {
     DevelopState state = m_requestedState;
     state.exposureHundredths = exposureHundredths;
-    requestFullRender(state);
+    requestFullRender(state,
+                      tr("Exposure %1").arg(exposureHistoryValue(exposureHundredths)));
 }
 
 void MainWindow::previewHighlights(int highlights)
@@ -513,7 +529,8 @@ void MainWindow::applyHighlights(int highlights)
 {
     DevelopState state = m_requestedState;
     state.highlights = highlights;
-    requestFullRender(state);
+    requestFullRender(state,
+                      tr("Highlights %1").arg(signedHistoryValue(highlights)));
 }
 
 void MainWindow::previewContrast(int contrast)
@@ -527,7 +544,8 @@ void MainWindow::applyContrast(int contrast)
 {
     DevelopState state = m_requestedState;
     state.contrast = contrast;
-    requestFullRender(state);
+    requestFullRender(state,
+                      tr("Contrast %1").arg(signedHistoryValue(contrast)));
 }
 
 void MainWindow::previewSaturation(int saturation)
@@ -541,7 +559,8 @@ void MainWindow::applySaturation(int saturation)
 {
     DevelopState state = m_requestedState;
     state.saturation = saturation;
-    requestFullRender(state);
+    requestFullRender(state,
+                      tr("Saturation %1").arg(signedHistoryValue(saturation)));
 }
 
 void MainWindow::previewVibrance(int vibrance)
@@ -555,7 +574,8 @@ void MainWindow::applyVibrance(int vibrance)
 {
     DevelopState state = m_requestedState;
     state.vibrance = vibrance;
-    requestFullRender(state);
+    requestFullRender(state,
+                      tr("Vibrance %1").arg(signedHistoryValue(vibrance)));
 }
 
 void MainWindow::requestPreview(const DevelopState &state)
@@ -576,13 +596,19 @@ void MainWindow::requestPreview(const DevelopState &state)
                                     state.vibrance);
 }
 
-void MainWindow::requestFullRender(const DevelopState &state)
+void MainWindow::requestFullRender(const DevelopState &state, const QString &historyLabel)
 {
     if (!isArwPath(m_currentFilePath)) {
         return;
     }
 
     m_requestedState = state;
+
+    if (!historyLabel.isEmpty()
+        && m_historyModel.commit(m_currentFilePath, historyLabel, state)) {
+        refreshHistoryPanel();
+    }
+
     m_renderService->requestFullRender(m_currentFilePath,
                                        state.temperatureKelvin,
                                        state.tint,
@@ -667,18 +693,74 @@ void MainWindow::handleWhiteBalancePick(const QString &filePath,
     state.temperatureKelvin = temperatureKelvin;
     state.tint = tint;
 
+    setDevelopControlsFromState(state);
+    requestFullRender(state, tr("White Balance Pick"));
+}
+
+void MainWindow::handleHistoryEntryActivated(int index)
+{
+    const std::optional<DevelopState> state =
+        m_historyModel.selectEntry(m_currentFilePath, index);
+    if (!state) {
+        return;
+    }
+
+    m_requestedState = *state;
+    m_fullQualityState.reset();
+    setDevelopControlsFromState(*state);
+    refreshHistoryPanel();
+
+    if (index == 0 && !m_originalImage.isNull()) {
+        m_canvas->replaceImage(m_originalImage);
+        m_navigator->setImage(m_originalImage);
+        m_histogram->setImage(m_originalImage);
+        m_fullImageSize = m_originalImage.size();
+        m_fullQualityState = *state;
+        return;
+    }
+
+    requestFullRender(*state);
+}
+
+void MainWindow::setDevelopControlsFromState(const DevelopState &state)
+{
     m_settingDevelopControls = true;
+
     if (m_temperatureSlider) {
         m_temperatureSlider->setValue(
             temperatureSliderPositionForKelvin(m_temperatureSlider,
-                                               temperatureKelvin));
+                                               state.temperatureKelvin));
     }
     if (m_tintSlider) {
-        m_tintSlider->setValue(tint);
+        m_tintSlider->setValue(state.tint);
     }
-    m_settingDevelopControls = false;
+    if (m_exposureSlider) {
+        m_exposureSlider->setValue(state.exposureHundredths);
+    }
+    if (m_highlightsSlider) {
+        m_highlightsSlider->setValue(state.highlights);
+    }
+    if (m_contrastSlider) {
+        m_contrastSlider->setValue(state.contrast);
+    }
+    if (m_saturationSlider) {
+        m_saturationSlider->setValue(state.saturation);
+    }
+    if (m_vibranceSlider) {
+        m_vibranceSlider->setValue(state.vibrance);
+    }
 
-    requestFullRender(state);
+    m_settingDevelopControls = false;
+}
+
+void MainWindow::refreshHistoryPanel()
+{
+    if (!m_historyPanel) {
+        return;
+    }
+
+    m_historyPanel->setEntries(m_historyModel.labels(m_currentFilePath),
+                               m_historyModel.currentIndex(m_currentFilePath));
 }
 
 void MainWindow::createActions()

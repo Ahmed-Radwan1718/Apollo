@@ -1,5 +1,8 @@
 #pragma once
 
+#include "app/DevelopState.h"
+#include "app/HistoryModel.h"
+
 #include <QImage>
 #include <QMainWindow>
 #include <QSize>
@@ -11,6 +14,7 @@ class QAction;
 class BasicPanel;
 class FilmstripWidget;
 class HistogramWidget;
+class HistoryPanel;
 class NavigatorPanel;
 class PhotoCanvas;
 class PhotoMetadataWidget;
@@ -48,20 +52,9 @@ private slots:
                                 int temperatureKelvin,
                                 int tint,
                                 const QString &error);
+    void handleHistoryEntryActivated(int index);
 
 private:
-    struct DevelopState {
-        int temperatureKelvin = 0;
-        int tint = 0;
-        int exposureHundredths = 0;
-        int highlights = 0;
-        int contrast = 0;
-        int saturation = 0;
-        int vibrance = 0;
-
-        bool operator==(const DevelopState &) const = default;
-    };
-
     void createActions();
     void previewTemperature(int kelvin);
     void previewTint(int tint);
@@ -77,9 +70,12 @@ private:
     void previewVibrance(int vibrance);
     void applyVibrance(int vibrance);
     void requestPreview(const DevelopState &state);
-    void requestFullRender(const DevelopState &state);
+    void requestFullRender(const DevelopState &state, const QString &historyLabel = {});
+    void setDevelopControlsFromState(const DevelopState &state);
+    void refreshHistoryPanel();
 
     NavigatorPanel *m_navigator = nullptr;
+    HistoryPanel *m_historyPanel = nullptr;
     PhotoCanvas *m_canvas = nullptr;
     FilmstripWidget *m_filmstrip = nullptr;
     HistogramWidget *m_histogram = nullptr;
@@ -97,9 +93,11 @@ private:
     WhiteBalancePickerController *m_whiteBalancePickerController = nullptr;
 
     QString m_currentFilePath;
+    QImage m_originalImage;
     QSize m_fullImageSize;
     DevelopState m_requestedState;
     std::optional<DevelopState> m_fullQualityState;
+    HistoryModel m_historyModel;
     bool m_settingDevelopControls = false;
 
     QAction *m_openAction = nullptr;
