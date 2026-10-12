@@ -1,28 +1,42 @@
 #include "ui/leftpanel/HistoryPanel.h"
 
 #include <QAbstractItemView>
+#include <QEasingCurve>
 #include <QKeySequence>
 #include <QListWidget>
 #include <QPainter>
 #include <QPaintEvent>
+#include <QResizeEvent>
 #include <QShortcut>
 #include <QSizePolicy>
 #include <QToolButton>
+#include <QVariantAnimation>
 #include <QVBoxLayout>
 
 namespace {
+
+constexpr int kPanelAnimationDurationMs = 220;
 
 class HistoryHeaderButton final : public QToolButton
 {
 public:
     explicit HistoryHeaderButton(QWidget *parent = nullptr)
         : QToolButton(parent)
+        , m_animation(new QVariantAnimation(this))
     {
         setText(tr("History"));
         setCursor(Qt::PointingHandCursor);
         setFocusPolicy(Qt::NoFocus);
         setFixedHeight(30);
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+        m_animation->setDuration(kPanelAnimationDurationMs);
+        m_animation->setEasingCurve(QEasingCurve::InOutCubic);
+        connect(m_animation, &QVariantAnimation::valueChanged, this,
+                [this](const QVariant &value) {
+                    m_angle = value.toReal();
+                    update();
+                });
     }
 
     void setExpanded(bool expanded)
@@ -30,8 +44,12 @@ public:
         if (m_expanded == expanded) {
             return;
         }
+
         m_expanded = expanded;
-        update();
+        m_animation->stop();
+        m_animation->setStartValue(m_angle);
+        m_animation->setEndValue(expanded ? 90.0 : 0.0);
+        m_animation->start();
     }
 
 protected:
@@ -59,12 +77,94 @@ protected:
         painter.setPen(QPen(color, 1.35, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         const QPointF center(width() - 10.0, height() / 2.0);
         painter.translate(center);
-        painter.rotate(m_expanded ? 90.0 : 0.0);
+        painter.rotate(m_angle);
         painter.drawLine(QPointF(-1.5, -3.5), QPointF(2.0, 0.0));
         painter.drawLine(QPointF(2.0, 0.0), QPointF(-1.5, 3.5));
     }
 
 private:
+    bool m_expanded = true;
+    qreal m_angle = 90.0;
+    QVariantAnimation *m_animation = nullptr;
+};
+
+class HistoryRevealContainer final : public QWidget
+{
+public:
+    explicit HistoryRevealContainer(QWidget *parent = nullptr)
+        : QWidget(parent)
+        , m_animation(new QVariantAnimation(this))
+    {
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+        m_animation->setDuration(kPanelAnimationDurationMs);
+        m_animation->setEasingCurve(QEasingCurve::InOutCubic);
+
+        connect(m_animation, &QVariantAnimation::valueChanged, this,
+                [this](const QVariant &value) {
+                    updateContentGeometry(value.toInt());
+                });
+
+        connect(m_animation, &QVariantAnimation::finished, this,
+                [this]() {
+                    updateContentGeometry(m_expanded ? height() : 0);
+                });
+    }
+
+    void setContentWidget(QWidget *content)
+    {
+        m_content = content;
+        if (!m_content) {
+            return;
+        }
+
+        m_content->setParent(this);
+        m_content->show();
+        updateContentGeometry(m_expanded ? height() : 0);
+    }
+
+    void setExpanded(bool expanded)
+    {
+        if (m_expanded == expanded || !m_content) {
+            return;
+        }
+
+        m_expanded = expanded;
+        m_animation->stop();
+        m_animation->setStartValue(m_content->height());
+        m_animation->setEndValue(expanded ? height() : 0);
+        m_animation->start();
+    }
+
+protected:
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QWidget::resizeEvent(event);
+
+        if (!m_content) {
+            return;
+        }
+
+        if (m_animation->state() == QAbstractAnimation::Running) {
+            updateContentGeometry(qMin(m_content->height(), height()));
+        } else {
+            updateContentGeometry(m_expanded ? height() : 0);
+        }
+    }
+
+private:
+    void updateContentGeometry(int contentHeight)
+    {
+        if (!m_content) {
+            return;
+        }
+
+        const int clampedHeight = qBound(0, contentHeight, height());
+        m_content->setGeometry(0, 0, width(), clampedHeight);
+    }
+
+    QWidget *m_content = nullptr;
+    QVariantAnimation *m_animation = nullptr;
     bool m_expanded = true;
 };
 
@@ -84,13 +184,16 @@ HistoryPanel::HistoryPanel(QWidget *parent)
     m_headerButton = header;
     layout->addWidget(m_headerButton);
 
-    m_list = new QListWidget(this);
+    auto *revealContainer = new HistoryRevealContainer(this);
+
+    m_list = new QListWidget(revealContainer);
     m_list->setObjectName(QStringLiteral("historyList"));
     m_list->setSelectionMode(QAbstractItemView::SingleSelection);
     m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     m_list->setFocusPolicy(Qt::NoFocus);
-    layout->addWidget(m_list, 1);
+    revealContainer->setContentWidget(m_list);
+    layout->addWidget(revealContainer, 1);
 
     setStyleSheet(QStringLiteral(
         "QWidget#historyPanel {"
@@ -205,14 +308,8 @@ void HistoryPanel::setExpanded(bool expanded)
 
     m_expanded = expanded;
     static_cast<HistoryHeaderButton *>(m_headerButton)->setExpanded(expanded);
-    m_list->setVisible(expanded);
 
-    if (expanded) {
-        setMaximumHeight(QWIDGETSIZE_MAX);
-        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    } else {
-        setMaximumHeight(m_headerButton->height() + 12);
-        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    if (m_list && m_list->parentWidget()) {
+        static_cast<HistoryRevealContainer *>(m_list->parentWidget())->setExpanded(expanded);
     }
-    updateGeometry();
 }
