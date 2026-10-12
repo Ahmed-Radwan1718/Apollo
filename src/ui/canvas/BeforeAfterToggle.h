@@ -1,7 +1,11 @@
 #pragma once
 
 #include <QEasingCurve>
+#include <QEvent>
+#include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QImage>
+#include <QLabel>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QSignalBlocker>
@@ -19,6 +23,7 @@ public:
 
     explicit BeforeAfterToggle(QWidget *parent = nullptr)
         : QToolButton(parent)
+        , m_beforeLabel(new QLabel(tr("Before"), parent))
         , m_pulseAnimation(new QVariantAnimation(this))
     {
         setObjectName(QStringLiteral("beforeAfterToggle"));
@@ -29,6 +34,26 @@ public:
         setCursor(Qt::PointingHandCursor);
         setFocusPolicy(Qt::NoFocus);
         setToolTip(tr("Toggle original and current edit"));
+
+        if (m_beforeLabel) {
+            m_beforeLabel->setObjectName(QStringLiteral("beforeViewLabel"));
+            m_beforeLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+            m_beforeLabel->setStyleSheet(QStringLiteral(
+                "QLabel#beforeViewLabel {"
+                "  color: #ffffff;"
+                "  background: rgba(0, 0, 0, 145);"
+                "  border-radius: 2px;"
+                "  padding: 3px 7px;"
+                "  font-size: 12px;"
+                "  font-weight: 600;"
+                "}"));
+            m_beforeLabel->adjustSize();
+            m_beforeLabel->hide();
+        }
+
+        if (parent) {
+            parent->installEventFilter(this);
+        }
 
         m_pulseAnimation->setDuration(180);
         m_pulseAnimation->setStartValue(0.0);
@@ -50,6 +75,8 @@ public:
 
         connect(this, &QToolButton::toggled, this,
                 [this](bool showingBefore) {
+                    setBeforeLabelVisible(showingBefore);
+
                     if (!m_displayCallback) {
                         return;
                     }
@@ -82,6 +109,7 @@ public:
         const QSignalBlocker blocker(this);
         setChecked(false);
         setEnabled(!image.isNull());
+        setBeforeLabelVisible(false);
     }
 
     void setCurrentImage(const QImage &image, const QSizeF &logicalSize)
@@ -105,6 +133,7 @@ public:
         const QSignalBlocker blocker(this);
         setChecked(false);
         setEnabled(false);
+        setBeforeLabelVisible(false);
     }
 
     [[nodiscard]] bool showingBefore() const noexcept
@@ -113,6 +142,20 @@ public:
     }
 
 protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (watched == parentWidget()
+            && m_beforeLabel
+            && m_beforeLabel->isVisible()
+            && (event->type() == QEvent::Paint
+                || event->type() == QEvent::Resize
+                || event->type() == QEvent::Show)) {
+            positionBeforeLabel();
+        }
+
+        return QToolButton::eventFilter(watched, event);
+    }
+
     void paintEvent(QPaintEvent *event) override
     {
         Q_UNUSED(event);
@@ -139,10 +182,60 @@ protected:
     }
 
 private:
+    QGraphicsView *graphicsView() const
+    {
+        QWidget *widget = parentWidget();
+        while (widget) {
+            if (auto *view = qobject_cast<QGraphicsView *>(widget)) {
+                return view;
+            }
+            widget = widget->parentWidget();
+        }
+        return nullptr;
+    }
+
+    void setBeforeLabelVisible(bool visible)
+    {
+        if (!m_beforeLabel) {
+            return;
+        }
+
+        m_beforeLabel->setVisible(visible && isEnabled());
+        if (m_beforeLabel->isVisible()) {
+            positionBeforeLabel();
+        }
+    }
+
+    void positionBeforeLabel()
+    {
+        if (!m_beforeLabel || !m_beforeLabel->isVisible() || !parentWidget()) {
+            return;
+        }
+
+        QGraphicsView *view = graphicsView();
+        if (!view || !view->scene() || view->scene()->sceneRect().isEmpty()) {
+            return;
+        }
+
+        const QRect imageRect = view->mapFromScene(view->scene()->sceneRect())
+                                    .boundingRect()
+                                    .intersected(parentWidget()->rect());
+        if (imageRect.isEmpty()) {
+            return;
+        }
+
+        constexpr int margin = 10;
+        m_beforeLabel->adjustSize();
+        m_beforeLabel->move(imageRect.left() + margin,
+                            imageRect.top() + margin);
+        m_beforeLabel->raise();
+    }
+
     QImage m_originalImage;
     QImage m_currentImage;
     QSizeF m_currentLogicalSize;
     DisplayCallback m_displayCallback;
+    QLabel *m_beforeLabel = nullptr;
     QVariantAnimation *m_pulseAnimation = nullptr;
     qreal m_pulse = 0.0;
 };
