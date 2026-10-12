@@ -232,6 +232,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_tintSlider = m_basicPanel->findChild<QSlider *>(QStringLiteral("tintSlider"));
     m_exposureSlider = findExposureSlider(m_basicPanel);
     m_highlightsSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Highlights"));
+    m_shadowsSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Shadows"));
     m_contrastSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Contrast"));
     m_saturationSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Saturation"));
     m_vibranceSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Vibrance"));
@@ -322,6 +323,27 @@ MainWindow::MainWindow(QWidget *parent)
                 [this]() {
                     if (!m_settingDevelopControls) {
                         applyHighlights(m_highlightsSlider->value());
+                    }
+                });
+    }
+
+    if (m_shadowsSlider) {
+        connect(m_shadowsSlider, &QSlider::valueChanged, this,
+                [this](int shadows) {
+                    if (m_settingDevelopControls) {
+                        return;
+                    }
+
+                    if (m_shadowsSlider->isSliderDown()) {
+                        previewShadows(shadows);
+                    } else {
+                        applyShadows(shadows);
+                    }
+                });
+        connect(m_shadowsSlider, &QSlider::sliderReleased, this,
+                [this]() {
+                    if (!m_settingDevelopControls) {
+                        applyShadows(m_shadowsSlider->value());
                     }
                 });
     }
@@ -533,6 +555,21 @@ void MainWindow::applyHighlights(int highlights)
                       tr("Highlights %1").arg(signedHistoryValue(highlights)));
 }
 
+void MainWindow::previewShadows(int shadows)
+{
+    DevelopState state = m_requestedState;
+    state.shadows = shadows;
+    requestPreview(state);
+}
+
+void MainWindow::applyShadows(int shadows)
+{
+    DevelopState state = m_requestedState;
+    state.shadows = shadows;
+    requestFullRender(state,
+                      tr("Shadows %1").arg(signedHistoryValue(shadows)));
+}
+
 void MainWindow::previewContrast(int contrast)
 {
     DevelopState state = m_requestedState;
@@ -591,6 +628,7 @@ void MainWindow::requestPreview(const DevelopState &state)
                                     state.tint,
                                     state.exposureHundredths,
                                     state.highlights,
+                                    state.shadows,
                                     state.contrast,
                                     state.saturation,
                                     state.vibrance);
@@ -614,6 +652,7 @@ void MainWindow::requestFullRender(const DevelopState &state, const QString &his
                                        state.tint,
                                        state.exposureHundredths,
                                        state.highlights,
+                                       state.shadows,
                                        state.contrast,
                                        state.saturation,
                                        state.vibrance);
@@ -624,6 +663,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
                                      int tint,
                                      int exposureHundredths,
                                      int highlights,
+                                     int shadows,
                                      int contrast,
                                      int saturation,
                                      int vibrance,
@@ -636,6 +676,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
         tint,
         exposureHundredths,
         highlights,
+        shadows,
         contrast,
         saturation,
         vibrance,
@@ -739,6 +780,9 @@ void MainWindow::setDevelopControlsFromState(const DevelopState &state)
     }
     if (m_highlightsSlider) {
         m_highlightsSlider->setValue(state.highlights);
+    }
+    if (m_shadowsSlider) {
+        m_shadowsSlider->setValue(state.shadows);
     }
     if (m_contrastSlider) {
         m_contrastSlider->setValue(state.contrast);

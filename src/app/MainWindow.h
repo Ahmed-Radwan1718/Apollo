@@ -42,6 +42,7 @@ private slots:
                              int tint,
                              int exposureHundredths,
                              int highlights,
+                             int shadows,
                              int contrast,
                              int saturation,
                              int vibrance,
@@ -63,6 +64,8 @@ private:
     void applyExposure(int exposureHundredths);
     void previewHighlights(int highlights);
     void applyHighlights(int highlights);
+    void previewShadows(int shadows);
+    void applyShadows(int shadows);
     void previewContrast(int contrast);
     void applyContrast(int contrast);
     void previewSaturation(int saturation);
@@ -85,6 +88,7 @@ private:
     QSlider *m_tintSlider = nullptr;
     QSlider *m_exposureSlider = nullptr;
     QSlider *m_highlightsSlider = nullptr;
+    QSlider *m_shadowsSlider = nullptr;
     QSlider *m_contrastSlider = nullptr;
     QSlider *m_saturationSlider = nullptr;
     QSlider *m_vibranceSlider = nullptr;

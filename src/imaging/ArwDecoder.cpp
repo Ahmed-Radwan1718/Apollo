@@ -32,6 +32,12 @@ constexpr double kHighlightsMaskStartEv = 1.0;
 constexpr double kHighlightsMaskFullEv = 3.0;
 constexpr double kHighlightsMaximumCompression = 0.9;
 constexpr double kHighlightsMaximumExpansion = 0.5;
+constexpr int kShadowsMinimum = -100;
+constexpr int kShadowsMaximum = 100;
+constexpr double kShadowsMaskStartEv = -1.0;
+constexpr double kShadowsMaskFullEv = -3.0;
+constexpr double kShadowsMaximumLiftCompression = 0.8;
+constexpr double kShadowsMaximumDeepenExpansion = 0.5;
 constexpr int kContrastMinimum = -100;
 constexpr int kContrastMaximum = 100;
 constexpr double kContrastPivot = kSceneMiddleGray;
@@ -594,6 +600,63 @@ void applyLinearHighlights(double &red,
     blue *= gain;
 }
 
+double integratedShadowWeightEv(double sceneEv)
+{
+    if (sceneEv >= kShadowsMaskStartEv) {
+        return 0.0;
+    }
+
+    const double width = kShadowsMaskStartEv - kShadowsMaskFullEv;
+    if (sceneEv <= kShadowsMaskFullEv) {
+        return 0.5 * width + (kShadowsMaskFullEv - sceneEv);
+    }
+
+    const double x = (kShadowsMaskStartEv - sceneEv) / width;
+    return width * (x * x * x - 0.5 * x * x * x * x);
+}
+
+void applyLinearShadows(double &red,
+                        double &green,
+                        double &blue,
+                        int shadows)
+{
+    const int clampedShadows = std::clamp(shadows,
+                                           kShadowsMinimum,
+                                           kShadowsMaximum);
+    if (clampedShadows == 0) {
+        return;
+    }
+
+    const double luminance = red * kLinearSrgbRedLuminance
+        + green * kLinearSrgbGreenLuminance
+        + blue * kLinearSrgbBlueLuminance;
+    if (luminance <= std::numeric_limits<double>::epsilon()) {
+        return;
+    }
+
+    // Mirror the scene-referred highlight curve below middle gray. The control
+    // begins at -1 EV and reaches full influence by -3 EV. Integrating the
+    // smoothstep changes the shadow slope continuously, so even at +/-100 the
+    // tone mapping remains monotonic instead of folding dark values over each other.
+    const double sceneEv = std::log2(luminance / kSceneMiddleGray);
+    const double weightedEv = integratedShadowWeightEv(sceneEv);
+    if (weightedEv <= 0.0) {
+        return;
+    }
+
+    const double amount = std::abs(static_cast<double>(clampedShadows)) / 100.0;
+    const double slopeChange = clampedShadows > 0
+        ? kShadowsMaximumLiftCompression * amount
+        : -kShadowsMaximumDeepenExpansion * amount;
+    const double gain = std::exp2(slopeChange * weightedEv);
+
+    // Use one linear-light gain for all channels so lifting or deepening shadows
+    // preserves the pixel's chromatic ratios instead of introducing a color cast.
+    red *= gain;
+    green *= gain;
+    blue *= gain;
+}
+
 Oklab linearSrgbToOklab(const LinearRgb &rgb)
 {
     const double l = 0.4122214708 * rgb.red
@@ -755,6 +818,7 @@ void applyOklabVibrance(double &red,
 QImage developedSrgbImage(const libraw_processed_image_t &processed,
                           int exposureHundredths,
                           int highlights,
+                          int shadows,
                           int contrast,
                           int saturation,
                           int vibrance,
@@ -790,6 +854,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
     const int clampedHighlights = std::clamp(highlights,
                                               kHighlightsMinimum,
                                               kHighlightsMaximum);
+    const int clampedShadows = std::clamp(shadows,
+                                           kShadowsMinimum,
+                                           kShadowsMaximum);
     const int clampedContrast = std::clamp(contrast,
                                            kContrastMinimum,
                                            kContrastMaximum);
@@ -806,7 +873,7 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
         return {};
     }
 
-    if (clampedHighlights == 0 && clampedContrast == 0
+    if (clampedHighlights == 0 && clampedShadows == 0 && clampedContrast == 0
         && clampedSaturation == 0 && clampedVibrance == 0) {
         // Keep the neutral path byte-for-byte equivalent to the existing exposure
         // render and avoid per-pixel floating-point work when tonal/color controls are 0.
@@ -846,6 +913,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                 if (clampedHighlights != 0) {
                     applyLinearHighlights(red, green, blue, clampedHighlights);
                 }
+                if (clampedShadows != 0) {
+                    applyLinearShadows(red, green, blue, clampedShadows);
+                }
                 if (clampedContrast != 0) {
                     applyLinearContrast(red, green, blue, clampedContrast);
                 }
@@ -877,6 +947,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                           int tint,
                           int exposureHundredths,
                           int highlights,
+                          int shadows,
                           int contrast,
                           int saturation,
                           int vibrance,
@@ -892,9 +963,9 @@ QImage ArwDecoder::decode(const QString &filePath,
     LibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
 
     // Ask LibRaw for a high-precision linear sRGB render. Nexus performs the
-    // final exposure, scene-referred highlights, midtone contrast, perceptual
-    // vibrance, saturation, and sRGB transfer itself instead of editing an
-    // already rendered 8-bit image.
+    // final exposure, scene-referred highlights and shadows, midtone contrast,
+    // perceptual vibrance, saturation, and sRGB transfer itself instead of
+    // editing an already rendered 8-bit image.
     processor.imgdata.params.use_camera_wb = 1;
     processor.imgdata.params.use_camera_matrix = 1;
     processor.imgdata.params.output_color = 1; // linear sRGB primaries
@@ -977,6 +1048,7 @@ QImage ArwDecoder::decode(const QString &filePath,
     QImage image = developedSrgbImage(*processed,
                                       exposureHundredths,
                                       highlights,
+                                      shadows,
                                       contrast,
                                       saturation,
                                       vibrance,

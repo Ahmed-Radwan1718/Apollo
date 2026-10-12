@@ -34,11 +34,12 @@ void TemperatureRenderService::requestPreview(const QString &filePath,
                                               int tint,
                                               int exposureHundredths,
                                               int highlights,
+                                              int shadows,
                                               int contrast,
                                               int saturation,
                                               int vibrance)
 {
-    request({filePath, kelvin, tint, exposureHundredths, highlights,
+    request({filePath, kelvin, tint, exposureHundredths, highlights, shadows,
              contrast, saturation, vibrance},
             true);
 }
@@ -48,11 +49,12 @@ void TemperatureRenderService::requestFullRender(const QString &filePath,
                                                  int tint,
                                                  int exposureHundredths,
                                                  int highlights,
+                                                 int shadows,
                                                  int contrast,
                                                  int saturation,
                                                  int vibrance)
 {
-    request({filePath, kelvin, tint, exposureHundredths, highlights,
+    request({filePath, kelvin, tint, exposureHundredths, highlights, shadows,
              contrast, saturation, vibrance},
             false);
 }
@@ -108,6 +110,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                           request.tint,
                                           request.exposureHundredths,
                                           request.highlights,
+                                          request.shadows,
                                           request.contrast,
                                           request.saturation,
                                           request.vibrance,
@@ -125,6 +128,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                  request.tint,
                                  request.exposureHundredths,
                                  request.highlights,
+                                 request.shadows,
                                  request.contrast,
                                  request.saturation,
                                  request.vibrance,
