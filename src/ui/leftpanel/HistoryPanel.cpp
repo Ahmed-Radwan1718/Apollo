@@ -1,9 +1,11 @@
 #include "ui/leftpanel/HistoryPanel.h"
 
 #include <QAbstractItemView>
+#include <QKeySequence>
 #include <QListWidget>
 #include <QPainter>
 #include <QPaintEvent>
+#include <QShortcut>
 #include <QSizePolicy>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -125,6 +127,33 @@ HistoryPanel::HistoryPanel(QWidget *parent)
                 const int row = m_list->row(item);
                 if (row >= 0) {
                     emit entryActivated(row);
+                }
+            });
+
+    QWidget *shortcutParent = window();
+    if (!shortcutParent) {
+        shortcutParent = this;
+    }
+
+    auto *undoShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Z")),
+                                       shortcutParent);
+    undoShortcut->setContext(Qt::WindowShortcut);
+    connect(undoShortcut, &QShortcut::activated, this,
+            [this]() {
+                const int currentRow = m_list->currentRow();
+                if (currentRow > 0) {
+                    emit entryActivated(currentRow - 1);
+                }
+            });
+
+    auto *redoShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+Z")),
+                                       shortcutParent);
+    redoShortcut->setContext(Qt::WindowShortcut);
+    connect(redoShortcut, &QShortcut::activated, this,
+            [this]() {
+                const int currentRow = m_list->currentRow();
+                if (currentRow >= 0 && currentRow + 1 < m_list->count()) {
+                    emit entryActivated(currentRow + 1);
                 }
             });
 }
