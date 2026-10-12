@@ -1,9 +1,11 @@
 #include "imaging/TemperatureRenderService.h"
 
 #include "imaging/ArwDecoder.h"
+#include "imaging/ArwPreviewSession.h"
 
 #include <QMetaObject>
 
+#include <memory>
 #include <utility>
 
 namespace imaging {
@@ -27,6 +29,18 @@ TemperatureRenderService::~TemperatureRenderService()
     if (m_fullThread.joinable()) {
         m_fullThread.join();
     }
+}
+
+void TemperatureRenderService::preparePreview(const QString &filePath,
+                                              int kelvin,
+                                              int tint)
+{
+    Request request;
+    request.filePath = filePath;
+    request.kelvin = kelvin;
+    request.tint = tint;
+    request.prepareOnly = true;
+    this->request(std::move(request), true);
 }
 
 void TemperatureRenderService::requestPreview(const QString &filePath,
@@ -64,6 +78,11 @@ void TemperatureRenderService::requestFullRender(const QString &filePath,
                                                  int saturation,
                                                  int vibrance)
 {
+    {
+        std::lock_guard lock(m_previewMutex);
+        m_pendingPreview.reset();
+    }
+
     request({filePath, kelvin, tint, exposureHundredths, highlights, shadows,
              whites, blacks, contrast, texture, clarity, dehaze, saturation, vibrance},
             false);
@@ -81,7 +100,7 @@ void TemperatureRenderService::request(Request request, bool preview)
 
     {
         std::lock_guard lock(mutex);
-        // Keep only the newest develop state. A RAW render already in progress may
+        // Keep only the newest develop state. A render already in progress may
         // finish, but obsolete develop-control positions never queue.
         pending = std::move(request);
     }
@@ -94,6 +113,10 @@ void TemperatureRenderService::workerLoop(bool preview)
     std::mutex &mutex = preview ? m_previewMutex : m_fullMutex;
     std::condition_variable &condition = preview ? m_previewCondition : m_fullCondition;
     std::optional<Request> &pending = preview ? m_pendingPreview : m_pendingFull;
+    std::unique_ptr<ArwPreviewSession> previewSession;
+    if (preview) {
+        previewSession = std::make_unique<ArwPreviewSession>();
+    }
 
     while (!m_stopping.load(std::memory_order_acquire)) {
         Request request;
@@ -112,24 +135,52 @@ void TemperatureRenderService::workerLoop(bool preview)
             pending.reset();
         }
 
+        if (preview && request.prepareOnly) {
+            QString ignoredError;
+            previewSession->prepare(request.filePath,
+                                    request.kelvin,
+                                    request.tint,
+                                    &ignoredError);
+            continue;
+        }
+
         QString error;
-        QImage image = ArwDecoder::decode(request.filePath,
-                                          &error,
-                                          nullptr,
-                                          request.kelvin,
-                                          request.tint,
-                                          request.exposureHundredths,
-                                          request.highlights,
-                                          request.shadows,
-                                          request.whites,
-                                          request.blacks,
-                                          request.contrast,
-                                          request.texture,
-                                          request.clarity,
-                                          request.dehaze,
-                                          request.saturation,
-                                          request.vibrance,
-                                          preview);
+        QImage image;
+        if (preview) {
+            image = previewSession->render(request.filePath,
+                                           &error,
+                                           request.kelvin,
+                                           request.tint,
+                                           request.exposureHundredths,
+                                           request.highlights,
+                                           request.shadows,
+                                           request.whites,
+                                           request.blacks,
+                                           request.contrast,
+                                           request.texture,
+                                           request.clarity,
+                                           request.dehaze,
+                                           request.saturation,
+                                           request.vibrance);
+        } else {
+            image = ArwDecoder::decode(request.filePath,
+                                       &error,
+                                       nullptr,
+                                       request.kelvin,
+                                       request.tint,
+                                       request.exposureHundredths,
+                                       request.highlights,
+                                       request.shadows,
+                                       request.whites,
+                                       request.blacks,
+                                       request.contrast,
+                                       request.texture,
+                                       request.clarity,
+                                       request.dehaze,
+                                       request.saturation,
+                                       request.vibrance,
+                                       false);
+        }
 
         QMetaObject::invokeMethod(
             this,

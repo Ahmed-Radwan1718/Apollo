@@ -20,6 +20,9 @@ public:
     explicit TemperatureRenderService(QObject *parent = nullptr);
     ~TemperatureRenderService() override;
 
+    void preparePreview(const QString &filePath,
+                        int kelvin,
+                        int tint);
     void requestPreview(const QString &filePath,
                         int kelvin,
                         int tint,
@@ -84,6 +87,7 @@ private:
         int dehaze = 0;
         int saturation = 0;
         int vibrance = 0;
+        bool prepareOnly = false;
     };
 
     void request(Request request, bool preview);

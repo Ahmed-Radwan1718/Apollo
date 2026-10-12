@@ -12,6 +12,12 @@ qt_standard_project_setup()
 include(cmake/LibRaw.cmake)
 nexus_add_libraw()
 
+set_source_files_properties(
+    src/imaging/ArwDecoder.cpp
+    src/imaging/ArwPreviewSessionImpl.inc
+    PROPERTIES HEADER_FILE_ONLY TRUE
+)
+
 qt_add_executable(Nexus WIN32
     src/main.cpp
     src/app/DevelopState.h
@@ -19,8 +25,11 @@ qt_add_executable(Nexus WIN32
     src/app/HistoryModel.h
     src/app/MainWindow.cpp
     src/app/MainWindow.h
+    src/imaging/ArwPipeline.cpp
     src/imaging/ArwDecoder.cpp
     src/imaging/ArwDecoder.h
+    src/imaging/ArwPreviewSession.h
+    src/imaging/ArwPreviewSessionImpl.inc
     src/imaging/Histogram.cpp
     src/imaging/Histogram.h
     src/imaging/ImageLoader.cpp

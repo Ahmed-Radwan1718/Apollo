@@ -138,6 +138,19 @@ QSlider *findLabeledSlider(BasicPanel *panel, const QString &labelText)
     return nullptr;
 }
 
+bool hasActiveDevelopSlider(const BasicPanel *panel)
+{
+    if (!panel) {
+        return false;
+    }
+
+    const QList<QSlider *> sliders = panel->findChildren<QSlider *>();
+    return std::any_of(sliders.cbegin(), sliders.cend(),
+                       [](const QSlider *slider) {
+                           return slider && slider->isSliderDown();
+                       });
+}
+
 } // namespace
 
 MainWindow::MainWindow(QWidget *parent)
@@ -602,6 +615,10 @@ void MainWindow::openImage(const QString &filePath)
 
     if (!showingOriginal && isArwPath(m_currentFilePath)) {
         requestFullRender(m_requestedState);
+    } else if (showingOriginal && isArwPath(m_currentFilePath)) {
+        m_renderService->preparePreview(m_currentFilePath,
+                                        m_requestedState.temperatureKelvin,
+                                        m_requestedState.tint);
     }
 }
 
@@ -887,7 +904,12 @@ void MainWindow::handleDevelopRender(const QString &filePath,
         vibrance,
     };
 
-    if (filePath != m_currentFilePath || renderedState != m_requestedState) {
+    if (filePath != m_currentFilePath) {
+        return;
+    }
+
+    if (renderedState != m_requestedState
+        && (!preview || !hasActiveDevelopSlider(m_basicPanel))) {
         return;
     }
 
@@ -911,6 +933,9 @@ void MainWindow::handleDevelopRender(const QString &filePath,
         m_canvas->replaceImage(image);
         m_fullImageSize = image.size();
         m_fullQualityState = renderedState;
+        m_renderService->preparePreview(filePath,
+                                        temperatureKelvin,
+                                        tint);
     }
 
     m_navigator->setImage(image);
