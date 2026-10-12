@@ -29,6 +29,7 @@ public:
                         int whites,
                         int contrast,
                         int texture,
+                        int clarity,
                         int dehaze,
                         int saturation,
                         int vibrance);
@@ -41,6 +42,7 @@ public:
                            int whites,
                            int contrast,
                            int texture,
+                           int clarity,
                            int dehaze,
                            int saturation,
                            int vibrance);
@@ -55,6 +57,7 @@ signals:
                      int whites,
                      int contrast,
                      int texture,
+                     int clarity,
                      int dehaze,
                      int saturation,
                      int vibrance,
@@ -73,6 +76,7 @@ private:
         int whites = 0;
         int contrast = 0;
         int texture = 0;
+        int clarity = 0;
         int dehaze = 0;
         int saturation = 0;
         int vibrance = 0;

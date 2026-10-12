@@ -60,6 +60,18 @@ constexpr double kTextureShadowProtectionStartEv = -5.0;
 constexpr double kTextureShadowProtectionFullEv = -2.5;
 constexpr double kTextureHighlightProtectionStartEv = 2.0;
 constexpr double kTextureHighlightProtectionEndEv = 3.5;
+constexpr int kClarityMinimum = -100;
+constexpr int kClarityMaximum = 100;
+constexpr double kClarityReferenceShortSide = 4000.0;
+constexpr double kClaritySmallRadiusAtReference = 4.0;
+constexpr double kClarityLargeRadiusAtReference = 24.0;
+constexpr double kClarityMaximumBandGain = 1.05;
+constexpr double kClarityBandSoftLimitEv = 0.60;
+constexpr double kClarityMaximumAdjustmentEv = 0.45;
+constexpr double kClarityShadowProtectionStartEv = -4.0;
+constexpr double kClarityShadowProtectionFullEv = -1.5;
+constexpr double kClarityHighlightProtectionStartEv = 1.0;
+constexpr double kClarityHighlightProtectionEndEv = 2.75;
 constexpr int kDehazeMinimum = -100;
 constexpr int kDehazeMaximum = 100;
 constexpr int kDehazeAirlightHistogramBins = 512;
@@ -1000,6 +1012,125 @@ void applyLinearTexture(double &red,
     blue *= gain;
 }
 
+std::pair<int, int> clarityRadii(int width, int height)
+{
+    const int shortSide = std::max(1, std::min(width, height));
+    const double scale = static_cast<double>(shortSide) / kClarityReferenceShortSide;
+    const int smallRadius = std::clamp(
+        static_cast<int>(std::lround(kClaritySmallRadiusAtReference * scale)), 2, 8);
+    const int largeRadius = std::clamp(
+        static_cast<int>(std::lround(kClarityLargeRadiusAtReference * scale)),
+        smallRadius + 4,
+        64);
+    return {smallRadius, largeRadius};
+}
+
+bool buildClarityBand(const std::uint16_t *samples,
+                      std::size_t pixelCount,
+                      int width,
+                      int height,
+                      double sampleScale,
+                      int highlights,
+                      int shadows,
+                      int whites,
+                      int contrast,
+                      std::vector<float> &clarityBand,
+                      std::vector<float> &scratch,
+                      QString *error)
+{
+    try {
+        clarityBand.resize(pixelCount);
+        scratch.resize(pixelCount);
+    } catch (const std::bad_alloc &) {
+        setError(error, QStringLiteral("Not enough memory to calculate the RAW clarity adjustment."));
+        return false;
+    }
+
+    constexpr double minimumLuminance = 1e-8;
+    for (std::size_t pixel = 0; pixel < pixelCount; ++pixel) {
+        const LinearRgb rgb = toneAdjustedLinearRgb(samples,
+                                                    pixel * 3,
+                                                    sampleScale,
+                                                    highlights,
+                                                    shadows,
+                                                    whites,
+                                                    contrast);
+        clarityBand[pixel] = static_cast<float>(
+            std::log2(std::max(linearLuminance(rgb), minimumLuminance)));
+    }
+
+    const auto [smallRadius, largeRadius] = clarityRadii(width, height);
+
+    // Clarity works at a deliberately broader scale than Texture. The first
+    // blur removes fine texture and sensor noise; subtracting a much wider local
+    // base then isolates medium/large scene structure for local-contrast shaping.
+    horizontalBoxBlur(clarityBand, scratch, width, height, smallRadius);
+    verticalBoxBlur(scratch, clarityBand, width, height, smallRadius);
+    horizontalBoxBlur(clarityBand, scratch, width, height, largeRadius);
+    verticalBoxBlurDifference(scratch, clarityBand, width, height, largeRadius);
+    return true;
+}
+
+double clarityToneWeight(double luminance)
+{
+    if (luminance <= std::numeric_limits<double>::epsilon()) {
+        return 0.0;
+    }
+
+    const double sceneEv = std::log2(luminance / kSceneMiddleGray);
+    const double shadowWeight = smoothstep01(
+        (sceneEv - kClarityShadowProtectionStartEv)
+        / (kClarityShadowProtectionFullEv - kClarityShadowProtectionStartEv));
+    const double highlightWeight = 1.0 - smoothstep01(
+        (sceneEv - kClarityHighlightProtectionStartEv)
+        / (kClarityHighlightProtectionEndEv - kClarityHighlightProtectionStartEv));
+    return shadowWeight * highlightWeight;
+}
+
+void applyLinearClarity(double &red,
+                        double &green,
+                        double &blue,
+                        int clarity,
+                        float bandEv)
+{
+    const int clampedClarity = std::clamp(clarity,
+                                           kClarityMinimum,
+                                           kClarityMaximum);
+    if (clampedClarity == 0) {
+        return;
+    }
+
+    const LinearRgb rgb{red, green, blue};
+    const double luminance = linearLuminance(rgb);
+    const double toneWeight = clarityToneWeight(luminance);
+    if (toneWeight <= 0.0) {
+        return;
+    }
+
+    // Soft-limit unusually strong local edges before scaling them. This keeps
+    // broad local contrast responsive while preventing extreme dark/light halos
+    // from growing linearly at high Clarity settings.
+    const double rawBandEv = static_cast<double>(bandEv);
+    const double compressedBandEv = kClarityBandSoftLimitEv
+        * std::tanh(rawBandEv / kClarityBandSoftLimitEv);
+    const double amount = static_cast<double>(clampedClarity) / 100.0;
+    const double requestedAdjustmentEv = amount
+        * kClarityMaximumBandGain
+        * compressedBandEv
+        * toneWeight;
+    const double adjustmentEv = std::clamp(requestedAdjustmentEv,
+                                            -kClarityMaximumAdjustmentEv,
+                                            kClarityMaximumAdjustmentEv);
+    const double gain = std::exp2(adjustmentEv);
+
+    // The local structure is measured from luminance only, then applied as one
+    // linear-light gain to RGB. Positive Clarity expands broader local contrast;
+    // negative Clarity compresses it without deliberately rotating hue.
+    red *= gain;
+    green *= gain;
+    blue *= gain;
+}
+
 LinearRgb estimateDehazeAirlight(const std::uint16_t *samples,
                                  std::size_t pixelCount,
                                  double sampleScale,
@@ -1358,6 +1489,7 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                           int whites,
                           int contrast,
                           int texture,
+                          int clarity,
                           int dehaze,
                           int saturation,
                           int vibrance,
@@ -1405,6 +1537,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
     const int clampedTexture = std::clamp(texture,
                                           kTextureMinimum,
                                           kTextureMaximum);
+    const int clampedClarity = std::clamp(clarity,
+                                          kClarityMinimum,
+                                          kClarityMaximum);
     const int clampedDehaze = std::clamp(dehaze,
                                          kDehazeMinimum,
                                          kDehazeMaximum);
@@ -1422,8 +1557,8 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
     }
 
     if (clampedHighlights == 0 && clampedShadows == 0 && clampedWhites == 0
-        && clampedContrast == 0 && clampedTexture == 0 && clampedDehaze == 0
-        && clampedSaturation == 0 && clampedVibrance == 0) {
+        && clampedContrast == 0 && clampedTexture == 0 && clampedClarity == 0
+        && clampedDehaze == 0 && clampedSaturation == 0 && clampedVibrance == 0) {
         // Keep the neutral path byte-for-byte equivalent to the existing exposure
         // render and avoid per-pixel floating-point work when develop controls are 0.
         std::vector<std::uint8_t> transferTable(kLinearMaximum + 1);
@@ -1449,6 +1584,8 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
         const double sampleScale = totalGain / static_cast<double>(kLinearMaximum);
         std::vector<float> textureBand;
         std::vector<float> textureScratch;
+        std::vector<float> clarityBand;
+        std::vector<float> clarityScratch;
 
         if (clampedTexture != 0
             && !buildTextureBand(samples,
@@ -1462,6 +1599,22 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                                  clampedContrast,
                                  textureBand,
                                  textureScratch,
+                                 error)) {
+            return {};
+        }
+
+        if (clampedClarity != 0
+            && !buildClarityBand(samples,
+                                 pixelCount,
+                                 static_cast<int>(processed.width),
+                                 static_cast<int>(processed.height),
+                                 sampleScale,
+                                 clampedHighlights,
+                                 clampedShadows,
+                                 clampedWhites,
+                                 clampedContrast,
+                                 clarityBand,
+                                 clarityScratch,
                                  error)) {
             return {};
         }
@@ -1499,6 +1652,13 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                                        rgb.blue,
                                        clampedTexture,
                                        textureBand[pixel]);
+                }
+                if (clampedClarity != 0) {
+                    applyLinearClarity(rgb.red,
+                                       rgb.green,
+                                       rgb.blue,
+                                       clampedClarity,
+                                       clarityBand[pixel]);
                 }
                 if (clampedDehaze != 0) {
                     applyLinearDehaze(rgb.red,
@@ -1539,6 +1699,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                           int whites,
                           int contrast,
                           int texture,
+                          int clarity,
                           int dehaze,
                           int saturation,
                           int vibrance,
@@ -1554,9 +1715,9 @@ QImage ArwDecoder::decode(const QString &filePath,
     LibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
 
     // Ask LibRaw for a high-precision linear sRGB render. Nexus performs the
-    // final exposure, scene-referred tonal controls, local texture contrast,
-    // atmospheric dehaze, perceptual vibrance, saturation, and sRGB transfer
-    // itself instead of editing an already rendered 8-bit image.
+    // final exposure, scene-referred tonal controls, texture and clarity local
+    // contrast, atmospheric dehaze, perceptual vibrance, saturation, and sRGB
+    // transfer itself instead of editing an already rendered 8-bit image.
     processor.imgdata.params.use_camera_wb = 1;
     processor.imgdata.params.use_camera_matrix = 1;
     processor.imgdata.params.output_color = 1; // linear sRGB primaries
@@ -1643,6 +1804,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                                       whites,
                                       contrast,
                                       texture,
+                                      clarity,
                                       dehaze,
                                       saturation,
                                       vibrance,

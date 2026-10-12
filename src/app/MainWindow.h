@@ -46,6 +46,7 @@ private slots:
                              int whites,
                              int contrast,
                              int texture,
+                             int clarity,
                              int dehaze,
                              int saturation,
                              int vibrance,
@@ -75,6 +76,8 @@ private:
     void applyContrast(int contrast);
     void previewTexture(int texture);
     void applyTexture(int texture);
+    void previewClarity(int clarity);
+    void applyClarity(int clarity);
     void previewDehaze(int dehaze);
     void applyDehaze(int dehaze);
     void previewSaturation(int saturation);
@@ -101,6 +104,7 @@ private:
     QSlider *m_whitesSlider = nullptr;
     QSlider *m_contrastSlider = nullptr;
     QSlider *m_textureSlider = nullptr;
+    QSlider *m_claritySlider = nullptr;
     QSlider *m_dehazeSlider = nullptr;
     QSlider *m_saturationSlider = nullptr;
     QSlider *m_vibranceSlider = nullptr;

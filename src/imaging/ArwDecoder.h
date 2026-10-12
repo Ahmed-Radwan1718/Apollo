@@ -35,6 +35,7 @@ public:
                                        int whites = 0,
                                        int contrast = 0,
                                        int texture = 0,
+                                       int clarity = 0,
                                        int dehaze = 0,
                                        int saturation = 0,
                                        int vibrance = 0,

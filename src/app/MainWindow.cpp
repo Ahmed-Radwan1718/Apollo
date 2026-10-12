@@ -236,6 +236,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_whitesSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Whites"));
     m_contrastSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Contrast"));
     m_textureSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Texture"));
+    m_claritySlider = findLabeledSlider(m_basicPanel, QStringLiteral("Clarity"));
     m_dehazeSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Dehaze"));
     m_saturationSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Saturation"));
     m_vibranceSlider = findLabeledSlider(m_basicPanel, QStringLiteral("Vibrance"));
@@ -410,6 +411,27 @@ MainWindow::MainWindow(QWidget *parent)
                 [this]() {
                     if (!m_settingDevelopControls) {
                         applyTexture(m_textureSlider->value());
+                    }
+                });
+    }
+
+    if (m_claritySlider) {
+        connect(m_claritySlider, &QSlider::valueChanged, this,
+                [this](int clarity) {
+                    if (m_settingDevelopControls) {
+                        return;
+                    }
+
+                    if (m_claritySlider->isSliderDown()) {
+                        previewClarity(clarity);
+                    } else {
+                        applyClarity(clarity);
+                    }
+                });
+        connect(m_claritySlider, &QSlider::sliderReleased, this,
+                [this]() {
+                    if (!m_settingDevelopControls) {
+                        applyClarity(m_claritySlider->value());
                     }
                 });
     }
@@ -681,6 +703,21 @@ void MainWindow::applyTexture(int texture)
                       tr("Texture %1").arg(signedHistoryValue(texture)));
 }
 
+void MainWindow::previewClarity(int clarity)
+{
+    DevelopState state = m_requestedState;
+    state.clarity = clarity;
+    requestPreview(state);
+}
+
+void MainWindow::applyClarity(int clarity)
+{
+    DevelopState state = m_requestedState;
+    state.clarity = clarity;
+    requestFullRender(state,
+                      tr("Clarity %1").arg(signedHistoryValue(clarity)));
+}
+
 void MainWindow::previewDehaze(int dehaze)
 {
     DevelopState state = m_requestedState;
@@ -743,6 +780,7 @@ void MainWindow::requestPreview(const DevelopState &state)
                                     state.whites,
                                     state.contrast,
                                     state.texture,
+                                    state.clarity,
                                     state.dehaze,
                                     state.saturation,
                                     state.vibrance);
@@ -770,6 +808,7 @@ void MainWindow::requestFullRender(const DevelopState &state, const QString &his
                                        state.whites,
                                        state.contrast,
                                        state.texture,
+                                       state.clarity,
                                        state.dehaze,
                                        state.saturation,
                                        state.vibrance);
@@ -784,6 +823,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
                                      int whites,
                                      int contrast,
                                      int texture,
+                                     int clarity,
                                      int dehaze,
                                      int saturation,
                                      int vibrance,
@@ -800,6 +840,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
         whites,
         contrast,
         texture,
+        clarity,
         dehaze,
         saturation,
         vibrance,
@@ -915,6 +956,9 @@ void MainWindow::setDevelopControlsFromState(const DevelopState &state)
     }
     if (m_textureSlider) {
         m_textureSlider->setValue(state.texture);
+    }
+    if (m_claritySlider) {
+        m_claritySlider->setValue(state.clarity);
     }
     if (m_dehazeSlider) {
         m_dehazeSlider->setValue(state.dehaze);
