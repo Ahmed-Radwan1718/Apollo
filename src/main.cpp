@@ -1,4 +1,5 @@
 #include "app/MainWindow.h"
+#include "ui/leftpanel/HistoryPanel.h"
 
 #include <QAction>
 #include <QApplication>
@@ -19,7 +20,7 @@ int main(int argc, char *argv[])
 
     auto *menuBar = window.menuBar();
     auto *fileMenu = menuBar->addMenu(QObject::tr("&File"));
-    menuBar->addMenu(QObject::tr("&Edit"));
+    auto *editMenu = menuBar->addMenu(QObject::tr("&Edit"));
     menuBar->addMenu(QObject::tr("&Photo"));
     auto *viewMenu = menuBar->addMenu(QObject::tr("&View"));
     menuBar->addMenu(QObject::tr("&Help"));
@@ -78,6 +79,44 @@ int main(int argc, char *argv[])
     exitAction->setShortcut(QKeySequence(QStringLiteral("Alt+F4")));
     QObject::connect(exitAction, &QAction::triggered,
                      &window, &QWidget::close);
+
+    auto *historyPanel = window.findChild<HistoryPanel *>();
+    QAction *undoAction = editMenu->addAction(QObject::tr("Undo\tCtrl+Z"));
+    QAction *redoAction = editMenu->addAction(QObject::tr("Redo\tCtrl+Shift+Z"));
+
+    if (historyPanel) {
+        QObject::connect(undoAction, &QAction::triggered,
+                         historyPanel, &HistoryPanel::undo);
+        QObject::connect(redoAction, &QAction::triggered,
+                         historyPanel, &HistoryPanel::redo);
+        QObject::connect(editMenu, &QMenu::aboutToShow,
+                         &window,
+                         [historyPanel, undoAction, redoAction]() {
+                             undoAction->setEnabled(historyPanel->canUndo());
+                             redoAction->setEnabled(historyPanel->canRedo());
+                         });
+        undoAction->setEnabled(historyPanel->canUndo());
+        redoAction->setEnabled(historyPanel->canRedo());
+    } else {
+        undoAction->setEnabled(false);
+        redoAction->setEnabled(false);
+    }
+
+    editMenu->addSeparator();
+    addPlaceholderAction(editMenu,
+                         QObject::tr("Copy Settings"),
+                         QKeySequence(QStringLiteral("Ctrl+Shift+C")));
+    addPlaceholderAction(editMenu,
+                         QObject::tr("Paste Settings"),
+                         QKeySequence(QStringLiteral("Ctrl+Shift+V")));
+    addPlaceholderAction(editMenu, QObject::tr("Paste Settings To…"));
+
+    editMenu->addSeparator();
+    addPlaceholderAction(editMenu, QObject::tr("Reset Adjustments"));
+    addPlaceholderAction(editMenu, QObject::tr("Reset Selected Adjustment"));
+
+    editMenu->addSeparator();
+    addPlaceholderAction(editMenu, QObject::tr("Preferences…"));
 
     if (QAction *fitAction = findWindowAction(QObject::tr("Fit to View"))) {
         viewMenu->addAction(fitAction);

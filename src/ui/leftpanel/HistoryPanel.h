@@ -16,6 +16,11 @@ public:
 
     void setEntries(const QStringList &labels, int currentIndex);
     void setCurrentIndex(int currentIndex);
+    void undo();
+    void redo();
+
+    [[nodiscard]] bool canUndo() const noexcept;
+    [[nodiscard]] bool canRedo() const noexcept;
 
 signals:
     void entryActivated(int index);

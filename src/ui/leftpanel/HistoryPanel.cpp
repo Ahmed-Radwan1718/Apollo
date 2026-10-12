@@ -138,24 +138,14 @@ HistoryPanel::HistoryPanel(QWidget *parent)
     auto *undoShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Z")),
                                        shortcutParent);
     undoShortcut->setContext(Qt::WindowShortcut);
-    connect(undoShortcut, &QShortcut::activated, this,
-            [this]() {
-                const int currentRow = m_list->currentRow();
-                if (currentRow > 0) {
-                    emit entryActivated(currentRow - 1);
-                }
-            });
+    connect(undoShortcut, &QShortcut::activated,
+            this, &HistoryPanel::undo);
 
     auto *redoShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+Z")),
                                        shortcutParent);
     redoShortcut->setContext(Qt::WindowShortcut);
-    connect(redoShortcut, &QShortcut::activated, this,
-            [this]() {
-                const int currentRow = m_list->currentRow();
-                if (currentRow >= 0 && currentRow + 1 < m_list->count()) {
-                    emit entryActivated(currentRow + 1);
-                }
-            });
+    connect(redoShortcut, &QShortcut::activated,
+            this, &HistoryPanel::redo);
 }
 
 void HistoryPanel::setEntries(const QStringList &labels, int currentIndex)
@@ -177,6 +167,34 @@ void HistoryPanel::setCurrentIndex(int currentIndex)
 
     m_list->setCurrentRow(currentIndex);
     m_list->scrollToItem(m_list->item(currentIndex), QAbstractItemView::EnsureVisible);
+}
+
+void HistoryPanel::undo()
+{
+    const int currentRow = m_list->currentRow();
+    if (currentRow > 0) {
+        emit entryActivated(currentRow - 1);
+    }
+}
+
+void HistoryPanel::redo()
+{
+    const int currentRow = m_list->currentRow();
+    if (currentRow >= 0 && currentRow + 1 < m_list->count()) {
+        emit entryActivated(currentRow + 1);
+    }
+}
+
+bool HistoryPanel::canUndo() const noexcept
+{
+    return m_list && m_list->currentRow() > 0;
+}
+
+bool HistoryPanel::canRedo() const noexcept
+{
+    return m_list
+        && m_list->currentRow() >= 0
+        && m_list->currentRow() + 1 < m_list->count();
 }
 
 void HistoryPanel::setExpanded(bool expanded)
