@@ -14,7 +14,6 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QResizeEvent>
-#include <QScrollBar>
 #include <QSizeF>
 #include <QUrl>
 #include <QWheelEvent>
@@ -29,16 +28,74 @@ class PhotoImageItem final : public QGraphicsItem
 public:
     void setImage(const QImage &image, const QSizeF &logicalSize)
     {
+        const QSizeF nextLogicalSize =
+            logicalSize.isValid() && !logicalSize.isEmpty()
+                ? logicalSize
+                : QSizeF(image.size());
+        const bool preserveVisibleRect =
+            !m_image.isNull()
+            && m_logicalSize == nextLogicalSize
+            && m_visibleLogicalRect.isValid()
+            && !m_visibleLogicalRect.isEmpty();
+
         prepareGeometryChange();
         m_image = image;
         m_image.setDevicePixelRatio(1.0);
-        m_logicalSize = logicalSize.isValid() && !logicalSize.isEmpty()
-            ? logicalSize
-            : QSizeF(image.size());
+        m_logicalSize = nextLogicalSize;
+
+        if (!preserveVisibleRect) {
+            resetVisibleLogicalRect();
+        } else {
+            setVisibleLogicalRect(m_visibleLogicalRect);
+        }
+
         update();
     }
 
     [[nodiscard]] const QImage &image() const noexcept { return m_image; }
+
+    [[nodiscard]] const QRectF &visibleLogicalRect() const noexcept
+    {
+        return m_visibleLogicalRect;
+    }
+
+    void resetVisibleLogicalRect()
+    {
+        m_visibleLogicalRect = boundingRect();
+        update();
+    }
+
+    void setVisibleLogicalRect(const QRectF &requestedRect)
+    {
+        const QRectF fullRect = boundingRect();
+        if (fullRect.isEmpty()) {
+            m_visibleLogicalRect = {};
+            update();
+            return;
+        }
+
+        if (!requestedRect.isValid() || requestedRect.isEmpty()) {
+            m_visibleLogicalRect = fullRect;
+            update();
+            return;
+        }
+
+        const qreal width = std::clamp(requestedRect.width(),
+                                       1.0,
+                                       fullRect.width());
+        const qreal height = std::clamp(requestedRect.height(),
+                                        1.0,
+                                        fullRect.height());
+        const qreal x = std::clamp(requestedRect.x(),
+                                   fullRect.left(),
+                                   fullRect.right() - width);
+        const qreal y = std::clamp(requestedRect.y(),
+                                   fullRect.top(),
+                                   fullRect.bottom() - height);
+
+        m_visibleLogicalRect = QRectF(x, y, width, height);
+        update();
+    }
 
     QRectF boundingRect() const override
     {
@@ -53,13 +110,33 @@ public:
             return;
         }
 
+        const QRectF fullRect = boundingRect();
+        if (fullRect.isEmpty()) {
+            return;
+        }
+
+        const QRectF visibleRect =
+            m_visibleLogicalRect.isValid() && !m_visibleLogicalRect.isEmpty()
+                ? m_visibleLogicalRect
+                : fullRect;
+        const qreal sourceScaleX =
+            static_cast<qreal>(m_image.width()) / fullRect.width();
+        const qreal sourceScaleY =
+            static_cast<qreal>(m_image.height()) / fullRect.height();
+        const QRectF sourceRect(
+            (visibleRect.left() - fullRect.left()) * sourceScaleX,
+            (visibleRect.top() - fullRect.top()) * sourceScaleY,
+            visibleRect.width() * sourceScaleX,
+            visibleRect.height() * sourceScaleY);
+
         painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
-        painter->drawImage(boundingRect(), m_image, QRectF(m_image.rect()));
+        painter->drawImage(fullRect, m_image, sourceRect);
     }
 
 private:
     QImage m_image;
     QSizeF m_logicalSize;
+    QRectF m_visibleLogicalRect;
 };
 
 PhotoImageItem *asPhotoItem(QGraphicsItem *item)
@@ -90,6 +167,25 @@ void positionBeforeAfterToggle(PhotoCanvas *canvas)
     toggle->move(qMax(0, canvas->viewport()->width() - toggle->width() - rightMargin),
                  qMax(0, canvas->viewport()->height() - toggle->height() - bottomMargin));
     toggle->raise();
+}
+
+QRectF centeredViewportRect(const QSizeF &size, const QRectF &viewportRect)
+{
+    return QRectF(viewportRect.center().x() - (size.width() * 0.5),
+                  viewportRect.center().y() - (size.height() * 0.5),
+                  size.width(),
+                  size.height());
+}
+
+QPointF normalizedPointInFrame(const QPointF &point, const QRectF &frame)
+{
+    if (frame.width() <= 0.0 || frame.height() <= 0.0) {
+        return QPointF(0.5, 0.5);
+    }
+
+    return QPointF(
+        std::clamp((point.x() - frame.left()) / frame.width(), 0.0, 1.0),
+        std::clamp((point.y() - frame.top()) / frame.height(), 0.0, 1.0));
 }
 
 } // namespace
@@ -258,12 +354,16 @@ qreal PhotoCanvas::zoomPercent() const noexcept
         return 0.0;
     }
 
+    if (m_zoomMode == ZoomMode::Manual) {
+        return m_manualZoomPercent;
+    }
+
     const qreal oneToOne = actualPixelScale();
     if (oneToOne <= 0.0) {
         return 0.0;
     }
 
-    return (currentViewScale() / oneToOne) * 100.0;
+    return (fitScale() / oneToOne) * 100.0;
 }
 
 void PhotoCanvas::fitToView()
@@ -273,6 +373,7 @@ void PhotoCanvas::fitToView()
     }
 
     m_zoomMode = ZoomMode::Fit;
+    asPhotoItem(m_imageItem)->resetVisibleLogicalRect();
 
     const qreal scale = fitScale();
     QTransform transform;
@@ -330,8 +431,6 @@ bool PhotoCanvas::event(QEvent *event)
         if (m_zoomMode == ZoomMode::Fit) {
             fitToView();
         } else {
-            // Keep the semantic zoom level stable when the window moves between
-            // monitors with different Windows scaling factors.
             setZoomPercentAt(m_manualZoomPercent, QRectF(viewport()->rect()).center());
         }
     }
@@ -365,10 +464,15 @@ void PhotoCanvas::resizeEvent(QResizeEvent *event)
     QGraphicsView::resizeEvent(event);
     positionBeforeAfterToggle(this);
 
-    if (hasImage() && m_zoomMode == ZoomMode::Fit) {
+    if (!hasImage()) {
+        updateCursor();
+        return;
+    }
+
+    if (m_zoomMode == ZoomMode::Fit) {
         fitToView();
     } else {
-        updateCursor();
+        setZoomPercentAt(m_manualZoomPercent, QRectF(viewport()->rect()).center());
     }
 }
 
@@ -535,8 +639,10 @@ qreal PhotoCanvas::fitScale() const noexcept
         return 1.0;
     }
 
-    const qreal availableWidth = std::max<qreal>(1.0, viewport()->width() - (2.0 * kFitMargin));
-    const qreal availableHeight = std::max<qreal>(1.0, viewport()->height() - (2.0 * kFitMargin));
+    const qreal availableWidth =
+        std::max<qreal>(1.0, viewport()->width() - (2.0 * kFitMargin));
+    const qreal availableHeight =
+        std::max<qreal>(1.0, viewport()->height() - (2.0 * kFitMargin));
 
     return std::min(availableWidth / imageRect.width(),
                     availableHeight / imageRect.height());
@@ -548,13 +654,12 @@ bool PhotoCanvas::canPan() const noexcept
         return false;
     }
 
-    const qreal scale = currentViewScale();
-    const QRectF imageRect = m_imageItem->boundingRect();
-    const qreal scaledWidth = imageRect.width() * scale;
-    const qreal scaledHeight = imageRect.height() * scale;
+    const PhotoImageItem *item = asPhotoItem(m_imageItem);
+    const QRectF fullRect = item->boundingRect();
+    const QRectF visibleRect = item->visibleLogicalRect();
 
-    return scaledWidth > viewport()->width() + 0.5
-        || scaledHeight > viewport()->height() + 0.5;
+    return visibleRect.width() < fullRect.width() - 0.5
+        || visibleRect.height() < fullRect.height() - 0.5;
 }
 
 void PhotoCanvas::setZoomPercentAt(qreal percent, const QPointF &anchorInViewport)
@@ -580,20 +685,56 @@ void PhotoCanvas::applyViewScale(qreal scale, const QPointF &anchorInViewport)
         return;
     }
 
-    const QPoint anchorPoint = anchorInViewport.toPoint();
-    const QPointF anchoredScenePoint = mapToScene(anchorPoint);
+    PhotoImageItem *item = asPhotoItem(m_imageItem);
+    const QRectF fullRect = item->boundingRect();
+    if (fullRect.isEmpty()) {
+        return;
+    }
 
-    QTransform newTransform;
-    newTransform.scale(scale, scale);
-    setTransform(newTransform);
+    const QRectF viewportRect(viewport()->rect());
+    const qreal currentScale = std::max<qreal>(currentViewScale(), 1e-9);
+    const QRectF currentFrame = centeredViewportRect(
+        QSizeF(fullRect.width() * currentScale,
+               fullRect.height() * currentScale),
+        viewportRect);
+    const QPointF currentNormalized =
+        normalizedPointInFrame(anchorInViewport, currentFrame);
+    const QRectF currentVisible = item->visibleLogicalRect().isEmpty()
+        ? fullRect
+        : item->visibleLogicalRect();
+    const QPointF logicalAnchor(
+        currentVisible.left() + currentNormalized.x() * currentVisible.width(),
+        currentVisible.top() + currentNormalized.y() * currentVisible.height());
 
-    const QPointF viewportCenter = QRectF(viewport()->rect()).center();
-    const QPointF offsetFromCenter = anchorInViewport - viewportCenter;
-    const QPointF desiredSceneCenter(
-        anchoredScenePoint.x() - (offsetFromCenter.x() / scale),
-        anchoredScenePoint.y() - (offsetFromCenter.y() / scale));
+    const qreal defaultScale = fitScale();
+    QTransform transform;
 
-    centerOn(desiredSceneCenter);
+    if (scale <= defaultScale) {
+        item->resetVisibleLogicalRect();
+        transform.scale(scale, scale);
+        setTransform(transform);
+        centerOn(m_imageItem);
+    } else {
+        const qreal cropRatio = defaultScale / scale;
+        const QSizeF cropSize(fullRect.width() * cropRatio,
+                              fullRect.height() * cropRatio);
+        const QRectF fixedFrame = centeredViewportRect(
+            QSizeF(fullRect.width() * defaultScale,
+                   fullRect.height() * defaultScale),
+            viewportRect);
+        const QPointF targetNormalized =
+            normalizedPointInFrame(anchorInViewport, fixedFrame);
+
+        item->setVisibleLogicalRect(
+            QRectF(logicalAnchor.x() - targetNormalized.x() * cropSize.width(),
+                   logicalAnchor.y() - targetNormalized.y() * cropSize.height(),
+                   cropSize.width(),
+                   cropSize.height()));
+
+        transform.scale(defaultScale, defaultScale);
+        setTransform(transform);
+        centerOn(m_imageItem);
+    }
 
     emit zoomChanged(zoomPercent());
     updateCursor();
@@ -608,13 +749,24 @@ void PhotoCanvas::beginPan(const QPointF &position)
 
 void PhotoCanvas::updatePan(const QPointF &position)
 {
+    if (!canPan()) {
+        return;
+    }
+
     const QPointF delta = position - m_lastPanPosition;
+    PhotoImageItem *item = asPhotoItem(m_imageItem);
+    QRectF visibleRect = item->visibleLogicalRect();
+    const QRectF fullRect = item->boundingRect();
+    const qreal frameWidth = fullRect.width() * currentViewScale();
+    const qreal frameHeight = fullRect.height() * currentViewScale();
 
-    auto *horizontal = horizontalScrollBar();
-    auto *vertical = verticalScrollBar();
-
-    horizontal->setValue(horizontal->value() - static_cast<int>(std::lround(delta.x())));
-    vertical->setValue(vertical->value() - static_cast<int>(std::lround(delta.y())));
+    if (frameWidth > 0.0 && frameHeight > 0.0) {
+        visibleRect.translate(
+            -delta.x() * (visibleRect.width() / frameWidth),
+            -delta.y() * (visibleRect.height() / frameHeight));
+        item->setVisibleLogicalRect(visibleRect);
+        viewport()->update();
+    }
 
     m_lastPanPosition = position;
 }
