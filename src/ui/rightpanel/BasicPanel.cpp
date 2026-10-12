@@ -459,8 +459,18 @@ protected:
     {
         if (event->button() == Qt::LeftButton && m_slider) {
             const QVariant overrideValue = m_slider->property("resetValue");
+            const bool wasSliderDown = m_slider->isSliderDown();
+            if (!wasSliderDown) {
+                m_slider->setSliderDown(true);
+            }
+
             m_slider->setLogicalValue(
                 overrideValue.isValid() ? overrideValue.toInt() : m_resetValue);
+
+            if (!wasSliderDown) {
+                m_slider->setSliderDown(false);
+            }
+
             event->accept();
             return;
         }
