@@ -21,6 +21,12 @@ class PhotoCanvas final : public QGraphicsView
 {
     Q_OBJECT
 
+private:
+    enum class ZoomMode {
+        Fit,
+        Manual,
+    };
+
 public:
     explicit PhotoCanvas(QWidget *parent = nullptr);
     ~PhotoCanvas() override;
@@ -34,6 +40,21 @@ public:
 
     [[nodiscard]] bool hasImage() const noexcept;
     [[nodiscard]] qreal zoomPercent() const noexcept;
+    [[nodiscard]] bool isFitZoom() const noexcept { return m_zoomMode == ZoomMode::Fit; }
+    [[nodiscard]] qreal relativeZoomPercent() const noexcept
+    {
+        if (!hasImage()) {
+            return 0.0;
+        }
+
+        const qreal oneToOne = actualPixelScale();
+        if (oneToOne <= 0.0) {
+            return 0.0;
+        }
+
+        const qreal fitPercent = (fitScale() / oneToOne) * 100.0;
+        return fitPercent > 0.0 ? (zoomPercent() / fitPercent) * 100.0 : 0.0;
+    }
     [[nodiscard]] qreal defaultFitScale() const noexcept { return fitScale(); }
 
 public slots:
@@ -42,6 +63,20 @@ public slots:
     void zoomIn();
     void zoomOut();
     void setZoomPercent(qreal percent);
+    void setRelativeZoomPercent(qreal percent)
+    {
+        if (!hasImage()) {
+            return;
+        }
+
+        const qreal oneToOne = actualPixelScale();
+        if (oneToOne <= 0.0) {
+            return;
+        }
+
+        const qreal fitPercent = (fitScale() / oneToOne) * 100.0;
+        setZoomPercent(fitPercent * (percent / 100.0));
+    }
 
 signals:
     void zoomChanged(qreal percent);
@@ -63,11 +98,6 @@ protected:
     void dropEvent(QDropEvent *event) override;
 
 private:
-    enum class ZoomMode {
-        Fit,
-        Manual,
-    };
-
     [[nodiscard]] qreal currentViewScale() const noexcept;
     [[nodiscard]] qreal actualPixelScale() const noexcept;
     [[nodiscard]] qreal fitScale() const noexcept;
