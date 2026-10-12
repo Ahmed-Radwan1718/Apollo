@@ -69,10 +69,13 @@ PhotoImageItem *asPhotoItem(QGraphicsItem *item)
 
 BeforeAfterToggle *beforeAfterToggle(const PhotoCanvas *canvas)
 {
-    return canvas && canvas->viewport()
-        ? canvas->viewport()->findChild<BeforeAfterToggle *>(
-              QString(), Qt::FindDirectChildrenOnly)
-        : nullptr;
+    if (!canvas || !canvas->viewport()) {
+        return nullptr;
+    }
+
+    QWidget *widget = canvas->viewport()->findChild<QWidget *>(
+        QStringLiteral("beforeAfterToggle"), Qt::FindDirectChildrenOnly);
+    return static_cast<BeforeAfterToggle *>(widget);
 }
 
 void positionBeforeAfterToggle(PhotoCanvas *canvas)
