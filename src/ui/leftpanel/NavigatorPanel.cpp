@@ -1,7 +1,6 @@
 #include "ui/leftpanel/NavigatorPanel.h"
 
 #include "ui/canvas/PhotoCanvas.h"
-#include "ui/sidebar/SidebarCollapseHandle.h"
 
 #include <QComboBox>
 #include <QHBoxLayout>
@@ -177,11 +176,6 @@ NavigatorPanel::NavigatorPanel(QWidget *parent)
                     m_canvas->setRelativeZoomPercent(zoom);
                 }
             });
-
-    if (QWidget *sidePanel = parentWidget()) {
-        new SidebarCollapseHandle(sidePanel,
-                                  SidebarCollapseHandle::Side::Left);
-    }
 }
 
 void NavigatorPanel::setImage(const QImage &image)
