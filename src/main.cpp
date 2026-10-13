@@ -1,5 +1,6 @@
 #include "app/MainWindow.h"
 #include "ui/leftpanel/HistoryPanel.h"
+#include "ui/rightpanel/BasicSliderInteractionController.h"
 
 #include <QAction>
 #include <QApplication>
@@ -17,6 +18,10 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
 
     MainWindow window;
+
+    if (QWidget *basicPanel = window.findChild<QWidget *>(QStringLiteral("basicPanel"))) {
+        new BasicSliderInteractionController(basicPanel, &window);
+    }
 
     auto *menuBar = window.menuBar();
     auto *fileMenu = menuBar->addMenu(QObject::tr("&File"));
