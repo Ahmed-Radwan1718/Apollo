@@ -565,7 +565,8 @@ private:
         m_editor->show();
         m_editor->raise();
         m_editor->setFocus(Qt::MouseFocusReason);
-        m_editor->selectAll();
+        m_editor->deselect();
+        m_editor->setCursorPosition(m_editor->text().size());
     }
 
     void commitEditing()
