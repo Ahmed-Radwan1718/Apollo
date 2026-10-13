@@ -11,6 +11,7 @@
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPixmap>
 #include <QResizeEvent>
 #include <QSizePolicy>
 #include <QSlider>
@@ -23,7 +24,7 @@
 
 namespace {
 
-constexpr int kPanelAnimationDurationMs = 220;
+constexpr int kPanelAnimationDurationMs = 280;
 constexpr int kTemperatureMinimumKelvin = 2000;
 constexpr int kTemperatureMaximumKelvin = 20000;
 constexpr int kDefaultTemperatureKelvin = 6500;
@@ -274,12 +275,21 @@ public:
 
         connect(m_animation, &QVariantAnimation::valueChanged, this,
                 [this](const QVariant &value) {
-                    setFixedHeight(value.toInt());
+                    const int nextHeight = value.toInt();
+                    if (height() != nextHeight) {
+                        setFixedHeight(nextHeight);
+                    }
+                    update();
                 });
 
         connect(m_animation, &QVariantAnimation::finished, this,
                 [this]() {
                     setFixedHeight(m_expanded ? m_expandedHeight : 0);
+                    if (m_content) {
+                        m_content->setVisible(m_expanded);
+                    }
+                    m_animationPixmap = {};
+                    update();
                 });
     }
 
@@ -324,18 +334,34 @@ public:
             return;
         }
 
+        m_animation->stop();
+
         if (expanded) {
             refreshExpandedHeight();
         }
 
+        cacheContentPixmap();
+        if (m_content) {
+            m_content->hide();
+        }
+
         m_expanded = expanded;
-        m_animation->stop();
         m_animation->setStartValue(height());
         m_animation->setEndValue(expanded ? m_expandedHeight : 0);
         m_animation->start();
     }
 
 protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        QWidget::paintEvent(event);
+
+        if (!m_animationPixmap.isNull()) {
+            QPainter painter(this);
+            painter.drawPixmap(0, 0, m_animationPixmap);
+        }
+    }
+
     void resizeEvent(QResizeEvent *event) override
     {
         QWidget::resizeEvent(event);
@@ -343,6 +369,29 @@ protected:
     }
 
 private:
+    void cacheContentPixmap()
+    {
+        if (!m_content || !m_animationPixmap.isNull() || m_expandedHeight <= 0) {
+            return;
+        }
+
+        const bool wasHidden = m_content->isHidden();
+        if (wasHidden) {
+            m_content->show();
+        }
+
+        updateContentGeometry();
+        m_content->ensurePolished();
+
+        m_animationPixmap = QPixmap(m_content->size());
+        m_animationPixmap.fill(Qt::transparent);
+        m_content->render(&m_animationPixmap);
+
+        if (wasHidden) {
+            m_content->hide();
+        }
+    }
+
     void updateContentGeometry()
     {
         if (!m_content) {
@@ -356,6 +405,7 @@ private:
 
     QWidget *m_content = nullptr;
     QVariantAnimation *m_animation = nullptr;
+    QPixmap m_animationPixmap;
     int m_expandedHeight = 0;
     bool m_expanded = true;
 };
