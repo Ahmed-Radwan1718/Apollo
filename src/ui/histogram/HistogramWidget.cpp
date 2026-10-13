@@ -7,34 +7,28 @@
 #include <QPen>
 #include <QSizePolicy>
 
+#include <algorithm>
 #include <array>
-#include <cmath>
 
 namespace {
 
-qreal normalizedHistogramHeight(quint64 count,
-                                quint64 peak,
-                                bool logarithmicScale)
+qreal normalizedHistogramHeight(quint64 count, quint64 displayPeak)
 {
-    if (count == 0 || peak == 0) {
+    if (count == 0 || displayPeak == 0) {
         return 0.0;
     }
 
-    if (logarithmicScale) {
-        return std::log1p(static_cast<qreal>(count))
-            / std::log1p(static_cast<qreal>(peak));
-    }
-
-    return static_cast<qreal>(count) / static_cast<qreal>(peak);
+    return std::min<qreal>(
+        static_cast<qreal>(count) / static_cast<qreal>(displayPeak),
+        1.0);
 }
 
 QPainterPath histogramPath(const std::array<quint64, imaging::HistogramData::kBinCount> &bins,
-                           quint64 peak,
-                           const QRectF &rect,
-                           bool logarithmicScale)
+                           quint64 displayPeak,
+                           const QRectF &rect)
 {
     QPainterPath path;
-    if (peak == 0 || rect.isEmpty()) {
+    if (displayPeak == 0 || rect.isEmpty()) {
         return path;
     }
 
@@ -45,7 +39,7 @@ QPainterPath histogramPath(const std::array<quint64, imaging::HistogramData::kBi
         const qreal x = rect.left()
             + (static_cast<qreal>(bin) / lastBin) * rect.width();
         const qreal normalized = normalizedHistogramHeight(
-            bins[static_cast<std::size_t>(bin)], peak, logarithmicScale);
+            bins[static_cast<std::size_t>(bin)], displayPeak);
         const qreal y = rect.bottom() - (normalized * rect.height());
         path.lineTo(x, y);
     }
@@ -60,6 +54,45 @@ quint64 largestEdgeBin(const imaging::HistogramData &histogram)
     return std::max({histogram.red.front(), histogram.red.back(),
                      histogram.green.front(), histogram.green.back(),
                      histogram.blue.front(), histogram.blue.back()});
+}
+
+quint64 largestInteriorBin(const imaging::HistogramData &histogram)
+{
+    quint64 peak = 0;
+    for (int bin = 1; bin < imaging::HistogramData::kBinCount - 1; ++bin) {
+        const std::size_t index = static_cast<std::size_t>(bin);
+        peak = std::max({peak,
+                         histogram.red[index],
+                         histogram.green[index],
+                         histogram.blue[index]});
+    }
+    return peak;
+}
+
+quint64 histogramDisplayPeak(const imaging::HistogramData &histogram)
+{
+    const quint64 peak = histogram.peak();
+    if (peak == 0) {
+        return 0;
+    }
+
+    const quint64 edgePeak = largestEdgeBin(histogram);
+    const qreal edgePeakRatio = static_cast<qreal>(edgePeak)
+        / static_cast<qreal>(peak);
+
+    // Keep the histogram on a linear scale at all times. If clipping creates
+    // an enormous bin at pure black or pure white, use the strongest non-edge
+    // tone for vertical normalization. The clipped edge bin is then capped at
+    // the top of the graph, preserving the shifted tonal shape while still
+    // showing a clear clipping peak at the appropriate edge.
+    if (edgePeakRatio >= 0.75) {
+        const quint64 interiorPeak = largestInteriorBin(histogram);
+        if (interiorPeak > 0) {
+            return interiorPeak;
+        }
+    }
+
+    return peak;
 }
 
 } // namespace
@@ -112,30 +145,23 @@ void HistogramWidget::paintEvent(QPaintEvent *event)
         return;
     }
 
-    const quint64 peak = m_histogram.peak();
-    if (peak == 0) {
+    const quint64 displayPeak = histogramDisplayPeak(m_histogram);
+    if (displayPeak == 0) {
         painter.setPen(QPen(QColor(48, 48, 48), 1.0));
         painter.drawRect(frameRect);
         return;
     }
-
-    // A dominant pure-black or pure-white bin can otherwise flatten every
-    // other tone into the baseline. Compress the vertical scale only for that
-    // edge-clipping case so the underlying tonal distribution stays readable.
-    const qreal edgePeakRatio = static_cast<qreal>(largestEdgeBin(m_histogram))
-        / static_cast<qreal>(peak);
-    const bool logarithmicScale = edgePeakRatio >= 0.75;
 
     // Keep bins 0 and 255 just inside the frame so real clipping peaks remain
     // visible as part of the histogram instead of disappearing under the border.
     const QRectF dataRect = plotRect.adjusted(2.0, 0.0, -2.0, 0.0);
 
     const QPainterPath redPath = histogramPath(
-        m_histogram.red, peak, dataRect, logarithmicScale);
+        m_histogram.red, displayPeak, dataRect);
     const QPainterPath greenPath = histogramPath(
-        m_histogram.green, peak, dataRect, logarithmicScale);
+        m_histogram.green, displayPeak, dataRect);
     const QPainterPath bluePath = histogramPath(
-        m_histogram.blue, peak, dataRect, logarithmicScale);
+        m_histogram.blue, displayPeak, dataRect);
 
     painter.save();
     painter.setClipRect(plotRect);
