@@ -118,8 +118,16 @@ int main(int argc, char *argv[])
     editMenu->addSeparator();
     addPlaceholderAction(editMenu, QObject::tr("Preferences…"));
 
-    addPlaceholderAction(photoMenu, QObject::tr("Reset Photo"));
-    addPlaceholderAction(photoMenu, QObject::tr("Revert to Original"));
+    QAction *revertAction = photoMenu->addAction(QObject::tr("Revert to Original"));
+    if (historyPanel) {
+        QObject::connect(revertAction, &QAction::triggered,
+                         historyPanel,
+                         [historyPanel]() {
+                             historyPanel->entryActivated(0);
+                         });
+    } else {
+        revertAction->setEnabled(false);
+    }
 
     photoMenu->addSeparator();
     addPlaceholderAction(photoMenu, QObject::tr("Rotate Left"));
