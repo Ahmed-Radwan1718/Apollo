@@ -1,7 +1,5 @@
 #include "ui/rightpanel/PhotoMetadataWidget.h"
 
-#include "ui/sidebar/SidebarCollapseHandle.h"
-
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QVBoxLayout>
@@ -126,11 +124,6 @@ PhotoMetadataWidget::PhotoMetadataWidget(QWidget *parent)
         "  color: #747474;"
         "  font-size: 10px;"
         "}"));
-
-    if (QWidget *sidePanel = parentWidget()) {
-        new SidebarCollapseHandle(sidePanel,
-                                  SidebarCollapseHandle::Side::Right);
-    }
 }
 
 void PhotoMetadataWidget::setMetadata(const imaging::PhotoMetadata &metadata)
