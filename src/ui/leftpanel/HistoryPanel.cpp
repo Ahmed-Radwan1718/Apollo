@@ -199,6 +199,7 @@ HistoryPanel::HistoryPanel(QWidget *parent)
         "QWidget#historyPanel {"
         "  background: #181818;"
         "  border: 0;"
+        "  border-top: 1px solid #2a2a2a;"
         "  font-family: \"Segoe UI Variable\";"
         "}"
         "QListWidget#historyList {"
