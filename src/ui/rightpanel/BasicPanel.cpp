@@ -574,7 +574,16 @@ private:
         if (sliderValueFromText(m_editor->text(), m_format,
                                 m_slider->logicalMinimum(), m_slider->logicalMaximum(),
                                 sliderValue)) {
+            const bool wasSliderDown = m_slider->isSliderDown();
+            if (!wasSliderDown) {
+                m_slider->setSliderDown(true);
+            }
+
             m_slider->setLogicalValue(sliderValue);
+
+            if (!wasSliderDown) {
+                m_slider->setSliderDown(false);
+            }
         }
 
         setText(formattedValue(m_slider->logicalValue(), m_format));
