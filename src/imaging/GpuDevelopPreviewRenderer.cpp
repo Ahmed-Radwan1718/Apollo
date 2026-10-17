@@ -206,6 +206,7 @@ struct GpuDevelopPreviewRenderer::Impl final : protected QOpenGLFunctions_3_3_Co
         }
 
         context.setFormat(surface->format());
+        context.setScreen(surface->screen());
         if (!context.create() || !context.makeCurrent(surface)) {
             return;
         }
@@ -233,22 +234,33 @@ struct GpuDevelopPreviewRenderer::Impl final : protected QOpenGLFunctions_3_3_Co
             context.doneCurrent();
             return;
         }
-        QOpenGLVertexArrayObject::Binder vaoBinder(&vao);
 
-        if (!vertexBuffer.create()) {
+        bool bufferReady = false;
+        {
+            // Binder::~Binder() calls VAO release(), so it must run while this
+            // context is still current. Never let this scope cross doneCurrent().
+            QOpenGLVertexArrayObject::Binder vaoBinder(&vao);
+            bufferReady = vertexBuffer.create();
+            if (bufferReady) {
+                vertexBuffer.bind();
+                vertexBuffer.allocate(vertices.data(),
+                                      static_cast<int>(vertices.size() * sizeof(float)));
+
+                program.bind();
+                program.enableAttributeArray(0);
+                program.enableAttributeArray(1);
+                program.setAttributeBuffer(0, GL_FLOAT, 0, 2, 4 * sizeof(float));
+                program.setAttributeBuffer(1, GL_FLOAT, 2 * sizeof(float), 2, 4 * sizeof(float));
+                program.release();
+                vertexBuffer.release();
+            }
+        }
+
+        if (!bufferReady) {
+            vao.destroy();
             context.doneCurrent();
             return;
         }
-        vertexBuffer.bind();
-        vertexBuffer.allocate(vertices.data(), static_cast<int>(vertices.size() * sizeof(float)));
-
-        program.bind();
-        program.enableAttributeArray(0);
-        program.enableAttributeArray(1);
-        program.setAttributeBuffer(0, GL_FLOAT, 0, 2, 4 * sizeof(float));
-        program.setAttributeBuffer(1, GL_FLOAT, 2 * sizeof(float), 2, 4 * sizeof(float));
-        program.release();
-        vertexBuffer.release();
 
         glGenTextures(1, &sourceTexture);
         available = sourceTexture != 0;
@@ -338,55 +350,65 @@ struct GpuDevelopPreviewRenderer::Impl final : protected QOpenGLFunctions_3_3_Co
             return {};
         }
 
-        QOpenGLFramebufferObjectFormat fboFormat;
-        fboFormat.setAttachment(QOpenGLFramebufferObject::NoAttachment);
-        fboFormat.setInternalTextureFormat(GL_RGBA8);
-        QOpenGLFramebufferObject fbo(QSize(width, height), fboFormat);
-        if (!fbo.isValid() || !fbo.bind()) {
+        QImage image;
+        bool framebufferReady = false;
+        {
+            // QOpenGLFramebufferObject owns GL resources. Destroy it before
+            // doneCurrent() so its destructor always has a valid current context.
+            QOpenGLFramebufferObjectFormat fboFormat;
+            fboFormat.setAttachment(QOpenGLFramebufferObject::NoAttachment);
+            fboFormat.setInternalTextureFormat(GL_RGBA8);
+            QOpenGLFramebufferObject fbo(QSize(width, height), fboFormat);
+
+            framebufferReady = fbo.isValid() && fbo.bind();
+            if (framebufferReady) {
+                glViewport(0, 0, width, height);
+                glDisable(GL_BLEND);
+                glDisable(GL_DEPTH_TEST);
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
+
+                program.bind();
+                program.setUniformValue("uSource", 0);
+                program.setUniformValue("uBaselineGain",
+                                        static_cast<float>(65535.0 / std::max(1, whitePoint)));
+                program.setUniformValue("uExposureGain",
+                                        static_cast<float>(std::exp2(
+                                            static_cast<double>(std::clamp(exposureHundredths, -500, 500))
+                                            / 100.0)));
+                program.setUniformValue("uHighlights",
+                                        static_cast<float>(std::clamp(highlights, -100, 100)) / 100.0f);
+                program.setUniformValue("uShadows",
+                                        static_cast<float>(std::clamp(shadows, -100, 100)) / 100.0f);
+                program.setUniformValue("uWhites",
+                                        static_cast<float>(std::clamp(whites, -100, 100)) / 100.0f);
+                program.setUniformValue("uBlacks",
+                                        static_cast<float>(std::clamp(blacks, -100, 100)) / 100.0f);
+                program.setUniformValue("uContrast",
+                                        static_cast<float>(std::clamp(contrast, -100, 100)) / 100.0f);
+                program.setUniformValue("uSaturation",
+                                        static_cast<float>(std::clamp(saturation, -100, 100)) / 100.0f);
+
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, sourceTexture);
+                {
+                    QOpenGLVertexArrayObject::Binder vaoBinder(&vao);
+                    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+                }
+                glBindTexture(GL_TEXTURE_2D, 0);
+                program.release();
+
+                image = fbo.toImage(true);
+                fbo.release();
+            }
+        }
+
+        context.doneCurrent();
+
+        if (!framebufferReady) {
             setError(error, QStringLiteral("Creating the GPU preview framebuffer failed."));
-            context.doneCurrent();
             return {};
         }
-
-        glViewport(0, 0, width, height);
-        glDisable(GL_BLEND);
-        glDisable(GL_DEPTH_TEST);
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        program.bind();
-        program.setUniformValue("uSource", 0);
-        program.setUniformValue("uBaselineGain",
-                                static_cast<float>(65535.0 / std::max(1, whitePoint)));
-        program.setUniformValue("uExposureGain",
-                                static_cast<float>(std::exp2(
-                                    static_cast<double>(std::clamp(exposureHundredths, -500, 500))
-                                    / 100.0)));
-        program.setUniformValue("uHighlights",
-                                static_cast<float>(std::clamp(highlights, -100, 100)) / 100.0f);
-        program.setUniformValue("uShadows",
-                                static_cast<float>(std::clamp(shadows, -100, 100)) / 100.0f);
-        program.setUniformValue("uWhites",
-                                static_cast<float>(std::clamp(whites, -100, 100)) / 100.0f);
-        program.setUniformValue("uBlacks",
-                                static_cast<float>(std::clamp(blacks, -100, 100)) / 100.0f);
-        program.setUniformValue("uContrast",
-                                static_cast<float>(std::clamp(contrast, -100, 100)) / 100.0f);
-        program.setUniformValue("uSaturation",
-                                static_cast<float>(std::clamp(saturation, -100, 100)) / 100.0f);
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, sourceTexture);
-        {
-            QOpenGLVertexArrayObject::Binder vaoBinder(&vao);
-            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-        }
-        glBindTexture(GL_TEXTURE_2D, 0);
-        program.release();
-
-        QImage image = fbo.toImage(true);
-        fbo.release();
-        context.doneCurrent();
 
         if (image.isNull()) {
             setError(error, QStringLiteral("Reading the GPU preview framebuffer failed."));
