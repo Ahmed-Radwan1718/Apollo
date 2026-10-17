@@ -86,6 +86,20 @@ LibraryWorkspaceController::LibraryWorkspaceController(
                                           Qt::QueuedConnection,
                                           Q_ARG(QString, filePath));
             });
+
+        m_grid->setFilesDroppedCallback(
+            [this](const QStringList &filePaths) {
+                if (!m_window) {
+                    return;
+                }
+
+                for (const QString &filePath : filePaths) {
+                    QMetaObject::invokeMethod(m_window,
+                                              "openImage",
+                                              Qt::QueuedConnection,
+                                              Q_ARG(QString, filePath));
+                }
+            });
     }
 
     connect(m_modeBar->libraryButton(), &QPushButton::clicked,

@@ -3,11 +3,14 @@
 #include <QHash>
 #include <QImage>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 #include <QWidget>
 
 #include <functional>
 
+class QDragEnterEvent;
+class QDropEvent;
 class QGridLayout;
 class QLabel;
 class QResizeEvent;
@@ -17,13 +20,18 @@ class QStackedWidget;
 class LibraryGridWidget final : public QWidget
 {
 public:
+    using FilesDroppedCallback = std::function<void(const QStringList &)>;
+
     explicit LibraryGridWidget(QWidget *parent = nullptr);
 
     void addPhoto(const QString &filePath, const QImage &image);
     void setPhotoActivatedCallback(std::function<void(const QString &)> callback);
+    void setFilesDroppedCallback(FilesDroppedCallback callback);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
 private:
     void reflow();
@@ -39,4 +47,5 @@ private:
     QVector<QString> m_order;
     QString m_currentFilePath;
     std::function<void(const QString &)> m_photoActivated;
+    FilesDroppedCallback m_filesDropped;
 };

@@ -1,12 +1,16 @@
 #include "ui/library/LibraryGridWidget.h"
 
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFileInfo>
 #include <QFont>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QImageReader>
 #include <QLabel>
 #include <QLayoutItem>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPaintEvent>
@@ -14,6 +18,7 @@
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QStackedWidget>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -28,6 +33,42 @@ constexpr int kThumbnailHeight = kThumbnailImageHeight + kThumbnailLabelHeight;
 constexpr int kThumbnailPreviewSize = 640;
 constexpr int kGridMargin = 16;
 constexpr int kGridSpacing = 12;
+
+bool isSupportedImageFile(const QString &filePath)
+{
+    const QFileInfo fileInfo(filePath);
+    if (!fileInfo.isFile()) {
+        return false;
+    }
+
+    const QByteArray suffix = fileInfo.suffix().toLatin1().toLower();
+    if (suffix == "arw") {
+        return true;
+    }
+
+    return QImageReader::supportedImageFormats().contains(suffix);
+}
+
+QStringList supportedLocalFiles(const QMimeData *mimeData)
+{
+    QStringList filePaths;
+    if (!mimeData || !mimeData->hasUrls()) {
+        return filePaths;
+    }
+
+    for (const QUrl &url : mimeData->urls()) {
+        if (!url.isLocalFile()) {
+            continue;
+        }
+
+        const QString filePath = QFileInfo(url.toLocalFile()).absoluteFilePath();
+        if (isSupportedImageFile(filePath) && !filePaths.contains(filePath)) {
+            filePaths.push_back(filePath);
+        }
+    }
+
+    return filePaths;
+}
 
 class LibraryThumbnail final : public QWidget
 {
@@ -137,6 +178,7 @@ LibraryGridWidget::LibraryGridWidget(QWidget *parent)
 {
     setObjectName(QStringLiteral("libraryGridWidget"));
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    setAcceptDrops(true);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -163,10 +205,12 @@ LibraryGridWidget::LibraryGridWidget(QWidget *parent)
 
     m_stack = new QStackedWidget(this);
     m_stack->setObjectName(QStringLiteral("libraryGridStack"));
+    m_stack->setAcceptDrops(false);
 
     auto *emptyLabel = new QLabel(tr("No photos in Library"), m_stack);
     emptyLabel->setObjectName(QStringLiteral("libraryEmptyLabel"));
     emptyLabel->setAlignment(Qt::AlignCenter);
+    emptyLabel->setAcceptDrops(false);
     m_stack->addWidget(emptyLabel);
 
     m_scrollArea = new QScrollArea(m_stack);
@@ -176,9 +220,12 @@ LibraryGridWidget::LibraryGridWidget(QWidget *parent)
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_scrollArea->setFocusPolicy(Qt::NoFocus);
+    m_scrollArea->setAcceptDrops(false);
+    m_scrollArea->viewport()->setAcceptDrops(false);
 
     m_content = new QWidget(m_scrollArea);
     m_content->setObjectName(QStringLiteral("libraryGridContent"));
+    m_content->setAcceptDrops(false);
     m_gridLayout = new QGridLayout(m_content);
     m_gridLayout->setContentsMargins(kGridMargin,
                                      kGridMargin,
@@ -275,10 +322,40 @@ void LibraryGridWidget::setPhotoActivatedCallback(
     m_photoActivated = std::move(callback);
 }
 
+void LibraryGridWidget::setFilesDroppedCallback(FilesDroppedCallback callback)
+{
+    m_filesDropped = std::move(callback);
+}
+
 void LibraryGridWidget::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
     reflow();
+}
+
+void LibraryGridWidget::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (!supportedLocalFiles(event->mimeData()).isEmpty()) {
+        event->acceptProposedAction();
+        return;
+    }
+
+    event->ignore();
+}
+
+void LibraryGridWidget::dropEvent(QDropEvent *event)
+{
+    const QStringList filePaths = supportedLocalFiles(event->mimeData());
+    if (filePaths.isEmpty()) {
+        event->ignore();
+        return;
+    }
+
+    if (m_filesDropped) {
+        m_filesDropped(filePaths);
+    }
+
+    event->acceptProposedAction();
 }
 
 void LibraryGridWidget::reflow()
