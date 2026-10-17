@@ -6,6 +6,7 @@
 #include "ui/leftpanel/HistoryPanel.h"
 #include "ui/leftpanel/NavigatorPanel.h"
 #include "ui/library/LibraryGridWidget.h"
+#include "ui/library/LibraryImportService.h"
 #include "ui/library/LibrarySidebar.h"
 #include "ui/rightpanel/BasicPanel.h"
 #include "ui/workspace/WorkspaceModeBar.h"
@@ -62,6 +63,17 @@ LibraryWorkspaceController::LibraryWorkspaceController(
         }
     }
 
+    m_importService = new LibraryImportService(this);
+    m_importService->setPhotoReadyCallback(
+        [this](const QString &filePath, const QImage &thumbnail) {
+            if (m_grid) {
+                m_grid->addPhoto(filePath, thumbnail);
+            }
+            if (m_sidebar) {
+                m_sidebar->addFolder(QFileInfo(filePath).absolutePath());
+            }
+        });
+
     if (m_filmstrip) {
         m_filmstrip->setPhotoOpenedCallback(
             [this](const QString &filePath, const QImage &image) {
@@ -89,15 +101,8 @@ LibraryWorkspaceController::LibraryWorkspaceController(
 
         m_grid->setFilesDroppedCallback(
             [this](const QStringList &filePaths) {
-                if (!m_window) {
-                    return;
-                }
-
-                for (const QString &filePath : filePaths) {
-                    QMetaObject::invokeMethod(m_window,
-                                              "openImage",
-                                              Qt::QueuedConnection,
-                                              Q_ARG(QString, filePath));
+                if (m_importService) {
+                    m_importService->importFiles(filePaths);
                 }
             });
     }

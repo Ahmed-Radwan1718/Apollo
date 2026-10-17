@@ -6,6 +6,7 @@ class BasicPanel;
 class FilmstripWidget;
 class HistoryPanel;
 class LibraryGridWidget;
+class LibraryImportService;
 class LibrarySidebar;
 class MainWindow;
 class NavigatorPanel;
@@ -31,5 +32,6 @@ private:
     BasicPanel *m_basicPanel = nullptr;
     LibrarySidebar *m_sidebar = nullptr;
     LibraryGridWidget *m_grid = nullptr;
+    LibraryImportService *m_importService = nullptr;
     bool m_libraryMode = false;
 };

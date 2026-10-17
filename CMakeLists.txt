@@ -37,6 +37,8 @@ qt_add_executable(Nexus WIN32
     src/imaging/PhotoMetadata.h
     src/imaging/TemperatureRenderService.cpp
     src/imaging/TemperatureRenderService.h
+    src/imaging/ThumbnailLoader.cpp
+    src/imaging/ThumbnailLoader.h
     src/imaging/WhiteBalancePickerService.cpp
     src/imaging/WhiteBalancePickerService.h
     src/ui/canvas/PhotoCanvas.cpp
@@ -51,6 +53,8 @@ qt_add_executable(Nexus WIN32
     src/ui/leftpanel/NavigatorPanel.h
     src/ui/library/LibraryGridWidget.cpp
     src/ui/library/LibraryGridWidget.h
+    src/ui/library/LibraryImportService.cpp
+    src/ui/library/LibraryImportService.h
     src/ui/library/LibrarySidebar.cpp
     src/ui/library/LibrarySidebar.h
     src/ui/library/LibraryWorkspaceController.cpp
