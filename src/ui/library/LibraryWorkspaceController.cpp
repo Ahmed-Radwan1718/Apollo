@@ -113,6 +113,9 @@ void LibraryWorkspaceController::setLibraryMode(bool libraryMode)
     if (m_canvas) {
         m_canvas->setVisible(!libraryMode);
     }
+    if (m_filmstrip) {
+        m_filmstrip->setVisible(!libraryMode);
+    }
     if (m_basicPanel) {
         m_basicPanel->setVisible(!libraryMode);
     }
