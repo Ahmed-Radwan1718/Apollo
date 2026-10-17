@@ -207,6 +207,9 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
 
     if (m_thumbnails.contains(filePath)) {
         setCurrentPhoto(filePath);
+        if (m_photoOpenedCallback) {
+            m_photoOpenedCallback(filePath, image);
+        }
         return;
     }
 
@@ -221,6 +224,15 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
     m_thumbnails.insert(filePath, thumbnail);
     m_contentLayout->insertWidget(m_contentLayout->count() - 1, thumbnail);
     setCurrentPhoto(filePath);
+
+    if (m_photoOpenedCallback) {
+        m_photoOpenedCallback(filePath, image);
+    }
+}
+
+void FilmstripWidget::setPhotoOpenedCallback(PhotoOpenedCallback callback)
+{
+    m_photoOpenedCallback = std::move(callback);
 }
 
 bool FilmstripWidget::eventFilter(QObject *watched, QEvent *event)

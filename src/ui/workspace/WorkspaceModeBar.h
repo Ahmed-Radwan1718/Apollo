@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QButtonGroup>
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -19,18 +20,25 @@ public:
         layout->setSpacing(8);
         layout->addStretch(1);
 
-        auto *libraryButton = new QPushButton(tr("Library"), this);
-        libraryButton->setObjectName(QStringLiteral("libraryModeButton"));
-        libraryButton->setFixedSize(80, 32);
-        libraryButton->setFocusPolicy(Qt::NoFocus);
-        layout->addWidget(libraryButton);
+        m_libraryButton = new QPushButton(tr("Library"), this);
+        m_libraryButton->setObjectName(QStringLiteral("libraryModeButton"));
+        m_libraryButton->setCheckable(true);
+        m_libraryButton->setFixedSize(80, 32);
+        m_libraryButton->setFocusPolicy(Qt::NoFocus);
+        layout->addWidget(m_libraryButton);
 
-        auto *developButton = new QPushButton(tr("Develop"), this);
-        developButton->setObjectName(QStringLiteral("developModeButton"));
-        developButton->setProperty("activeMode", true);
-        developButton->setFixedSize(80, 32);
-        developButton->setFocusPolicy(Qt::NoFocus);
-        layout->addWidget(developButton);
+        m_developButton = new QPushButton(tr("Develop"), this);
+        m_developButton->setObjectName(QStringLiteral("developModeButton"));
+        m_developButton->setCheckable(true);
+        m_developButton->setChecked(true);
+        m_developButton->setFixedSize(80, 32);
+        m_developButton->setFocusPolicy(Qt::NoFocus);
+        layout->addWidget(m_developButton);
+
+        auto *buttonGroup = new QButtonGroup(this);
+        buttonGroup->setExclusive(true);
+        buttonGroup->addButton(m_libraryButton);
+        buttonGroup->addButton(m_developButton);
 
         layout->addStretch(1);
 
@@ -51,23 +59,38 @@ public:
             "QPushButton#libraryModeButton:hover, QPushButton#developModeButton:hover {"
             "  color: #e0e0e0;"
             "}"
-            "QPushButton[activeMode=\"true\"] {"
+            "QPushButton#libraryModeButton:checked, QPushButton#developModeButton:checked {"
             "  color: #ffffff;"
             "  font-weight: 700;"
             "}"));
     }
 
-    static void install(QWidget *centerPanel)
+    QPushButton *libraryButton() const noexcept { return m_libraryButton; }
+    QPushButton *developButton() const noexcept { return m_developButton; }
+
+    void setLibraryMode(bool libraryMode)
+    {
+        m_libraryButton->setChecked(libraryMode);
+        m_developButton->setChecked(!libraryMode);
+    }
+
+    static WorkspaceModeBar *install(QWidget *centerPanel)
     {
         if (!centerPanel) {
-            return;
+            return nullptr;
         }
 
         auto *layout = qobject_cast<QVBoxLayout *>(centerPanel->layout());
         if (!layout) {
-            return;
+            return nullptr;
         }
 
-        layout->insertWidget(0, new WorkspaceModeBar(centerPanel));
+        auto *modeBar = new WorkspaceModeBar(centerPanel);
+        layout->insertWidget(0, modeBar);
+        return modeBar;
     }
+
+private:
+    QPushButton *m_libraryButton = nullptr;
+    QPushButton *m_developButton = nullptr;
 };

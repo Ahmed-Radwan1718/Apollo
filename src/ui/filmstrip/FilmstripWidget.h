@@ -5,6 +5,8 @@
 #include <QString>
 #include <QWidget>
 
+#include <functional>
+
 class PhotoCanvas;
 class QEvent;
 class QHBoxLayout;
@@ -14,9 +16,12 @@ class QScrollArea;
 class FilmstripWidget final : public QWidget
 {
 public:
+    using PhotoOpenedCallback = std::function<void(const QString &, const QImage &)>;
+
     explicit FilmstripWidget(QWidget *parent = nullptr);
 
     void addPhoto(const QString &filePath, const QImage &image);
+    void setPhotoOpenedCallback(PhotoOpenedCallback callback);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -32,4 +37,5 @@ private:
     QHBoxLayout *m_contentLayout = nullptr;
     QHash<QString, QWidget *> m_thumbnails;
     QString m_currentFilePath;
+    PhotoOpenedCallback m_photoOpenedCallback;
 };

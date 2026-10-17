@@ -49,6 +49,12 @@ qt_add_executable(Nexus WIN32
     src/ui/leftpanel/HistoryPanel.h
     src/ui/leftpanel/NavigatorPanel.cpp
     src/ui/leftpanel/NavigatorPanel.h
+    src/ui/library/LibraryGridWidget.cpp
+    src/ui/library/LibraryGridWidget.h
+    src/ui/library/LibrarySidebar.cpp
+    src/ui/library/LibrarySidebar.h
+    src/ui/library/LibraryWorkspaceController.cpp
+    src/ui/library/LibraryWorkspaceController.h
     src/ui/rightpanel/BasicPanel.cpp
     src/ui/rightpanel/BasicPanel.h
     src/ui/rightpanel/PhotoMetadataWidget.cpp
@@ -56,6 +62,7 @@ qt_add_executable(Nexus WIN32
     src/ui/rightpanel/WhiteBalancePickerController.cpp
     src/ui/rightpanel/WhiteBalancePickerController.h
     src/ui/sidebar/SidebarCollapseHandle.h
+    src/ui/workspace/WorkspaceModeBar.h
 )
 
 target_include_directories(Nexus PRIVATE src)
