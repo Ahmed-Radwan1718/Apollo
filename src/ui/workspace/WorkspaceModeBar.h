@@ -12,23 +12,23 @@ public:
         : QWidget(parent)
     {
         setObjectName(QStringLiteral("workspaceModeBar"));
-        setFixedHeight(40);
+        setFixedHeight(42);
 
         auto *layout = new QHBoxLayout(this);
         layout->setContentsMargins(0, 0, 0, 0);
-        layout->setSpacing(4);
+        layout->setSpacing(8);
         layout->addStretch(1);
 
         auto *libraryButton = new QPushButton(tr("Library"), this);
         libraryButton->setObjectName(QStringLiteral("libraryModeButton"));
-        libraryButton->setFixedSize(72, 30);
+        libraryButton->setFixedSize(80, 32);
         libraryButton->setFocusPolicy(Qt::NoFocus);
         layout->addWidget(libraryButton);
 
         auto *developButton = new QPushButton(tr("Develop"), this);
         developButton->setObjectName(QStringLiteral("developModeButton"));
         developButton->setProperty("activeMode", true);
-        developButton->setFixedSize(72, 30);
+        developButton->setFixedSize(80, 32);
         developButton->setFocusPolicy(Qt::NoFocus);
         layout->addWidget(developButton);
 
@@ -42,17 +42,18 @@ public:
             "QPushButton#libraryModeButton, QPushButton#developModeButton {"
             "  background: transparent;"
             "  border: 0;"
-            "  color: #9f9f9f;"
+            "  color: #b5b5b5;"
             "  font-family: \"Segoe UI Variable\";"
-            "  font-size: 12px;"
+            "  font-size: 13px;"
+            "  font-weight: 600;"
             "  padding: 0;"
             "}"
             "QPushButton#libraryModeButton:hover, QPushButton#developModeButton:hover {"
-            "  color: #d7d7d7;"
+            "  color: #e0e0e0;"
             "}"
             "QPushButton[activeMode=\"true\"] {"
-            "  color: #f0f0f0;"
-            "  font-weight: 600;"
+            "  color: #ffffff;"
+            "  font-weight: 700;"
             "}"));
     }
 
