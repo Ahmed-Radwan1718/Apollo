@@ -1,6 +1,7 @@
 #include "app/MainWindow.h"
 #include "ui/leftpanel/HistoryPanel.h"
 #include "ui/rightpanel/BasicSliderInteractionController.h"
+#include "ui/workspace/WorkspaceModeBar.h"
 
 #include <QAction>
 #include <QApplication>
@@ -18,6 +19,10 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
 
     MainWindow window;
+
+    if (QWidget *centerPanel = window.findChild<QWidget *>(QStringLiteral("centerPanel"))) {
+        WorkspaceModeBar::install(centerPanel);
+    }
 
     if (QWidget *basicPanel = window.findChild<QWidget *>(QStringLiteral("basicPanel"))) {
         new BasicSliderInteractionController(basicPanel, &window);
