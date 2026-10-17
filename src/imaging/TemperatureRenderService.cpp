@@ -4,6 +4,9 @@
 #include "imaging/ArwPreviewSession.h"
 
 #include <QMetaObject>
+#include <QOffscreenSurface>
+#include <QOpenGLContext>
+#include <QSurfaceFormat>
 
 #include <memory>
 #include <utility>
@@ -12,9 +15,30 @@ namespace imaging {
 
 TemperatureRenderService::TemperatureRenderService(QObject *parent)
     : QObject(parent)
-    , m_previewThread([this]() { workerLoop(true); })
-    , m_fullThread([this]() { workerLoop(false); })
 {
+    // QOffscreenSurface must be created and destroyed on the GUI thread. The
+    // preview worker may safely make its own OpenGL context current against this
+    // surface after creation, which keeps all shader work off the UI thread.
+    if (QOpenGLContext::supportsThreadedOpenGL()) {
+        QSurfaceFormat format;
+        format.setRenderableType(QSurfaceFormat::OpenGL);
+        format.setVersion(3, 3);
+        format.setProfile(QSurfaceFormat::CoreProfile);
+        format.setDepthBufferSize(0);
+        format.setStencilBufferSize(0);
+
+        auto *surface = new QOffscreenSurface();
+        surface->setFormat(format);
+        surface->create();
+        if (surface->isValid()) {
+            m_previewSurface = surface;
+        } else {
+            delete surface;
+        }
+    }
+
+    m_previewThread = std::jthread([this]() { workerLoop(true); });
+    m_fullThread = std::jthread([this]() { workerLoop(false); });
 }
 
 TemperatureRenderService::~TemperatureRenderService()
@@ -29,6 +53,11 @@ TemperatureRenderService::~TemperatureRenderService()
     if (m_fullThread.joinable()) {
         m_fullThread.join();
     }
+
+    // The worker context has been destroyed by this point, so the GUI thread can
+    // safely release the offscreen surface it created in the constructor.
+    delete m_previewSurface;
+    m_previewSurface = nullptr;
 }
 
 void TemperatureRenderService::preparePreview(const QString &filePath,
@@ -115,7 +144,7 @@ void TemperatureRenderService::workerLoop(bool preview)
     std::optional<Request> &pending = preview ? m_pendingPreview : m_pendingFull;
     std::unique_ptr<ArwPreviewSession> previewSession;
     if (preview) {
-        previewSession = std::make_unique<ArwPreviewSession>();
+        previewSession = std::make_unique<ArwPreviewSession>(m_previewSurface);
     }
 
     while (!m_stopping.load(std::memory_order_acquire)) {
