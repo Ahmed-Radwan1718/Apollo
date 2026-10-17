@@ -2,6 +2,7 @@
 
 #include <QHBoxLayout>
 #include <QPushButton>
+#include <QSizePolicy>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -12,47 +13,65 @@ public:
         : QWidget(parent)
     {
         setObjectName(QStringLiteral("workspaceModeBar"));
-        setFixedHeight(40);
+        setFixedHeight(46);
 
         auto *layout = new QHBoxLayout(this);
         layout->setContentsMargins(0, 0, 0, 0);
-        layout->setSpacing(4);
+        layout->setSpacing(0);
         layout->addStretch(1);
 
-        auto *libraryButton = new QPushButton(tr("Library"), this);
-        libraryButton->setObjectName(QStringLiteral("libraryModeButton"));
-        libraryButton->setFixedSize(72, 30);
-        libraryButton->setFocusPolicy(Qt::NoFocus);
-        layout->addWidget(libraryButton);
+        auto *buttonRegion = new QWidget(this);
+        buttonRegion->setObjectName(QStringLiteral("workspaceModeButtonRegion"));
+        buttonRegion->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 
-        auto *developButton = new QPushButton(tr("Develop"), this);
+        auto *buttonLayout = new QHBoxLayout(buttonRegion);
+        buttonLayout->setContentsMargins(0, 0, 0, 0);
+        buttonLayout->setSpacing(8);
+        buttonLayout->addStretch(1);
+
+        auto *libraryButton = new QPushButton(tr("Library"), buttonRegion);
+        libraryButton->setObjectName(QStringLiteral("libraryModeButton"));
+        libraryButton->setFixedSize(88, 34);
+        libraryButton->setFocusPolicy(Qt::NoFocus);
+        buttonLayout->addWidget(libraryButton);
+
+        auto *developButton = new QPushButton(tr("Develop"), buttonRegion);
         developButton->setObjectName(QStringLiteral("developModeButton"));
         developButton->setProperty("activeMode", true);
-        developButton->setFixedSize(72, 30);
+        developButton->setFixedSize(88, 34);
         developButton->setFocusPolicy(Qt::NoFocus);
-        layout->addWidget(developButton);
+        buttonLayout->addWidget(developButton);
 
-        layout->addStretch(1);
+        buttonLayout->addStretch(1);
+        layout->addWidget(buttonRegion, 1);
 
         setStyleSheet(QStringLiteral(
             "QWidget#workspaceModeBar {"
             "  background: #181818;"
             "  border-bottom: 1px solid #252525;"
             "}"
+            "QWidget#workspaceModeButtonRegion {"
+            "  background: transparent;"
+            "}"
             "QPushButton#libraryModeButton, QPushButton#developModeButton {"
             "  background: transparent;"
-            "  border: 0;"
-            "  color: #9f9f9f;"
+            "  border: 1px solid transparent;"
+            "  border-radius: 4px;"
+            "  color: #c7c7c7;"
             "  font-family: \"Segoe UI Variable\";"
-            "  font-size: 12px;"
+            "  font-size: 13px;"
+            "  font-weight: 600;"
             "  padding: 0;"
             "}"
             "QPushButton#libraryModeButton:hover, QPushButton#developModeButton:hover {"
-            "  color: #d7d7d7;"
+            "  background: #242424;"
+            "  color: #f0f0f0;"
             "}"
             "QPushButton[activeMode=\"true\"] {"
-            "  color: #f0f0f0;"
-            "  font-weight: 600;"
+            "  background: #303030;"
+            "  border: 1px solid #4d4d4d;"
+            "  color: #ffffff;"
+            "  font-weight: 700;"
             "}"));
     }
 
