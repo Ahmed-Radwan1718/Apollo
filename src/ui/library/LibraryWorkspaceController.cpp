@@ -149,6 +149,6 @@ void LibraryWorkspaceController::setLibraryMode(bool libraryMode)
         m_sidebar->hide();
     }
     if (m_grid) {
-        m_grid->hide();
+        m_grid->setVisible(libraryMode);
     }
 }
