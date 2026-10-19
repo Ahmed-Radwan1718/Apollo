@@ -6,7 +6,6 @@
 #include <QFont>
 #include <QFrame>
 #include <QGridLayout>
-#include <QHBoxLayout>
 #include <QImageReader>
 #include <QLabel>
 #include <QLayoutItem>
@@ -184,25 +183,6 @@ LibraryGridWidget::LibraryGridWidget(QWidget *parent)
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    auto *header = new QWidget(this);
-    header->setObjectName(QStringLiteral("libraryGridHeader"));
-    header->setFixedHeight(38);
-
-    auto *headerLayout = new QHBoxLayout(header);
-    headerLayout->setContentsMargins(16, 0, 16, 0);
-    headerLayout->setSpacing(8);
-
-    auto *title = new QLabel(tr("All Photos"), header);
-    title->setObjectName(QStringLiteral("libraryGridTitle"));
-    headerLayout->addWidget(title);
-    headerLayout->addStretch(1);
-
-    m_countLabel = new QLabel(header);
-    m_countLabel->setObjectName(QStringLiteral("libraryGridCount"));
-    headerLayout->addWidget(m_countLabel);
-
-    layout->addWidget(header);
-
     m_stack = new QStackedWidget(this);
     m_stack->setObjectName(QStringLiteral("libraryGridStack"));
     m_stack->setAcceptDrops(false);
@@ -240,24 +220,11 @@ LibraryGridWidget::LibraryGridWidget(QWidget *parent)
     layout->addWidget(m_stack, 1);
 
     setStyleSheet(QStringLiteral(
-        "QWidget#libraryGridWidget, QWidget#libraryGridHeader,"
-        "QWidget#libraryGridContent, QStackedWidget#libraryGridStack,"
-        "QScrollArea#libraryGridScrollArea {"
+        "QWidget#libraryGridWidget, QWidget#libraryGridContent,"
+        "QStackedWidget#libraryGridStack, QScrollArea#libraryGridScrollArea {"
         "  background: #181818;"
         "  border: 0;"
         "  font-family: \"Segoe UI Variable\";"
-        "}"
-        "QWidget#libraryGridHeader {"
-        "  border-bottom: 1px solid #252525;"
-        "}"
-        "QLabel#libraryGridTitle {"
-        "  color: #d6d6d6;"
-        "  font-size: 12px;"
-        "  font-weight: 600;"
-        "}"
-        "QLabel#libraryGridCount {"
-        "  color: #9f9f9f;"
-        "  font-size: 11px;"
         "}"
         "QLabel#libraryEmptyLabel {"
         "  background: #181818;"
@@ -281,8 +248,6 @@ LibraryGridWidget::LibraryGridWidget(QWidget *parent)
         "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
         "  background: transparent;"
         "}"));
-
-    updateHeader();
 }
 
 void LibraryGridWidget::addPhoto(const QString &filePath, const QImage &image)
@@ -312,7 +277,6 @@ void LibraryGridWidget::addPhoto(const QString &filePath, const QImage &image)
     m_order.push_back(filePath);
     m_stack->setCurrentWidget(m_scrollArea);
     setCurrentPhoto(filePath);
-    updateHeader();
     reflow();
 }
 
