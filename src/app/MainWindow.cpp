@@ -218,7 +218,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     resize(1440, 900);
     setMinimumSize(800, 520);
-    setWindowTitle(QStringLiteral("Nexus"));
+    setWindowTitle(QStringLiteral("Apollo"));
 
     setStyleSheet(QStringLiteral(
         "QMainWindow { background: #181818; }"
@@ -611,7 +611,7 @@ void MainWindow::openImage(const QString &filePath)
     setDevelopControlsFromState(m_requestedState);
     refreshHistoryPanel();
 
-    setWindowTitle(QStringLiteral("%1 — Nexus").arg(QFileInfo(filePath).fileName()));
+    setWindowTitle(QStringLiteral("%1 — Apollo").arg(QFileInfo(filePath).fileName()));
 
     if (!showingOriginal && isArwPath(m_currentFilePath)) {
         requestFullRender(m_requestedState);
