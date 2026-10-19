@@ -1882,6 +1882,11 @@ QImage ArwDecoder::decode(const QString &filePath,
         return {};
     }
 
+    // dcraw_make_mem_image() owns its returned buffer independently of the
+    // LibRaw instance, so release the decoded RAW and postprocessed buffers before
+    // allocating Nexus's final display image.
+    processor.recycle();
+
     QImage image = developedSrgbImage(*processed,
                                       exposureHundredths,
                                       highlights,
