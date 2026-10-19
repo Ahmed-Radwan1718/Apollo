@@ -72,6 +72,9 @@ LibraryWorkspaceController::LibraryWorkspaceController(
             if (m_sidebar) {
                 m_sidebar->addFolder(QFileInfo(filePath).absolutePath());
             }
+            if (m_filmstrip) {
+                m_filmstrip->addPhoto(filePath, thumbnail);
+            }
         });
 
     if (m_filmstrip) {
