@@ -1,8 +1,6 @@
 #include "imaging/ArwPreviewSession.h"
-#include "imaging/GpuDevelopPreviewRenderer.h"
 
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <memory>
 
@@ -11,11 +9,6 @@ namespace imaging {
 struct ArwPreviewSession::Impl
 {
     static constexpr int kMaximumPreviewLongSide = 1280;
-
-    explicit Impl(QOffscreenSurface *gpuSurface)
-        : gpuRenderer(gpuSurface)
-    {
-    }
 
     ~Impl()
     {
@@ -31,7 +24,6 @@ struct ArwPreviewSession::Impl
         }
         cachedTemperatureKelvin = std::numeric_limits<int>::min();
         cachedTint = std::numeric_limits<int>::min();
-        cachedWhitePoint = kLinearMaximum;
     }
 
     void reset()
@@ -206,8 +198,6 @@ struct ArwPreviewSession::Impl
 
         clearCachedImage();
         cachedImage = candidate;
-        cachedWhitePoint = autoBrightnessWhitePoint(destination, targetPixelCount);
-        ++sourceRevision;
         return true;
     }
 
@@ -296,13 +286,10 @@ struct ArwPreviewSession::Impl
     libraw_processed_image_t *cachedImage = nullptr;
     int cachedTemperatureKelvin = std::numeric_limits<int>::min();
     int cachedTint = std::numeric_limits<int>::min();
-    int cachedWhitePoint = kLinearMaximum;
-    std::uint64_t sourceRevision = 0;
-    GpuDevelopPreviewRenderer gpuRenderer;
 };
 
-ArwPreviewSession::ArwPreviewSession(QOffscreenSurface *gpuSurface)
-    : m_impl(std::make_unique<Impl>(gpuSurface))
+ArwPreviewSession::ArwPreviewSession()
+    : m_impl(std::make_unique<Impl>())
 {
 }
 
@@ -339,33 +326,6 @@ QImage ArwPreviewSession::render(const QString &filePath,
 {
     if (!prepare(filePath, whiteBalanceTemperatureKelvin, tint, error)) {
         return {};
-    }
-
-    if (m_impl->gpuRenderer.isAvailable()
-        && texture == 0
-        && clarity == 0
-        && dehaze == 0
-        && vibrance == 0) {
-        QString gpuError;
-        const auto *samples = reinterpret_cast<const std::uint16_t *>(
-            m_impl->cachedImage->data);
-        QImage gpuImage = m_impl->gpuRenderer.render(
-            samples,
-            static_cast<int>(m_impl->cachedImage->width),
-            static_cast<int>(m_impl->cachedImage->height),
-            m_impl->cachedWhitePoint,
-            m_impl->sourceRevision,
-            exposureHundredths,
-            highlights,
-            shadows,
-            whites,
-            blacks,
-            contrast,
-            saturation,
-            &gpuError);
-        if (!gpuImage.isNull()) {
-            return gpuImage;
-        }
     }
 
     return developedSrgbImage(*m_impl->cachedImage,

@@ -10,8 +10,6 @@
 #include <optional>
 #include <thread>
 
-class QOffscreenSurface;
-
 namespace imaging {
 
 class TemperatureRenderService final : public QObject
@@ -105,7 +103,6 @@ private:
     std::condition_variable m_fullCondition;
     std::optional<Request> m_pendingFull;
 
-    QOffscreenSurface *m_previewSurface = nullptr;
     std::jthread m_previewThread;
     std::jthread m_fullThread;
 };

@@ -5,14 +5,12 @@
 
 #include <memory>
 
-class QOffscreenSurface;
-
 namespace imaging {
 
 class ArwPreviewSession final
 {
 public:
-    explicit ArwPreviewSession(QOffscreenSurface *gpuSurface = nullptr);
+    ArwPreviewSession();
     ~ArwPreviewSession();
 
     ArwPreviewSession(const ArwPreviewSession &) = delete;

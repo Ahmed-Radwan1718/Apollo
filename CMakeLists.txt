@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Widgets OpenGL OpenGLWidgets)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Widgets)
 qt_standard_project_setup()
 
 include(cmake/LibRaw.cmake)
@@ -30,8 +30,6 @@ qt_add_executable(Nexus WIN32
     src/imaging/ArwDecoder.h
     src/imaging/ArwPreviewSession.h
     src/imaging/ArwPreviewSessionImpl.inc
-    src/imaging/GpuDevelopPreviewRenderer.cpp
-    src/imaging/GpuDevelopPreviewRenderer.h
     src/imaging/Histogram.cpp
     src/imaging/Histogram.h
     src/imaging/ImageLoader.cpp
@@ -43,10 +41,6 @@ qt_add_executable(Nexus WIN32
     src/imaging/ThumbnailLoader.h
     src/imaging/WhiteBalancePickerService.cpp
     src/imaging/WhiteBalancePickerService.h
-    src/ui/canvas/GpuCanvasInstaller.cpp
-    src/ui/canvas/GpuCanvasInstaller.h
-    src/ui/canvas/GpuCanvasViewport.cpp
-    src/ui/canvas/GpuCanvasViewport.h
     src/ui/canvas/PhotoCanvas.cpp
     src/ui/canvas/PhotoCanvas.h
     src/ui/filmstrip/FilmstripWidget.cpp
@@ -78,8 +72,6 @@ qt_add_executable(Nexus WIN32
 target_include_directories(Nexus PRIVATE src)
 target_link_libraries(Nexus PRIVATE
     Qt6::Widgets
-    Qt6::OpenGL
-    Qt6::OpenGLWidgets
     libraw::libraw_r
 )
 
