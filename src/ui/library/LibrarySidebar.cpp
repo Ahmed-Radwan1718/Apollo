@@ -1,7 +1,11 @@
 #include "ui/library/LibrarySidebar.h"
 
 #include <QFileInfo>
+#include <QFont>
 #include <QLabel>
+#include <QPainter>
+#include <QPaintEvent>
+#include <QPen>
 #include <QSizePolicy>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -18,21 +22,67 @@ QLabel *makeItem(const QString &text, bool selected, QWidget *parent)
     return label;
 }
 
-QToolButton *makeSectionHeader(const QString &text,
-                               QWidget *content,
-                               QWidget *parent)
+class LibrarySectionHeader final : public QToolButton
 {
-    auto *button = new QToolButton(parent);
-    button->setObjectName(QStringLiteral("librarySectionHeader"));
-    button->setText(text);
-    button->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    button->setCheckable(true);
-    button->setChecked(true);
-    button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+public:
+    LibrarySectionHeader(const QString &text,
+                         bool expanded,
+                         QWidget *parent = nullptr)
+        : QToolButton(parent)
+    {
+        setText(text);
+        setCheckable(true);
+        setChecked(expanded);
+        setCursor(Qt::PointingHandCursor);
+        setFocusPolicy(Qt::NoFocus);
+        setFixedHeight(30);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        painter.setRenderHint(QPainter::TextAntialiasing, true);
+
+        const QColor color = underMouse()
+            ? QColor(255, 255, 255)
+            : QColor(214, 214, 214);
+        painter.setPen(color);
+
+        QFont titleFont = font();
+        titleFont.setPointSizeF(9.0);
+        titleFont.setWeight(QFont::DemiBold);
+        painter.setFont(titleFont);
+        painter.drawText(rect().adjusted(0, 0, -24, 0),
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         text());
+
+        painter.setPen(QPen(color, 1.35, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        const QPointF center(width() - 10.0, height() / 2.0);
+        painter.translate(center);
+        if (isChecked()) {
+            painter.rotate(90.0);
+        }
+        painter.drawLine(QPointF(-1.5, -3.5), QPointF(2.0, 0.0));
+        painter.drawLine(QPointF(2.0, 0.0), QPointF(-1.5, 3.5));
+    }
+};
+
+LibrarySectionHeader *makeSectionHeader(const QString &text,
+                                        QWidget *content,
+                                        bool expanded,
+                                        QWidget *parent)
+{
+    auto *button = new LibrarySectionHeader(text, expanded, parent);
+    content->setVisible(expanded);
 
     QObject::connect(button, &QToolButton::toggled, content,
-                     [content](bool expanded) {
-                         content->setVisible(expanded);
+                     [content](bool isExpanded) {
+                         content->setVisible(isExpanded);
                      });
 
     return button;
@@ -54,20 +104,19 @@ LibrarySidebar::LibrarySidebar(QWidget *parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(14, 14, 14, 12);
-    layout->setSpacing(4);
+    layout->setContentsMargins(14, 0, 14, 12);
+    layout->setSpacing(2);
 
     auto *catalogContent = makeSectionContent(this);
     auto *catalogLayout = new QVBoxLayout(catalogContent);
     catalogLayout->setContentsMargins(0, 0, 0, 0);
-    catalogLayout->setSpacing(4);
+    catalogLayout->setSpacing(2);
     catalogLayout->addWidget(makeItem(tr("All Photos"), true, catalogContent));
     catalogLayout->addWidget(makeItem(tr("Recently Added"), false, catalogContent));
+    catalogLayout->addWidget(makeItem(tr("Favorites"), false, catalogContent));
 
-    layout->addWidget(makeSectionHeader(tr("Catalog"), catalogContent, this));
+    layout->addWidget(makeSectionHeader(tr("Catalog"), catalogContent, false, this));
     layout->addWidget(catalogContent);
-
-    layout->addSpacing(14);
 
     auto *folderContainer = makeSectionContent(this);
     folderContainer->setObjectName(QStringLiteral("libraryFolderContainer"));
@@ -75,17 +124,15 @@ LibrarySidebar::LibrarySidebar(QWidget *parent)
     m_folderLayout->setContentsMargins(0, 0, 0, 0);
     m_folderLayout->setSpacing(2);
 
-    layout->addWidget(makeSectionHeader(tr("Folders"), folderContainer, this));
+    layout->addWidget(makeSectionHeader(tr("Folders"), folderContainer, true, this));
     layout->addWidget(folderContainer);
-
-    layout->addSpacing(14);
 
     auto *collectionsContent = makeSectionContent(this);
     auto *collectionsLayout = new QVBoxLayout(collectionsContent);
     collectionsLayout->setContentsMargins(0, 0, 0, 0);
     collectionsLayout->setSpacing(2);
 
-    layout->addWidget(makeSectionHeader(tr("Collections"), collectionsContent, this));
+    layout->addWidget(makeSectionHeader(tr("Collections"), collectionsContent, false, this));
     layout->addWidget(collectionsContent);
     layout->addStretch(1);
 
@@ -95,18 +142,6 @@ LibrarySidebar::LibrarySidebar(QWidget *parent)
         "  background: #181818;"
         "  border: 0;"
         "  font-family: \"Segoe UI Variable\";"
-        "}"
-        "QToolButton#librarySectionHeader {"
-        "  background: transparent;"
-        "  border: 0;"
-        "  color: #d6d6d6;"
-        "  font-size: 12px;"
-        "  font-weight: 600;"
-        "  text-align: left;"
-        "  padding: 0 0 4px 0;"
-        "}"
-        "QToolButton#librarySectionHeader:hover {"
-        "  color: #f2f2f2;"
         "}"
         "QLabel#libraryItem, QLabel#librarySelectedItem {"
         "  color: #b5b5b5;"

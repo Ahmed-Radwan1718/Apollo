@@ -121,24 +121,15 @@ void LibraryWorkspaceController::setLibraryMode(bool libraryMode)
 
     if (m_modeBar) {
         m_modeBar->setLibraryMode(libraryMode);
-
-        int leftInset = 0;
-        if (libraryMode && m_window) {
-            if (QWidget *leftPanel =
-                    m_window->findChild<QWidget *>(QStringLiteral("leftPanel"))) {
-                leftInset = leftPanel->width();
-            }
-        }
-
         if (m_modeBar->layout()) {
-            m_modeBar->layout()->setContentsMargins(leftInset, 0, 0, 0);
+            m_modeBar->layout()->setContentsMargins(0, 0, 0, 0);
         }
     }
 
     if (m_window) {
         if (QWidget *leftPanel =
                 m_window->findChild<QWidget *>(QStringLiteral("leftPanel"))) {
-            leftPanel->setVisible(!libraryMode);
+            leftPanel->show();
         }
     }
 
@@ -158,7 +149,7 @@ void LibraryWorkspaceController::setLibraryMode(bool libraryMode)
         m_basicPanel->setVisible(!libraryMode);
     }
     if (m_sidebar) {
-        m_sidebar->hide();
+        m_sidebar->setVisible(libraryMode);
     }
     if (m_grid) {
         m_grid->setVisible(libraryMode);
