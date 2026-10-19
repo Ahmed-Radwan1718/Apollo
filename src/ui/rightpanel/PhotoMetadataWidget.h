@@ -8,6 +8,8 @@ class QLabel;
 
 class PhotoMetadataWidget final : public QWidget
 {
+    Q_OBJECT
+
 public:
     explicit PhotoMetadataWidget(QWidget *parent = nullptr);
 

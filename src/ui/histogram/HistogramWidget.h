@@ -9,6 +9,8 @@ class QPaintEvent;
 
 class HistogramWidget final : public QWidget
 {
+    Q_OBJECT
+
 public:
     explicit HistogramWidget(QWidget *parent = nullptr);
 
