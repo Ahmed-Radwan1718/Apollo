@@ -1,7 +1,9 @@
 #include "ui/library/LibraryGridWidget.h"
 
 #include <QDragEnterEvent>
+#include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QEvent>
 #include <QFileInfo>
 #include <QFont>
 #include <QFrame>
@@ -183,14 +185,22 @@ LibraryGridWidget::LibraryGridWidget(QWidget *parent)
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
+    const auto registerDropSurface = [this](QWidget *surface) {
+        if (!surface) {
+            return;
+        }
+        surface->setAcceptDrops(true);
+        surface->installEventFilter(this);
+    };
+
     m_stack = new QStackedWidget(this);
     m_stack->setObjectName(QStringLiteral("libraryGridStack"));
-    m_stack->setAcceptDrops(false);
+    registerDropSurface(m_stack);
 
     auto *emptyLabel = new QLabel(tr("No photos in Library"), m_stack);
     emptyLabel->setObjectName(QStringLiteral("libraryEmptyLabel"));
     emptyLabel->setAlignment(Qt::AlignCenter);
-    emptyLabel->setAcceptDrops(false);
+    registerDropSurface(emptyLabel);
     m_stack->addWidget(emptyLabel);
 
     m_scrollArea = new QScrollArea(m_stack);
@@ -200,12 +210,12 @@ LibraryGridWidget::LibraryGridWidget(QWidget *parent)
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_scrollArea->setFocusPolicy(Qt::NoFocus);
-    m_scrollArea->setAcceptDrops(false);
-    m_scrollArea->viewport()->setAcceptDrops(false);
+    registerDropSurface(m_scrollArea);
+    registerDropSurface(m_scrollArea->viewport());
 
     m_content = new QWidget(m_scrollArea);
     m_content->setObjectName(QStringLiteral("libraryGridContent"));
-    m_content->setAcceptDrops(false);
+    registerDropSurface(m_content);
     m_gridLayout = new QGridLayout(m_content);
     m_gridLayout->setContentsMargins(kGridMargin,
                                      kGridMargin,
@@ -289,6 +299,39 @@ void LibraryGridWidget::setPhotoActivatedCallback(
 void LibraryGridWidget::setFilesDroppedCallback(FilesDroppedCallback callback)
 {
     m_filesDropped = std::move(callback);
+}
+
+bool LibraryGridWidget::eventFilter(QObject *watched, QEvent *event)
+{
+    Q_UNUSED(watched);
+
+    if (!event) {
+        return QWidget::eventFilter(watched, event);
+    }
+
+    if (event->type() == QEvent::DragEnter) {
+        auto *dragEvent = static_cast<QDragEnterEvent *>(event);
+        dragEnterEvent(dragEvent);
+        return dragEvent->isAccepted();
+    }
+
+    if (event->type() == QEvent::DragMove) {
+        auto *dragEvent = static_cast<QDragMoveEvent *>(event);
+        if (!supportedLocalFiles(dragEvent->mimeData()).isEmpty()) {
+            dragEvent->acceptProposedAction();
+            return true;
+        }
+        dragEvent->ignore();
+        return false;
+    }
+
+    if (event->type() == QEvent::Drop) {
+        auto *drop = static_cast<QDropEvent *>(event);
+        dropEvent(drop);
+        return drop->isAccepted();
+    }
+
+    return QWidget::eventFilter(watched, event);
 }
 
 void LibraryGridWidget::resizeEvent(QResizeEvent *event)
