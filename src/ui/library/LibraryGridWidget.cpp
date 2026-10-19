@@ -31,7 +31,6 @@ constexpr int kThumbnailWidth = 176;
 constexpr int kThumbnailImageHeight = 112;
 constexpr int kThumbnailLabelHeight = 24;
 constexpr int kThumbnailHeight = kThumbnailImageHeight + kThumbnailLabelHeight;
-constexpr int kThumbnailPreviewSize = 640;
 constexpr int kGridMargin = 16;
 constexpr int kGridSpacing = 12;
 
@@ -89,9 +88,9 @@ public:
 
     void setImage(const QImage &image)
     {
-        m_thumbnail = image.scaled(kThumbnailPreviewSize,
-                                   kThumbnailPreviewSize,
-                                   Qt::KeepAspectRatio,
+        m_thumbnail = image.scaled(kThumbnailWidth,
+                                   kThumbnailImageHeight,
+                                   Qt::KeepAspectRatioByExpanding,
                                    Qt::SmoothTransformation);
         update();
     }
@@ -126,19 +125,19 @@ protected:
         painter.fillRect(rect(), QColor(24, 24, 24));
 
         const QRect imageRect(0, 0, width(), kThumbnailImageHeight);
-        painter.fillRect(imageRect, QColor(17, 17, 17));
 
         if (!m_thumbnail.isNull()) {
             painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
-            const QRect available = imageRect.adjusted(5, 5, -5, -5);
-            const QSize drawnSize = m_thumbnail.size().scaled(available.size(),
-                                                              Qt::KeepAspectRatio);
-            const QRect target(available.center().x() - drawnSize.width() / 2,
-                               available.center().y() - drawnSize.height() / 2,
-                               drawnSize.width(),
-                               drawnSize.height());
-            painter.drawImage(target, m_thumbnail);
+            const int sourceX = std::max(0, (m_thumbnail.width() - imageRect.width()) / 2);
+            const int sourceY = std::max(0, (m_thumbnail.height() - imageRect.height()) / 2);
+            const QRect sourceRect(sourceX,
+                                   sourceY,
+                                   imageRect.width(),
+                                   imageRect.height());
+            painter.drawImage(imageRect, m_thumbnail, sourceRect);
+        } else {
+            painter.fillRect(imageRect, QColor(17, 17, 17));
         }
 
         if (m_selected) {
