@@ -123,6 +123,13 @@ void LibraryWorkspaceController::setLibraryMode(bool libraryMode)
         m_modeBar->setLibraryMode(libraryMode);
     }
 
+    if (m_window) {
+        if (QWidget *leftPanel =
+                m_window->findChild<QWidget *>(QStringLiteral("leftPanel"))) {
+            leftPanel->setVisible(!libraryMode);
+        }
+    }
+
     if (m_navigator) {
         m_navigator->setVisible(!libraryMode);
     }
@@ -139,9 +146,9 @@ void LibraryWorkspaceController::setLibraryMode(bool libraryMode)
         m_basicPanel->setVisible(!libraryMode);
     }
     if (m_sidebar) {
-        m_sidebar->setVisible(libraryMode);
+        m_sidebar->hide();
     }
     if (m_grid) {
-        m_grid->setVisible(libraryMode);
+        m_grid->hide();
     }
 }
