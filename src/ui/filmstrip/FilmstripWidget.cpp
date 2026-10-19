@@ -207,9 +207,6 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
 
     if (m_thumbnails.contains(filePath)) {
         setCurrentPhoto(filePath);
-        if (m_photoOpenedCallback) {
-            m_photoOpenedCallback(filePath, image);
-        }
         return;
     }
 

@@ -12,6 +12,8 @@
 
 namespace {
 
+constexpr int kHistogramPreviewMaximumEdge = 1024;
+
 qreal normalizedHistogramHeight(quint64 count, quint64 displayPeak)
 {
     if (count == 0 || displayPeak == 0) {
@@ -106,7 +108,17 @@ HistogramWidget::HistogramWidget(QWidget *parent)
 
 void HistogramWidget::setImage(const QImage &image)
 {
-    m_histogram = imaging::Histogram::calculate(image);
+    QImage histogramImage = image;
+    if (!image.isNull()
+        && (image.width() > kHistogramPreviewMaximumEdge
+            || image.height() > kHistogramPreviewMaximumEdge)) {
+        histogramImage = image.scaled(kHistogramPreviewMaximumEdge,
+                                      kHistogramPreviewMaximumEdge,
+                                      Qt::KeepAspectRatio,
+                                      Qt::FastTransformation);
+    }
+
+    m_histogram = imaging::Histogram::calculate(histogramImage);
     update();
 }
 

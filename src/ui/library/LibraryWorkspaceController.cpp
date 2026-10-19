@@ -3,15 +3,19 @@
 #include "app/MainWindow.h"
 #include "ui/canvas/PhotoCanvas.h"
 #include "ui/filmstrip/FilmstripWidget.h"
+#include "ui/histogram/HistogramWidget.h"
 #include "ui/leftpanel/HistoryPanel.h"
 #include "ui/leftpanel/NavigatorPanel.h"
 #include "ui/library/LibraryGridWidget.h"
 #include "ui/library/LibraryImportService.h"
 #include "ui/library/LibrarySidebar.h"
 #include "ui/rightpanel/BasicPanel.h"
+#include "ui/rightpanel/PhotoMetadataWidget.h"
 #include "ui/workspace/WorkspaceModeBar.h"
 
+#include <QDir>
 #include <QFileInfo>
+#include <QMessageBox>
 #include <QMetaObject>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -35,6 +39,8 @@ LibraryWorkspaceController::LibraryWorkspaceController(
     m_navigator = m_window->findChild<NavigatorPanel *>();
     m_history = m_window->findChild<HistoryPanel *>();
     m_canvas = m_window->findChild<PhotoCanvas *>();
+    m_histogram = m_window->findChild<HistogramWidget *>();
+    m_photoMetadata = m_window->findChild<PhotoMetadataWidget *>();
 
     if (QWidget *filmstripWidget =
             m_window->findChild<QWidget *>(QStringLiteral("filmstripWidget"))) {
@@ -77,6 +83,38 @@ LibraryWorkspaceController::LibraryWorkspaceController(
             }
         });
 
+    m_importService->setDevelopPhotoReadyCallback(
+        [this](const QString &filePath, const QString &error) {
+            if (!m_window) {
+                return;
+            }
+
+            if (!error.isEmpty()) {
+                if (m_basicPanel) {
+                    m_basicPanel->setEnabled(true);
+                }
+
+                QMessageBox::critical(
+                    m_window,
+                    tr("Could not open photo"),
+                    tr("Apollo could not decode:\n%1\n\n%2")
+                        .arg(QDir::toNativeSeparators(filePath), error));
+                return;
+            }
+
+            // ImageLoader has already decoded and cached this image on a worker.
+            // Reuse MainWindow's normal open path so history/develop state remains
+            // exactly the same, but the expensive decoder no longer blocks the UI.
+            QMetaObject::invokeMethod(m_window,
+                                      "openImage",
+                                      Qt::DirectConnection,
+                                      Q_ARG(QString, filePath));
+
+            if (m_basicPanel) {
+                m_basicPanel->setEnabled(true);
+            }
+        });
+
     if (m_filmstrip) {
         m_filmstrip->setPhotoOpenedCallback(
             [this](const QString &filePath, const QImage &image) {
@@ -91,15 +129,41 @@ LibraryWorkspaceController::LibraryWorkspaceController(
 
     if (m_grid) {
         m_grid->setPhotoActivatedCallback(
-            [this](const QString &filePath) {
+            [this](const QString &filePath, const QImage &preview) {
                 if (!m_window || filePath.isEmpty()) {
                     return;
                 }
 
-                QMetaObject::invokeMethod(m_window,
-                                          "openImage",
-                                          Qt::QueuedConnection,
-                                          Q_ARG(QString, filePath));
+                // Show the already-available Library preview immediately. Full
+                // resolution decode continues in the background below.
+                if (!preview.isNull()) {
+                    if (m_canvas) {
+                        m_canvas->setImage(preview);
+                    }
+                    if (m_navigator) {
+                        m_navigator->setImage(preview);
+                    }
+                    if (m_histogram) {
+                        m_histogram->setImage(preview);
+                    }
+                    if (m_photoMetadata) {
+                        m_photoMetadata->clear();
+                    }
+                    if (m_filmstrip) {
+                        m_filmstrip->addPhoto(filePath, preview);
+                    }
+                }
+
+                if (m_basicPanel) {
+                    m_basicPanel->setEnabled(false);
+                }
+
+                m_window->setWindowTitle(
+                    QStringLiteral("%1 — Apollo").arg(QFileInfo(filePath).fileName()));
+
+                if (m_importService) {
+                    m_importService->requestDevelopPhoto(filePath);
+                }
             });
 
         m_grid->setFilesDroppedCallback(

@@ -4,6 +4,7 @@
 
 class BasicPanel;
 class FilmstripWidget;
+class HistogramWidget;
 class HistoryPanel;
 class LibraryGridWidget;
 class LibraryImportService;
@@ -11,6 +12,7 @@ class LibrarySidebar;
 class MainWindow;
 class NavigatorPanel;
 class PhotoCanvas;
+class PhotoMetadataWidget;
 class WorkspaceModeBar;
 
 class LibraryWorkspaceController final : public QObject
@@ -29,6 +31,8 @@ private:
     HistoryPanel *m_history = nullptr;
     PhotoCanvas *m_canvas = nullptr;
     FilmstripWidget *m_filmstrip = nullptr;
+    HistogramWidget *m_histogram = nullptr;
+    PhotoMetadataWidget *m_photoMetadata = nullptr;
     BasicPanel *m_basicPanel = nullptr;
     LibrarySidebar *m_sidebar = nullptr;
     LibraryGridWidget *m_grid = nullptr;

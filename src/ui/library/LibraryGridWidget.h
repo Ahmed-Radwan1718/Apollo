@@ -21,12 +21,14 @@ class QStackedWidget;
 class LibraryGridWidget final : public QWidget
 {
 public:
+    using PhotoActivatedCallback =
+        std::function<void(const QString &, const QImage &)>;
     using FilesDroppedCallback = std::function<void(const QStringList &)>;
 
     explicit LibraryGridWidget(QWidget *parent = nullptr);
 
     void addPhoto(const QString &filePath, const QImage &image);
-    void setPhotoActivatedCallback(std::function<void(const QString &)> callback);
+    void setPhotoActivatedCallback(PhotoActivatedCallback callback);
     void setFilesDroppedCallback(FilesDroppedCallback callback);
 
 protected:
@@ -48,6 +50,6 @@ private:
     QHash<QString, QWidget *> m_thumbnails;
     QVector<QString> m_order;
     QString m_currentFilePath;
-    std::function<void(const QString &)> m_photoActivated;
+    PhotoActivatedCallback m_photoActivated;
     FilesDroppedCallback m_filesDropped;
 };

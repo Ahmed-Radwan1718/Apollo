@@ -75,7 +75,7 @@ class LibraryThumbnail final : public QWidget
 public:
     LibraryThumbnail(const QString &filePath,
                      const QImage &image,
-                     std::function<void()> activated,
+                     std::function<void(const QImage &)> activated,
                      QWidget *parent = nullptr)
         : QWidget(parent)
         , m_fileName(QFileInfo(filePath).fileName())
@@ -111,7 +111,7 @@ protected:
         if (event->button() == Qt::LeftButton
             && rect().contains(event->position().toPoint())
             && m_activated) {
-            m_activated();
+            m_activated(m_thumbnail);
         }
 
         QWidget::mouseReleaseEvent(event);
@@ -167,7 +167,7 @@ protected:
 private:
     QImage m_thumbnail;
     QString m_fileName;
-    std::function<void()> m_activated;
+    std::function<void(const QImage &)> m_activated;
     bool m_selected = false;
 };
 
@@ -274,10 +274,10 @@ void LibraryGridWidget::addPhoto(const QString &filePath, const QImage &image)
     auto *thumbnail = new LibraryThumbnail(
         filePath,
         image,
-        [this, filePath]() {
+        [this, filePath](const QImage &preview) {
             setCurrentPhoto(filePath);
             if (m_photoActivated) {
-                m_photoActivated(filePath);
+                m_photoActivated(filePath, preview);
             }
         },
         m_content);
@@ -289,8 +289,7 @@ void LibraryGridWidget::addPhoto(const QString &filePath, const QImage &image)
     reflow();
 }
 
-void LibraryGridWidget::setPhotoActivatedCallback(
-    std::function<void(const QString &)> callback)
+void LibraryGridWidget::setPhotoActivatedCallback(PhotoActivatedCallback callback)
 {
     m_photoActivated = std::move(callback);
 }
