@@ -101,7 +101,7 @@ HistogramWidget::HistogramWidget(QWidget *parent)
     : QWidget(parent)
 {
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    setMinimumHeight(132);
+    setFixedHeight(132);
 }
 
 void HistogramWidget::setImage(const QImage &image)
