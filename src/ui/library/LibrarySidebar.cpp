@@ -25,16 +25,14 @@ QToolButton *makeSectionHeader(const QString &text,
     auto *button = new QToolButton(parent);
     button->setObjectName(QStringLiteral("librarySectionHeader"));
     button->setText(text);
-    button->setArrowType(Qt::DownArrow);
-    button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    button->setToolButtonStyle(Qt::ToolButtonTextOnly);
     button->setCheckable(true);
     button->setChecked(true);
     button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     QObject::connect(button, &QToolButton::toggled, content,
-                     [button, content](bool expanded) {
+                     [content](bool expanded) {
                          content->setVisible(expanded);
-                         button->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
                      });
 
     return button;
