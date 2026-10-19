@@ -11,6 +11,7 @@
 
 class QDragEnterEvent;
 class QDropEvent;
+class QEvent;
 class QGridLayout;
 class QLabel;
 class QResizeEvent;
@@ -29,6 +30,7 @@ public:
     void setFilesDroppedCallback(FilesDroppedCallback callback);
 
 protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
