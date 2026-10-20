@@ -20,6 +20,8 @@ set_source_files_properties(
 
 qt_add_executable(Nexus WIN32
     src/main.cpp
+    src/app/ApplicationStateStore.cpp
+    src/app/ApplicationStateStore.h
     src/app/DevelopState.h
     src/app/HistoryModel.cpp
     src/app/HistoryModel.h

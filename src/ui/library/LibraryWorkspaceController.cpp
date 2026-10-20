@@ -1,5 +1,6 @@
 #include "ui/library/LibraryWorkspaceController.h"
 
+#include "app/ApplicationStateStore.h"
 #include "app/MainWindow.h"
 #include "ui/canvas/PhotoCanvas.h"
 #include "ui/filmstrip/FilmstripWidget.h"
@@ -74,6 +75,7 @@ LibraryWorkspaceController::LibraryWorkspaceController(
         [this](const QString &filePath,
                const QImage &thumbnail,
                const imaging::PhotoMetadata &metadata) {
+            ApplicationStateStore::addLibraryPhoto(filePath);
             m_libraryMetadata.insert(filePath, metadata);
 
             if (m_grid) {
@@ -122,6 +124,8 @@ LibraryWorkspaceController::LibraryWorkspaceController(
     if (m_filmstrip) {
         m_filmstrip->setPhotoOpenedCallback(
             [this](const QString &filePath, const QImage &image) {
+                ApplicationStateStore::addLibraryPhoto(filePath);
+
                 if (m_grid) {
                     m_grid->addPhoto(filePath, image);
                 }
@@ -182,6 +186,11 @@ LibraryWorkspaceController::LibraryWorkspaceController(
                     m_importService->importFiles(filePaths);
                 }
             });
+    }
+
+    const QStringList savedLibraryPhotos = ApplicationStateStore::loadLibraryPhotos();
+    if (m_importService && !savedLibraryPhotos.isEmpty()) {
+        m_importService->importFiles(savedLibraryPhotos);
     }
 
     connect(m_modeBar->libraryButton(), &QPushButton::clicked,

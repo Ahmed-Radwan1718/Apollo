@@ -1,6 +1,26 @@
 #include "app/HistoryModel.h"
 
+#include "app/ApplicationStateStore.h"
+
+#include <algorithm>
 #include <utility>
+
+HistoryModel::HistoryModel()
+{
+    const QVector<Snapshot> savedHistories = ApplicationStateStore::loadHistories();
+    for (const Snapshot &snapshot : savedHistories) {
+        if (snapshot.filePath.isEmpty() || snapshot.entries.isEmpty()) {
+            continue;
+        }
+
+        PhotoHistory history;
+        history.entries = snapshot.entries;
+        history.currentIndex = std::clamp(snapshot.currentIndex,
+                                          0,
+                                          static_cast<int>(history.entries.size()) - 1);
+        m_histories.insert(snapshot.filePath, std::move(history));
+    }
+}
 
 void HistoryModel::initializePhoto(const QString &filePath,
                                    const DevelopState &originalState)
@@ -13,6 +33,7 @@ void HistoryModel::initializePhoto(const QString &filePath,
     history.entries.push_back({QStringLiteral("Original"), originalState});
     history.currentIndex = 0;
     m_histories.insert(filePath, std::move(history));
+    persist();
 }
 
 bool HistoryModel::hasPhoto(const QString &filePath) const
@@ -32,6 +53,7 @@ QStringList HistoryModel::labels(const QString &filePath) const
     for (const Entry &entry : iterator->entries) {
         result.push_back(entry.label);
     }
+
     return result;
 }
 
@@ -61,6 +83,7 @@ std::optional<DevelopState> HistoryModel::selectEntry(const QString &filePath, i
     }
 
     iterator->currentIndex = index;
+    persist();
     return iterator->entries[index].state;
 }
 
@@ -86,6 +109,28 @@ bool HistoryModel::commit(const QString &filePath,
     }
 
     history.entries.push_back({label, state});
-    history.currentIndex = history.entries.size() - 1;
+    history.currentIndex = static_cast<int>(history.entries.size()) - 1;
+    persist();
     return true;
+}
+
+QVector<HistoryModel::Snapshot> HistoryModel::snapshots() const
+{
+    QVector<Snapshot> result;
+    result.reserve(m_histories.size());
+
+    for (auto iterator = m_histories.constBegin(); iterator != m_histories.constEnd(); ++iterator) {
+        result.push_back({iterator.key(), iterator->entries, iterator->currentIndex});
+    }
+
+    std::sort(result.begin(), result.end(),
+              [](const Snapshot &left, const Snapshot &right) {
+                  return left.filePath < right.filePath;
+              });
+    return result;
+}
+
+void HistoryModel::persist() const
+{
+    ApplicationStateStore::saveHistories(snapshots());
 }
