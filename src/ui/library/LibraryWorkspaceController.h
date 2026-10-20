@@ -1,5 +1,8 @@
 #pragma once
 
+#include "imaging/PhotoMetadata.h"
+
+#include <QHash>
 #include <QObject>
 
 class BasicPanel;
@@ -37,5 +40,6 @@ private:
     LibrarySidebar *m_sidebar = nullptr;
     LibraryGridWidget *m_grid = nullptr;
     LibraryImportService *m_importService = nullptr;
+    QHash<QString, imaging::PhotoMetadata> m_libraryMetadata;
     bool m_libraryMode = false;
 };

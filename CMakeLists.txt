@@ -35,6 +35,8 @@ qt_add_executable(Nexus WIN32
     src/imaging/ImageLoader.cpp
     src/imaging/ImageLoader.h
     src/imaging/PhotoMetadata.h
+    src/imaging/PhotoMetadataLoader.cpp
+    src/imaging/PhotoMetadataLoader.h
     src/imaging/TemperatureRenderService.cpp
     src/imaging/TemperatureRenderService.h
     src/imaging/ThumbnailLoader.cpp

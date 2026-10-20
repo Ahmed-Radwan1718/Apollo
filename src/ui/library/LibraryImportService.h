@@ -1,5 +1,7 @@
 #pragma once
 
+#include "imaging/PhotoMetadata.h"
+
 #include <QImage>
 #include <QObject>
 #include <QSet>
@@ -14,7 +16,8 @@
 class LibraryImportService final : public QObject
 {
 public:
-    using PhotoReadyCallback = std::function<void(const QString &, const QImage &)>;
+    using PhotoReadyCallback =
+        std::function<void(const QString &, const QImage &, const imaging::PhotoMetadata &)>;
     using DevelopPhotoReadyCallback = std::function<void(const QString &, const QString &)>;
 
     explicit LibraryImportService(QObject *parent = nullptr);

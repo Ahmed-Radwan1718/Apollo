@@ -71,7 +71,11 @@ LibraryWorkspaceController::LibraryWorkspaceController(
 
     m_importService = new LibraryImportService(this);
     m_importService->setPhotoReadyCallback(
-        [this](const QString &filePath, const QImage &thumbnail) {
+        [this](const QString &filePath,
+               const QImage &thumbnail,
+               const imaging::PhotoMetadata &metadata) {
+            m_libraryMetadata.insert(filePath, metadata);
+
             if (m_grid) {
                 m_grid->addPhoto(filePath, thumbnail);
             }
@@ -146,11 +150,17 @@ LibraryWorkspaceController::LibraryWorkspaceController(
                     if (m_histogram) {
                         m_histogram->setImage(preview);
                     }
-                    if (m_photoMetadata) {
-                        m_photoMetadata->clear();
-                    }
                     if (m_filmstrip) {
                         m_filmstrip->addPhoto(filePath, preview);
+                    }
+                }
+
+                if (m_photoMetadata) {
+                    const auto metadata = m_libraryMetadata.constFind(filePath);
+                    if (metadata != m_libraryMetadata.constEnd()) {
+                        m_photoMetadata->setMetadata(*metadata);
+                    } else {
+                        m_photoMetadata->clear();
                     }
                 }
 

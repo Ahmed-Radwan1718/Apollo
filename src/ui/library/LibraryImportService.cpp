@@ -1,6 +1,7 @@
 #include "ui/library/LibraryImportService.h"
 
 #include "imaging/ImageLoader.h"
+#include "imaging/PhotoMetadataLoader.h"
 #include "imaging/ThumbnailLoader.h"
 
 #include <QFileInfo>
@@ -50,16 +51,19 @@ void LibraryImportService::importFiles(const QStringList &filePaths)
             QImage thumbnail = imaging::ThumbnailLoader::load(
                 absoluteFilePath,
                 kLibraryThumbnailMaximumEdge);
+            const imaging::PhotoMetadata metadata =
+                imaging::PhotoMetadataLoader::load(absoluteFilePath);
 
             QMetaObject::invokeMethod(
                 this,
                 [this,
                  absoluteFilePath,
-                 thumbnail = std::move(thumbnail)]() mutable {
+                 thumbnail = std::move(thumbnail),
+                 metadata]() mutable {
                     m_pendingFiles.remove(absoluteFilePath);
 
                     if (!thumbnail.isNull() && m_photoReady) {
-                        m_photoReady(absoluteFilePath, thumbnail);
+                        m_photoReady(absoluteFilePath, thumbnail, metadata);
                     }
                 },
                 Qt::QueuedConnection);
