@@ -22,6 +22,10 @@ public:
 
     void addPhoto(const QString &filePath, const QImage &image);
     void setPhotoOpenedCallback(PhotoOpenedCallback callback);
+    [[nodiscard]] const QString &currentPhotoPath() const noexcept
+    {
+        return m_currentFilePath;
+    }
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;

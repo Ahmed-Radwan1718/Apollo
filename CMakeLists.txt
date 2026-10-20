@@ -27,6 +27,8 @@ qt_add_executable(Nexus WIN32
     src/app/HistoryModel.h
     src/app/MainWindow.cpp
     src/app/MainWindow.h
+    src/app/PhotoExportController.cpp
+    src/app/PhotoExportController.h
     src/imaging/ArwPipeline.cpp
     src/imaging/ArwDecoder.cpp
     src/imaging/ArwDecoder.h

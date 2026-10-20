@@ -1,4 +1,5 @@
 #include "app/MainWindow.h"
+#include "app/PhotoExportController.h"
 #include "ui/leftpanel/HistoryPanel.h"
 #include "ui/library/LibraryWorkspaceController.h"
 #include "ui/rightpanel/BasicSliderInteractionController.h"
@@ -33,6 +34,8 @@ int main(int argc, char *argv[])
     if (QWidget *basicPanel = window.findChild<QWidget *>(QStringLiteral("basicPanel"))) {
         new BasicSliderInteractionController(basicPanel, &window);
     }
+
+    new PhotoExportController(&window, &window);
 
     auto *menuBar = window.menuBar();
     auto *fileMenu = menuBar->addMenu(QObject::tr("&File"));
@@ -81,9 +84,9 @@ int main(int argc, char *argv[])
     addPlaceholderAction(fileMenu, QObject::tr("Save Edit State As…"));
 
     fileMenu->addSeparator();
-    addPlaceholderAction(fileMenu,
-                         QObject::tr("Export…"),
-                         QKeySequence(QStringLiteral("Ctrl+Shift+E")));
+    if (QAction *exportAction = findWindowAction(QObject::tr("Export…"))) {
+        fileMenu->addAction(exportAction);
+    }
     addPlaceholderAction(fileMenu, QObject::tr("Export with Previous Settings"));
 
     fileMenu->addSeparator();
