@@ -1,8 +1,10 @@
 #include "app/PhotoExportController.h"
 
+#include "app/ExportDialog.h"
 #include "app/HistoryModel.h"
 #include "imaging/ArwDecoder.h"
 #include "imaging/ImageLoader.h"
+#include "imaging/PhotoMetadata.h"
 #include "ui/filmstrip/FilmstripWidget.h"
 
 #include <QAction>
@@ -15,7 +17,17 @@
 #include <QSaveFile>
 #include <QWidget>
 
+#include <algorithm>
+#include <cmath>
+#include <optional>
+
 namespace {
+
+struct ExportRenderResult {
+    QImage image;
+    imaging::PhotoMetadata metadata;
+    QString error;
+};
 
 bool isArwPath(const QString &filePath)
 {
@@ -23,58 +35,157 @@ bool isArwPath(const QString &filePath)
                                                Qt::CaseInsensitive) == 0;
 }
 
-QString exportPathWithExtension(QString filePath, const QString &selectedFilter)
+QString extensionForFormat(ExportDialog::Format format)
 {
-    if (!QFileInfo(filePath).suffix().isEmpty()) {
+    return format == ExportDialog::Format::Png
+        ? QStringLiteral(".png")
+        : QStringLiteral(".jpg");
+}
+
+QString filterForFormat(ExportDialog::Format format)
+{
+    return format == ExportDialog::Format::Png
+        ? QStringLiteral("PNG Image (*.png)")
+        : QStringLiteral("JPEG Image (*.jpg *.jpeg)");
+}
+
+QString exportPathWithFormat(QString filePath, ExportDialog::Format format)
+{
+    const QFileInfo info(filePath);
+    const QString suffix = info.suffix().toLower();
+    const bool matchesFormat = format == ExportDialog::Format::Png
+        ? suffix == QStringLiteral("png")
+        : suffix == QStringLiteral("jpg") || suffix == QStringLiteral("jpeg");
+
+    if (matchesFormat) {
         return filePath;
     }
 
-    filePath += selectedFilter.startsWith(QStringLiteral("PNG"), Qt::CaseInsensitive)
-        ? QStringLiteral(".png")
-        : QStringLiteral(".jpg");
-    return filePath;
+    const QString extension = extensionForFormat(format);
+    if (suffix.isEmpty()) {
+        return filePath + extension;
+    }
+
+    return QDir(info.absolutePath()).filePath(info.completeBaseName() + extension);
 }
 
-QImage renderForExport(const QString &filePath, QString *error)
+ExportRenderResult renderForExport(const QString &filePath)
 {
+    ExportRenderResult result;
+
     if (!isArwPath(filePath)) {
-        const imaging::ImageLoadResult result = imaging::ImageLoader::load(filePath);
-        if (!result.succeeded()) {
-            if (error) {
-                *error = result.error;
-            }
-            return {};
-        }
-        return result.image;
+        const imaging::ImageLoadResult loaded = imaging::ImageLoader::load(filePath);
+        result.image = loaded.image;
+        result.metadata = loaded.metadata;
+        result.error = loaded.error;
+        return result;
     }
 
     HistoryModel history;
     const std::optional<DevelopState> savedState = history.currentState(filePath);
     if (!savedState) {
-        return imaging::ArwDecoder::decode(filePath, error);
+        result.image = imaging::ArwDecoder::decode(filePath,
+                                                  &result.error,
+                                                  &result.metadata);
+        return result;
     }
 
     const DevelopState &state = *savedState;
-    return imaging::ArwDecoder::decode(filePath,
-                                       error,
-                                       nullptr,
-                                       state.temperatureKelvin,
-                                       state.tint,
-                                       state.exposureHundredths,
-                                       state.highlights,
-                                       state.shadows,
-                                       state.whites,
-                                       state.blacks,
-                                       state.contrast,
-                                       state.texture,
-                                       state.clarity,
-                                       state.dehaze,
-                                       state.saturation,
-                                       state.vibrance,
-                                       false);
+    result.image = imaging::ArwDecoder::decode(filePath,
+                                               &result.error,
+                                               &result.metadata,
+                                               state.temperatureKelvin,
+                                               state.tint,
+                                               state.exposureHundredths,
+                                               state.highlights,
+                                               state.shadows,
+                                               state.whites,
+                                               state.blacks,
+                                               state.contrast,
+                                               state.texture,
+                                               state.clarity,
+                                               state.dehaze,
+                                               state.saturation,
+                                               state.vibrance,
+                                               false);
+    return result;
 }
 
-bool writeExportImage(const QImage &image, const QString &filePath, QString *error)
+QImage resizeForExport(const QImage &image, const ExportDialog::Settings &settings)
+{
+    if (image.isNull() || settings.resizeMode == ExportDialog::ResizeMode::Original) {
+        return image;
+    }
+
+    if (settings.resizeMode == ExportDialog::ResizeMode::LongEdge) {
+        const int longEdge = std::max(image.width(), image.height());
+        if (longEdge <= 0 || settings.longEdgePixels <= 0
+            || longEdge == settings.longEdgePixels) {
+            return image;
+        }
+
+        return image.scaled(settings.longEdgePixels,
+                            settings.longEdgePixels,
+                            Qt::KeepAspectRatio,
+                            Qt::SmoothTransformation);
+    }
+
+    const double scale = settings.resizeMode == ExportDialog::ResizeMode::Percent50
+        ? 0.5
+        : 0.25;
+    const QSize targetSize(
+        std::max(1, static_cast<int>(std::lround(image.width() * scale))),
+        std::max(1, static_cast<int>(std::lround(image.height() * scale))));
+    return image.scaled(targetSize,
+                        Qt::KeepAspectRatio,
+                        Qt::SmoothTransformation);
+}
+
+QString shutterMetadataValue(double seconds)
+{
+    if (seconds <= 0.0) {
+        return {};
+    }
+
+    if (seconds < 1.0) {
+        const int denominator = std::max(1, static_cast<int>(std::lround(1.0 / seconds)));
+        return QStringLiteral("1/%1 s").arg(denominator);
+    }
+
+    return QStringLiteral("%1 s").arg(QString::number(seconds, 'g', 6));
+}
+
+void addAvailableMetadata(QImageWriter &writer, const imaging::PhotoMetadata &metadata)
+{
+    if (metadata.shutterSeconds > 0.0) {
+        writer.setText(QStringLiteral("Exposure Time"),
+                       shutterMetadataValue(metadata.shutterSeconds));
+    }
+    if (metadata.aperture > 0.0) {
+        writer.setText(QStringLiteral("Aperture"),
+                       QStringLiteral("f/%1").arg(QString::number(metadata.aperture, 'g', 4)));
+    }
+    if (metadata.iso > 0.0) {
+        writer.setText(QStringLiteral("ISO"),
+                       QString::number(static_cast<int>(std::lround(metadata.iso))));
+    }
+    if (metadata.focalLengthMm > 0.0) {
+        writer.setText(QStringLiteral("Focal Length"),
+                       QStringLiteral("%1 mm")
+                           .arg(QString::number(metadata.focalLengthMm, 'g', 5)));
+    }
+    if (metadata.whiteBalanceTemperatureKelvin > 0) {
+        writer.setText(QStringLiteral("White Balance Temperature"),
+                       QStringLiteral("%1 K")
+                           .arg(metadata.whiteBalanceTemperatureKelvin));
+    }
+}
+
+bool writeExportImage(const QImage &image,
+                      const QString &filePath,
+                      const ExportDialog::Settings &settings,
+                      const imaging::PhotoMetadata &metadata,
+                      QString *error)
 {
     if (image.isNull()) {
         if (error) {
@@ -83,8 +194,7 @@ bool writeExportImage(const QImage &image, const QString &filePath, QString *err
         return false;
     }
 
-    const QString suffix = QFileInfo(filePath).suffix().toLower();
-    const QByteArray format = suffix == QStringLiteral("png")
+    const QByteArray format = settings.format == ExportDialog::Format::Png
         ? QByteArrayLiteral("png")
         : QByteArrayLiteral("jpeg");
 
@@ -98,8 +208,11 @@ bool writeExportImage(const QImage &image, const QString &filePath, QString *err
 
     {
         QImageWriter writer(&file, format);
-        if (format == QByteArrayLiteral("jpeg")) {
-            writer.setQuality(95);
+        if (settings.format == ExportDialog::Format::Jpeg) {
+            writer.setQuality(std::clamp(settings.quality, 1, 100));
+        }
+        if (settings.includeMetadata) {
+            addAvailableMetadata(writer, metadata);
         }
 
         if (!writer.write(image)) {
@@ -158,35 +271,45 @@ void PhotoExportController::exportCurrentPhoto()
         return;
     }
 
-    const QFileInfo sourceInfo(sourcePath);
-    const QString suggestedPath = QDir(sourceInfo.absolutePath()).filePath(
-        sourceInfo.completeBaseName() + QStringLiteral("_export.jpg"));
+    ExportDialog exportDialog(m_window);
+    if (exportDialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    const ExportDialog::Settings settings = exportDialog.settings();
 
-    QString selectedFilter = tr("JPEG Image (*.jpg *.jpeg)");
+    const QFileInfo sourceInfo(sourcePath);
+    const QString extension = extensionForFormat(settings.format);
+    const QString suggestedPath = QDir(sourceInfo.absolutePath()).filePath(
+        sourceInfo.completeBaseName() + QStringLiteral("_export") + extension);
+
     QString exportPath = QFileDialog::getSaveFileName(
         m_window,
         tr("Export Photo"),
         suggestedPath,
-        tr("JPEG Image (*.jpg *.jpeg);;PNG Image (*.png)"),
-        &selectedFilter);
+        filterForFormat(settings.format));
 
     if (exportPath.isEmpty()) {
         return;
     }
 
-    exportPath = exportPathWithExtension(exportPath, selectedFilter);
+    exportPath = exportPathWithFormat(exportPath, settings.format);
 
-    QString error;
-    const QImage image = renderForExport(sourcePath, &error);
-    if (image.isNull()) {
+    ExportRenderResult rendered = renderForExport(sourcePath);
+    if (rendered.image.isNull()) {
         QMessageBox::critical(m_window,
                               tr("Export Failed"),
                               tr("Apollo could not render the photo for export.\n\n%1")
-                                  .arg(error));
+                                  .arg(rendered.error));
         return;
     }
 
-    if (!writeExportImage(image, exportPath, &error)) {
+    const QImage outputImage = resizeForExport(rendered.image, settings);
+    QString error;
+    if (!writeExportImage(outputImage,
+                          exportPath,
+                          settings,
+                          rendered.metadata,
+                          &error)) {
         QMessageBox::critical(m_window,
                               tr("Export Failed"),
                               tr("Apollo could not save:\n%1\n\n%2")

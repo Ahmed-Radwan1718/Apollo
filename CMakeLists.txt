@@ -23,6 +23,8 @@ qt_add_executable(Nexus WIN32
     src/app/ApplicationStateStore.cpp
     src/app/ApplicationStateStore.h
     src/app/DevelopState.h
+    src/app/ExportDialog.cpp
+    src/app/ExportDialog.h
     src/app/HistoryModel.cpp
     src/app/HistoryModel.h
     src/app/MainWindow.cpp
