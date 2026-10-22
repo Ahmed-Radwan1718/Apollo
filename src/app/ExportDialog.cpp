@@ -111,14 +111,27 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     auto *qualityRow = new QWidget(fileGroup);
     auto *qualityLayout = new QHBoxLayout(qualityRow);
     qualityLayout->setContentsMargins(0, 0, 0, 0);
-    qualityLayout->setSpacing(0);
+    qualityLayout->setSpacing(8);
 
     m_qualitySlider = new ExportQualitySlider(qualityRow);
     m_qualitySlider->setObjectName(QStringLiteral("exportQualitySlider"));
     m_qualitySlider->setRange(1, 100);
     m_qualitySlider->setValue(95);
 
+    auto *qualityValueLabel = new QLabel(tr("95%"), qualityRow);
+    qualityValueLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    qualityValueLabel->setFixedWidth(38);
+    qualityValueLabel->setStyleSheet(QStringLiteral(
+        "QLabel {"
+        "  color: #9f9f9f;"
+        "  background: transparent;"
+        "  border: 0;"
+        "  font-size: 11px;"
+        "}"
+        "QLabel:disabled { color: #676767; }"));
+
     qualityLayout->addWidget(m_qualitySlider, 1);
+    qualityLayout->addWidget(qualityValueLabel);
     fileLayout->addRow(m_qualityLabel, qualityRow);
 
     m_locationCombo = new QComboBox(fileGroup);
@@ -206,11 +219,19 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     rootLayout->addWidget(buttons);
 
     connect(m_formatCombo, &QComboBox::currentIndexChanged,
-            this, [this](int) { updateControlStates(); });
+            this, [this, qualityValueLabel](int) {
+                updateControlStates();
+                qualityValueLabel->setEnabled(m_formatCombo->currentIndex() == 0);
+            });
     connect(m_locationCombo, &QComboBox::currentIndexChanged,
             this, [this](int) { updateControlStates(); });
     connect(m_sizeCombo, &QComboBox::currentIndexChanged,
             this, [this](int) { updateControlStates(); });
+    connect(m_qualitySlider, &QSlider::valueChanged,
+            qualityValueLabel,
+            [qualityValueLabel](int value) {
+                qualityValueLabel->setText(QStringLiteral("%1%").arg(value));
+            });
     connect(m_subfolderEdit, &QLineEdit::textChanged,
             this, [this](const QString &) { updateControlStates(); });
     connect(m_browseButton, &QPushButton::clicked,
