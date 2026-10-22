@@ -22,12 +22,12 @@ ExportDialog::ExportDialog(QWidget *parent)
 
     auto *rootLayout = new QVBoxLayout(this);
     rootLayout->setContentsMargins(18, 12, 18, 16);
-    rootLayout->setSpacing(4);
+    rootLayout->setSpacing(6);
 
     auto *fileGroup = new QGroupBox(tr("File Settings"), this);
     fileGroup->setObjectName(QStringLiteral("exportSection"));
     auto *fileLayout = new QFormLayout(fileGroup);
-    fileLayout->setContentsMargins(12, 14, 12, 12);
+    fileLayout->setContentsMargins(12, 16, 12, 12);
     fileLayout->setHorizontalSpacing(14);
     fileLayout->setVerticalSpacing(10);
 
@@ -62,7 +62,7 @@ ExportDialog::ExportDialog(QWidget *parent)
     auto *sizeGroup = new QGroupBox(tr("Image Sizing"), this);
     sizeGroup->setObjectName(QStringLiteral("exportSection"));
     auto *sizeLayout = new QFormLayout(sizeGroup);
-    sizeLayout->setContentsMargins(12, 14, 12, 12);
+    sizeLayout->setContentsMargins(12, 16, 12, 12);
     sizeLayout->setHorizontalSpacing(14);
     sizeLayout->setVerticalSpacing(10);
 
@@ -86,7 +86,7 @@ ExportDialog::ExportDialog(QWidget *parent)
     auto *metadataGroup = new QGroupBox(tr("Metadata"), this);
     metadataGroup->setObjectName(QStringLiteral("exportSection"));
     auto *metadataLayout = new QVBoxLayout(metadataGroup);
-    metadataLayout->setContentsMargins(12, 14, 12, 12);
+    metadataLayout->setContentsMargins(12, 16, 12, 12);
     m_includeMetadataCheckBox = new QCheckBox(
         tr("Include available photo metadata"), metadataGroup);
     m_includeMetadataCheckBox->setChecked(true);
@@ -127,7 +127,7 @@ ExportDialog::ExportDialog(QWidget *parent)
         "  color: #d6d6d6;"
         "  border: 0;"
         "  border-top: 1px solid #2a2a2a;"
-        "  margin-top: 18px;"
+        "  margin-top: 16px;"
         "  padding-top: 0;"
         "  font-size: 13px;"
         "  font-weight: 600;"
@@ -136,7 +136,7 @@ ExportDialog::ExportDialog(QWidget *parent)
         "  subcontrol-origin: margin;"
         "  subcontrol-position: top left;"
         "  left: 0;"
-        "  top: -8px;"
+        "  top: 0;"
         "  padding: 0 8px 0 0;"
         "  background: #181818;"
         "  color: #d6d6d6;"
@@ -179,18 +179,26 @@ ExportDialog::ExportDialog(QWidget *parent)
         "  outline: 0;"
         "}"
         "QSlider#exportQualitySlider {"
+        "  background: transparent;"
+        "  border: none;"
         "  min-height: 14px;"
         "  max-height: 14px;"
         "}"
         "QSlider#exportQualitySlider::groove:horizontal {"
         "  height: 2px;"
+        "  border: none;"
         "  border-radius: 1px;"
-        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
-        "    stop:0 #303030, stop:0.5 #626262, stop:1 #9b9b9b);"
+        "  background: #3a3a3a;"
         "}"
-        "QSlider#exportQualitySlider::sub-page:horizontal,"
+        "QSlider#exportQualitySlider::sub-page:horizontal {"
+        "  background: #8a8a8a;"
+        "  border: none;"
+        "  border-radius: 1px;"
+        "}"
         "QSlider#exportQualitySlider::add-page:horizontal {"
-        "  background: transparent;"
+        "  background: #3a3a3a;"
+        "  border: none;"
+        "  border-radius: 1px;"
         "}"
         "QSlider#exportQualitySlider::handle:horizontal {"
         "  width: 10px;"
@@ -204,6 +212,10 @@ ExportDialog::ExportDialog(QWidget *parent)
         "  background: #ffffff;"
         "}"
         "QSlider#exportQualitySlider:disabled::groove:horizontal {"
+        "  background: #303030;"
+        "}"
+        "QSlider#exportQualitySlider:disabled::sub-page:horizontal,"
+        "QSlider#exportQualitySlider:disabled::add-page:horizontal {"
         "  background: #303030;"
         "}"
         "QSlider#exportQualitySlider:disabled::handle:horizontal {"
