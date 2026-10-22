@@ -69,6 +69,24 @@ QString exportPathWithFormat(QString filePath, ExportDialog::Format format)
     return QDir(info.absolutePath()).filePath(info.completeBaseName() + extension);
 }
 
+QString exportDirectoryForSettings(const QString &sourcePath,
+                                   const ExportDialog::Settings &settings)
+{
+    const QFileInfo sourceInfo(sourcePath);
+    const QString sourceDirectory = sourceInfo.absolutePath();
+
+    switch (settings.locationMode) {
+    case ExportDialog::LocationMode::OriginalSubfolder:
+        return QDir::cleanPath(
+            QDir(sourceDirectory).filePath(settings.subfolderName.trimmed()));
+    case ExportDialog::LocationMode::CustomFolder:
+        return QDir::cleanPath(settings.customFolder);
+    case ExportDialog::LocationMode::SameAsOriginal:
+    default:
+        return sourceDirectory;
+    }
+}
+
 ExportRenderResult renderForExport(const QString &filePath)
 {
     ExportRenderResult result;
@@ -271,15 +289,39 @@ void PhotoExportController::exportCurrentPhoto()
         return;
     }
 
-    ExportDialog exportDialog(m_window);
+    const QFileInfo sourceInfo(sourcePath);
+    ExportDialog exportDialog(sourceInfo.absolutePath(), m_window);
     if (exportDialog.exec() != QDialog::Accepted) {
         return;
     }
     const ExportDialog::Settings settings = exportDialog.settings();
 
-    const QFileInfo sourceInfo(sourcePath);
+    const QString exportDirectory = exportDirectoryForSettings(sourcePath, settings);
+    if (exportDirectory.isEmpty()) {
+        QMessageBox::critical(m_window,
+                              tr("Export Failed"),
+                              tr("Choose a valid export location."));
+        return;
+    }
+
+    if (settings.locationMode == ExportDialog::LocationMode::OriginalSubfolder) {
+        if (!QDir().mkpath(exportDirectory)) {
+            QMessageBox::critical(m_window,
+                                  tr("Export Failed"),
+                                  tr("Nexus could not create the export folder:\n%1")
+                                      .arg(QDir::toNativeSeparators(exportDirectory)));
+            return;
+        }
+    } else if (!QDir(exportDirectory).exists()) {
+        QMessageBox::critical(m_window,
+                              tr("Export Failed"),
+                              tr("The selected export folder no longer exists:\n%1")
+                                  .arg(QDir::toNativeSeparators(exportDirectory)));
+        return;
+    }
+
     const QString extension = extensionForFormat(settings.format);
-    const QString suggestedPath = QDir(sourceInfo.absolutePath()).filePath(
+    const QString suggestedPath = QDir(exportDirectory).filePath(
         sourceInfo.completeBaseName() + QStringLiteral("_export") + extension);
 
     QString exportPath = QFileDialog::getSaveFileName(
