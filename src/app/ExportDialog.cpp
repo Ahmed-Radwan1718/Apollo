@@ -164,24 +164,6 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     m_subfolderEdit->setText(tr("Exports"));
     fileLayout->addRow(m_subfolderLabel, m_subfolderEdit);
 
-    m_folderLabel = new QLabel(tr("Folder"), fileGroup);
-    m_folderRow = new QWidget(fileGroup);
-    auto *folderLayout = new QHBoxLayout(m_folderRow);
-    folderLayout->setContentsMargins(0, 0, 0, 0);
-    folderLayout->setSpacing(8);
-
-    m_folderEdit = new QLineEdit(m_folderRow);
-    m_folderEdit->setObjectName(QStringLiteral("exportLineEdit"));
-    m_folderEdit->setReadOnly(true);
-    m_folderEdit->setPlaceholderText(tr("Choose a folder"));
-
-    m_browseButton = new QPushButton(tr("…"), m_folderRow);
-    m_browseButton->setObjectName(QStringLiteral("exportBrowseButton"));
-    m_browseButton->setFixedWidth(34);
-
-    folderLayout->addWidget(m_folderEdit, 1);
-    folderLayout->addWidget(m_browseButton);
-    fileLayout->addRow(m_folderLabel, m_folderRow);
     rootLayout->addWidget(fileGroup);
 
     auto *metadataGroup = new QGroupBox(tr("Metadata"), this);
@@ -233,8 +215,6 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
             });
     connect(m_subfolderEdit, &QLineEdit::textChanged,
             this, [this](const QString &) { updateControlStates(); });
-    connect(m_browseButton, &QPushButton::clicked,
-            this, &ExportDialog::chooseCustomFolder);
 
     setStyleSheet(QStringLiteral(
         "QDialog#exportDialog {"
@@ -297,18 +277,6 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
         "QSlider#exportQualitySlider {"
         "  min-height: 14px;"
         "  max-height: 14px;"
-        "}"
-        "QPushButton#exportBrowseButton {"
-        "  background: #1a1a1a;"
-        "  color: #d5d5d5;"
-        "  border: 1px solid #343434;"
-        "  border-radius: 2px;"
-        "  min-height: 32px;"
-        "  padding: 0;"
-        "}"
-        "QPushButton#exportBrowseButton:hover {"
-        "  background: #252525;"
-        "  border-color: #4a4a4a;"
         "}"
         "QDialogButtonBox#exportButtons QPushButton {"
         "  background: transparent;"
@@ -373,8 +341,6 @@ void ExportDialog::updateControlStates()
     const bool customFolder = m_locationCombo->currentIndex() == 2;
     m_subfolderLabel->setVisible(subfolder);
     m_subfolderEdit->setVisible(subfolder);
-    m_folderLabel->setVisible(customFolder);
-    m_folderRow->setVisible(customFolder);
 
     bool canExport = true;
     if (subfolder) {
@@ -405,7 +371,6 @@ void ExportDialog::chooseCustomFolder()
 
     m_customFolder = selectedDirectory;
     const QString nativeDirectory = QDir::toNativeSeparators(selectedDirectory);
-    m_folderEdit->setText(nativeDirectory);
     m_locationCombo->setEditText(nativeDirectory);
     m_locationCombo->lineEdit()->setCursorPosition(0);
     updateControlStates();
