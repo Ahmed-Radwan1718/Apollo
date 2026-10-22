@@ -95,6 +95,7 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
 
     auto *fileGroup = new QGroupBox(tr("File"), this);
     fileGroup->setObjectName(QStringLiteral("exportSection"));
+    fileGroup->setProperty("exportFileSection", true);
     auto *fileLayout = new QFormLayout(fileGroup);
     fileLayout->setContentsMargins(12, 18, 12, 10);
     fileLayout->setHorizontalSpacing(14);
@@ -248,6 +249,9 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
         "  padding-top: 0;"
         "  font-size: 13px;"
         "  font-weight: 600;"
+        "}"
+        "QGroupBox#exportSection[exportFileSection=\"true\"] {"
+        "  margin-top: 22px;"
         "}"
         "QGroupBox#exportSection::title {"
         "  subcontrol-origin: margin;"
