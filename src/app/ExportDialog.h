@@ -2,13 +2,6 @@
 
 #include <QDialog>
 
-class QCheckBox;
-class QComboBox;
-class QLabel;
-class QSlider;
-class QSpinBox;
-class QWidget;
-
 class ExportDialog final : public QDialog
 {
 public:
@@ -35,16 +28,4 @@ public:
     explicit ExportDialog(QWidget *parent = nullptr);
 
     [[nodiscard]] Settings settings() const;
-
-private:
-    void updateControlStates();
-
-    QComboBox *m_formatCombo = nullptr;
-    QLabel *m_qualityLabel = nullptr;
-    QSlider *m_qualitySlider = nullptr;
-    QSpinBox *m_qualitySpinBox = nullptr;
-    QComboBox *m_sizeCombo = nullptr;
-    QLabel *m_longEdgeLabel = nullptr;
-    QSpinBox *m_longEdgeSpinBox = nullptr;
-    QCheckBox *m_includeMetadataCheckBox = nullptr;
 };
