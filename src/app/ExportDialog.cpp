@@ -111,23 +111,14 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     auto *qualityRow = new QWidget(fileGroup);
     auto *qualityLayout = new QHBoxLayout(qualityRow);
     qualityLayout->setContentsMargins(0, 0, 0, 0);
-    qualityLayout->setSpacing(10);
+    qualityLayout->setSpacing(0);
 
     m_qualitySlider = new ExportQualitySlider(qualityRow);
     m_qualitySlider->setObjectName(QStringLiteral("exportQualitySlider"));
     m_qualitySlider->setRange(1, 100);
     m_qualitySlider->setValue(95);
 
-    m_qualitySpinBox = new QSpinBox(qualityRow);
-    m_qualitySpinBox->setObjectName(QStringLiteral("exportSpinBox"));
-    m_qualitySpinBox->setRange(1, 100);
-    m_qualitySpinBox->setValue(95);
-    m_qualitySpinBox->setSuffix(QStringLiteral("%"));
-    m_qualitySpinBox->setButtonSymbols(QAbstractSpinBox::NoButtons);
-    m_qualitySpinBox->setFixedWidth(58);
-
     qualityLayout->addWidget(m_qualitySlider, 1);
-    qualityLayout->addWidget(m_qualitySpinBox);
     fileLayout->addRow(m_qualityLabel, qualityRow);
 
     m_locationCombo = new QComboBox(fileGroup);
@@ -220,10 +211,6 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
             this, [this](int) { updateControlStates(); });
     connect(m_sizeCombo, &QComboBox::currentIndexChanged,
             this, [this](int) { updateControlStates(); });
-    connect(m_qualitySlider, &QSlider::valueChanged,
-            m_qualitySpinBox, &QSpinBox::setValue);
-    connect(m_qualitySpinBox, &QSpinBox::valueChanged,
-            m_qualitySlider, &QSlider::setValue);
     connect(m_subfolderEdit, &QLineEdit::textChanged,
             this, [this](const QString &) { updateControlStates(); });
     connect(m_browseButton, &QPushButton::clicked,
@@ -350,7 +337,7 @@ ExportDialog::Settings ExportDialog::settings() const
     }
 
     result.longEdgePixels = m_longEdgeSpinBox->value();
-    result.quality = m_qualitySpinBox->value();
+    result.quality = m_qualitySlider->value();
     result.includeMetadata = m_includeMetadataCheckBox->isChecked();
     result.subfolderName = m_subfolderEdit->text().trimmed();
     result.customFolder = m_customFolder;
@@ -362,7 +349,6 @@ void ExportDialog::updateControlStates()
     const bool jpeg = m_formatCombo->currentIndex() == 0;
     m_qualityLabel->setEnabled(jpeg);
     m_qualitySlider->setEnabled(jpeg);
-    m_qualitySpinBox->setEnabled(jpeg);
 
     const bool longEdge = m_sizeCombo->currentIndex() == 1;
     m_longEdgeLabel->setEnabled(longEdge);
