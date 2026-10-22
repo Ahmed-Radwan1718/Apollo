@@ -113,6 +113,9 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     m_locationCombo->addItem(tr("Same as original"));
     m_locationCombo->addItem(tr("Subfolder of original"));
     m_locationCombo->addItem(tr("Choose folder"));
+    m_locationCombo->setEditable(true);
+    m_locationCombo->lineEdit()->setReadOnly(true);
+    m_locationCombo->lineEdit()->setCursorPosition(0);
 
     auto *formatLocationRow = new QWidget(fileGroup);
     auto *formatLocationLayout = new QHBoxLayout(formatLocationRow);
@@ -401,6 +404,9 @@ void ExportDialog::chooseCustomFolder()
     }
 
     m_customFolder = selectedDirectory;
-    m_folderEdit->setText(QDir::toNativeSeparators(selectedDirectory));
+    const QString nativeDirectory = QDir::toNativeSeparators(selectedDirectory);
+    m_folderEdit->setText(nativeDirectory);
+    m_locationCombo->setEditText(nativeDirectory);
+    m_locationCombo->lineEdit()->setCursorPosition(0);
     updateControlStates();
 }
