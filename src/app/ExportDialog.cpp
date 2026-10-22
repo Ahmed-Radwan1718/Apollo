@@ -11,11 +11,72 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPainter>
 #include <QPushButton>
 #include <QSlider>
 #include <QSpinBox>
+#include <QStyle>
 #include <QVBoxLayout>
 #include <QWidget>
+
+namespace {
+
+class ExportQualitySlider final : public QSlider
+{
+public:
+    explicit ExportQualitySlider(QWidget *parent = nullptr)
+        : QSlider(Qt::Horizontal, parent)
+    {
+        setFixedHeight(14);
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        constexpr qreal handleRadius = 5.0;
+        constexpr qreal grooveHeight = 2.0;
+        const qreal left = handleRadius;
+        const qreal right = qMax(left, width() - handleRadius);
+        const qreal centerY = height() / 2.0;
+
+        if (isEnabled()) {
+            QLinearGradient gradient(left, centerY, right, centerY);
+            gradient.setColorAt(0.0, QColor(QStringLiteral("#303030")));
+            gradient.setColorAt(0.5, QColor(QStringLiteral("#626262")));
+            gradient.setColorAt(1.0, QColor(QStringLiteral("#9b9b9b")));
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(gradient);
+        } else {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(QStringLiteral("#303030")));
+        }
+
+        painter.drawRoundedRect(QRectF(left,
+                                       centerY - grooveHeight / 2.0,
+                                       qMax<qreal>(0.0, right - left),
+                                       grooveHeight),
+                                1.0,
+                                1.0);
+
+        const int available = qMax(0, static_cast<int>(right - left));
+        const int handleOffset = QStyle::sliderPositionFromValue(
+            minimum(), maximum(), value(), available, invertedAppearance());
+        const qreal handleX = left + handleOffset;
+
+        painter.setBrush(isEnabled()
+                             ? (underMouse() ? QColor(QStringLiteral("#ffffff"))
+                                             : QColor(QStringLiteral("#d9d9d9")))
+                             : QColor(QStringLiteral("#666666")));
+        painter.drawEllipse(QPointF(handleX, centerY), handleRadius, handleRadius);
+    }
+};
+
+} // namespace
 
 ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     : QDialog(parent)
@@ -52,7 +113,7 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     qualityLayout->setContentsMargins(0, 0, 0, 0);
     qualityLayout->setSpacing(10);
 
-    m_qualitySlider = new QSlider(Qt::Horizontal, qualityRow);
+    m_qualitySlider = new ExportQualitySlider(qualityRow);
     m_qualitySlider->setObjectName(QStringLiteral("exportQualitySlider"));
     m_qualitySlider->setRange(1, 100);
     m_qualitySlider->setValue(95);
@@ -226,35 +287,6 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
         "QSlider#exportQualitySlider {"
         "  min-height: 14px;"
         "  max-height: 14px;"
-        "}"
-        "QSlider#exportQualitySlider::groove:horizontal {"
-        "  height: 2px;"
-        "  border-radius: 1px;"
-        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
-        "    stop:0 #303030, stop:0.5 #626262, stop:1 #9b9b9b);"
-        "}"
-        "QSlider#exportQualitySlider::sub-page:horizontal,"
-        "QSlider#exportQualitySlider::add-page:horizontal { background: transparent; }"
-        "QSlider#exportQualitySlider::handle:horizontal {"
-        "  width: 10px;"
-        "  height: 10px;"
-        "  margin: -4px 0;"
-        "  border-radius: 5px;"
-        "  background: #d9d9d9;"
-        "  border: 0;"
-        "}"
-        "QSlider#exportQualitySlider::handle:horizontal:hover {"
-        "  background: #ffffff;"
-        "}"
-        "QSlider#exportQualitySlider:disabled::groove:horizontal {"
-        "  background: #303030;"
-        "}"
-        "QSlider#exportQualitySlider:disabled::sub-page:horizontal,"
-        "QSlider#exportQualitySlider:disabled::add-page:horizontal {"
-        "  background: transparent;"
-        "}"
-        "QSlider#exportQualitySlider:disabled::handle:horizontal {"
-        "  background: #666666;"
         "}"
         "QPushButton#exportBrowseButton {"
         "  background: #1a1a1a;"
