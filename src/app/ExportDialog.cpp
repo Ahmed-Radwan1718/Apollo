@@ -106,7 +106,26 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     m_formatCombo->setObjectName(QStringLiteral("exportCombo"));
     m_formatCombo->addItem(tr("JPEG"));
     m_formatCombo->addItem(tr("PNG"));
-    fileLayout->addRow(tr("Format"), m_formatCombo);
+
+    m_locationCombo = new QComboBox(fileGroup);
+    m_locationCombo->setObjectName(QStringLiteral("exportCombo"));
+    m_locationCombo->addItem(tr("Same as original"));
+    m_locationCombo->addItem(tr("Subfolder of original"));
+    m_locationCombo->addItem(tr("Choose folder"));
+
+    auto *formatLocationRow = new QWidget(fileGroup);
+    auto *formatLocationLayout = new QHBoxLayout(formatLocationRow);
+    formatLocationLayout->setContentsMargins(0, 0, 0, 0);
+    formatLocationLayout->setSpacing(10);
+
+    auto *formatLabel = new QLabel(tr("Format"), formatLocationRow);
+    auto *locationLabel = new QLabel(tr("Location"), formatLocationRow);
+    formatLocationLayout->addWidget(formatLabel);
+    formatLocationLayout->addWidget(m_formatCombo, 1);
+    formatLocationLayout->addSpacing(8);
+    formatLocationLayout->addWidget(locationLabel);
+    formatLocationLayout->addWidget(m_locationCombo, 1);
+    fileLayout->addRow(formatLocationRow);
 
     m_qualityLabel = new QLabel(tr("Quality"), fileGroup);
     auto *qualityRow = new QWidget(fileGroup);
@@ -134,13 +153,6 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     qualityLayout->addWidget(m_qualitySlider, 1);
     qualityLayout->addWidget(qualityValueLabel);
     fileLayout->addRow(m_qualityLabel, qualityRow);
-
-    m_locationCombo = new QComboBox(fileGroup);
-    m_locationCombo->setObjectName(QStringLiteral("exportCombo"));
-    m_locationCombo->addItem(tr("Same as original"));
-    m_locationCombo->addItem(tr("Subfolder of original"));
-    m_locationCombo->addItem(tr("Choose folder"));
-    fileLayout->addRow(tr("Location"), m_locationCombo);
 
     m_subfolderLabel = new QLabel(tr("Subfolder"), fileGroup);
     m_subfolderEdit = new QLineEdit(fileGroup);
