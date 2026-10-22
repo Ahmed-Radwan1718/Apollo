@@ -16,6 +16,7 @@
 #include <QSlider>
 #include <QSpinBox>
 #include <QStyle>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -199,7 +200,16 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
                 qualityValueLabel->setEnabled(m_formatCombo->currentIndex() == 0);
             });
     connect(m_locationCombo, &QComboBox::currentIndexChanged,
-            this, [this](int) { updateControlStates(); });
+            this, [this](int index) {
+                updateControlStates();
+                if (index == 2) {
+                    QTimer::singleShot(0, this, [this]() {
+                        if (m_locationCombo->currentIndex() == 2) {
+                            chooseCustomFolder();
+                        }
+                    });
+                }
+            });
     connect(m_qualitySlider, &QSlider::valueChanged,
             qualityValueLabel,
             [qualityValueLabel](int value) {
