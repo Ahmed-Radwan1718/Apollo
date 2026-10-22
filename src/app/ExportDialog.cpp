@@ -167,31 +167,6 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     fileLayout->addRow(m_folderLabel, m_folderRow);
     rootLayout->addWidget(fileGroup);
 
-    auto *sizeGroup = new QGroupBox(tr("Image Size"), this);
-    sizeGroup->setObjectName(QStringLiteral("exportSection"));
-    auto *sizeLayout = new QFormLayout(sizeGroup);
-    sizeLayout->setContentsMargins(12, 18, 12, 10);
-    sizeLayout->setHorizontalSpacing(14);
-    sizeLayout->setVerticalSpacing(10);
-    sizeLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    sizeLayout->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-
-    m_sizeCombo = new QComboBox(sizeGroup);
-    m_sizeCombo->setObjectName(QStringLiteral("exportCombo"));
-    m_sizeCombo->addItem(tr("Original Size"));
-    m_sizeCombo->addItem(tr("Long Edge"));
-    sizeLayout->addRow(tr("Resize"), m_sizeCombo);
-
-    m_longEdgeLabel = new QLabel(tr("Long edge"), sizeGroup);
-    m_longEdgeSpinBox = new QSpinBox(sizeGroup);
-    m_longEdgeSpinBox->setObjectName(QStringLiteral("exportSpinBox"));
-    m_longEdgeSpinBox->setRange(64, 30000);
-    m_longEdgeSpinBox->setValue(2048);
-    m_longEdgeSpinBox->setSuffix(tr(" px"));
-    m_longEdgeSpinBox->setButtonSymbols(QAbstractSpinBox::NoButtons);
-    sizeLayout->addRow(m_longEdgeLabel, m_longEdgeSpinBox);
-    rootLayout->addWidget(sizeGroup);
-
     auto *metadataGroup = new QGroupBox(tr("Metadata"), this);
     metadataGroup->setObjectName(QStringLiteral("exportSection"));
     auto *metadataLayout = new QVBoxLayout(metadataGroup);
@@ -224,8 +199,6 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
                 qualityValueLabel->setEnabled(m_formatCombo->currentIndex() == 0);
             });
     connect(m_locationCombo, &QComboBox::currentIndexChanged,
-            this, [this](int) { updateControlStates(); });
-    connect(m_sizeCombo, &QComboBox::currentIndexChanged,
             this, [this](int) { updateControlStates(); });
     connect(m_qualitySlider, &QSlider::valueChanged,
             qualityValueLabel,
@@ -341,9 +314,6 @@ ExportDialog::Settings ExportDialog::settings() const
 {
     Settings result;
     result.format = m_formatCombo->currentIndex() == 1 ? Format::Png : Format::Jpeg;
-    result.resizeMode = m_sizeCombo->currentIndex() == 1
-        ? ResizeMode::LongEdge
-        : ResizeMode::Original;
 
     switch (m_locationCombo->currentIndex()) {
     case 1:
@@ -357,7 +327,6 @@ ExportDialog::Settings ExportDialog::settings() const
         break;
     }
 
-    result.longEdgePixels = m_longEdgeSpinBox->value();
     result.quality = m_qualitySlider->value();
     result.includeMetadata = m_includeMetadataCheckBox->isChecked();
     result.subfolderName = m_subfolderEdit->text().trimmed();
@@ -370,10 +339,6 @@ void ExportDialog::updateControlStates()
     const bool jpeg = m_formatCombo->currentIndex() == 0;
     m_qualityLabel->setEnabled(jpeg);
     m_qualitySlider->setEnabled(jpeg);
-
-    const bool longEdge = m_sizeCombo->currentIndex() == 1;
-    m_longEdgeLabel->setEnabled(longEdge);
-    m_longEdgeSpinBox->setEnabled(longEdge);
 
     const bool subfolder = m_locationCombo->currentIndex() == 1;
     const bool customFolder = m_locationCombo->currentIndex() == 2;
