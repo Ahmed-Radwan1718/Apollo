@@ -237,13 +237,13 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     connect(m_locationCombo, &QComboBox::currentIndexChanged,
             this, [this](int index) {
                 updateControlStates();
-                if (index == 2) {
-                    QTimer::singleShot(0, this, [this]() {
-                        if (m_locationCombo->currentIndex() == 2) {
-                            chooseCustomFolder();
-                        }
-                    });
-                }
+                QTimer::singleShot(0, this, [this, index]() {
+                    m_locationCombo->lineEdit()->setCursorPosition(0);
+                    m_locationCombo->lineEdit()->deselect();
+                    if (index == 2 && m_locationCombo->currentIndex() == 2) {
+                        chooseCustomFolder();
+                    }
+                });
             });
     connect(m_qualitySlider, &QSlider::valueChanged,
             qualityValueLabel,
