@@ -115,6 +115,7 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     m_locationCombo->addItem(tr("Choose folder"));
     m_locationCombo->setEditable(true);
     m_locationCombo->lineEdit()->setReadOnly(true);
+    m_locationCombo->lineEdit()->setAttribute(Qt::WA_TransparentForMouseEvents);
     m_locationCombo->lineEdit()->setCursorPosition(0);
 
     auto *formatLocationRow = new QWidget(fileGroup);
