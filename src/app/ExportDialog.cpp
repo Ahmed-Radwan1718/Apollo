@@ -5,12 +5,14 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QEvent>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
 #include <QSlider>
@@ -77,6 +79,43 @@ protected:
     }
 };
 
+class ExportLocationComboBox final : public QComboBox
+{
+public:
+    explicit ExportLocationComboBox(QWidget *parent = nullptr)
+        : QComboBox(parent)
+    {
+        setEditable(true);
+        lineEdit()->setReadOnly(true);
+        lineEdit()->installEventFilter(this);
+    }
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (watched == lineEdit() && event->type() == QEvent::MouseButtonPress) {
+            const auto *mouseEvent = static_cast<QMouseEvent *>(event);
+            if (mouseEvent->button() == Qt::LeftButton) {
+                showPopup();
+                return true;
+            }
+        }
+
+        return QComboBox::eventFilter(watched, event);
+    }
+
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton) {
+            showPopup();
+            event->accept();
+            return;
+        }
+
+        QComboBox::mousePressEvent(event);
+    }
+};
+
 } // namespace
 
 ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
@@ -108,14 +147,11 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     m_formatCombo->addItem(tr("JPEG"));
     m_formatCombo->addItem(tr("PNG"));
 
-    m_locationCombo = new QComboBox(fileGroup);
+    m_locationCombo = new ExportLocationComboBox(fileGroup);
     m_locationCombo->setObjectName(QStringLiteral("exportCombo"));
     m_locationCombo->addItem(tr("Same as original"));
     m_locationCombo->addItem(tr("Subfolder of original"));
     m_locationCombo->addItem(tr("Choose folder"));
-    m_locationCombo->setEditable(true);
-    m_locationCombo->lineEdit()->setReadOnly(true);
-    m_locationCombo->lineEdit()->setAttribute(Qt::WA_TransparentForMouseEvents);
     m_locationCombo->lineEdit()->setCursorPosition(0);
 
     auto *formatLocationRow = new QWidget(fileGroup);
