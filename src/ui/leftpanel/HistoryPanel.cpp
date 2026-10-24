@@ -26,7 +26,7 @@ public:
         , m_animation(new QVariantAnimation(this))
     {
         setText(tr("History"));
-        setCursor(Qt::PointingHandCursor);
+        setCursor(Qt::ArrowCursor);
         setFocusPolicy(Qt::NoFocus);
         setFixedHeight(30);
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -234,9 +234,6 @@ HistoryPanel::HistoryPanel(QWidget *parent)
         "  background: #2d2d2d;"
         "  color: #f0f0f0;"
         "}"));
-
-    connect(m_headerButton, &QToolButton::clicked, this,
-            [this]() { setExpanded(!m_expanded); });
 
     connect(m_list, &QListWidget::itemClicked, this,
             [this](QListWidgetItem *item) {
