@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int kStateSchemaVersion = 1;
+constexpr int kStateSchemaVersion = 2;
 constexpr auto kStateFileName = "apollo-state.json";
 
 QString stateFilePath()
@@ -100,25 +100,46 @@ QJsonObject developStateToJson(const DevelopState &state)
     object.insert(QStringLiteral("dehaze"), state.dehaze);
     object.insert(QStringLiteral("saturation"), state.saturation);
     object.insert(QStringLiteral("vibrance"), state.vibrance);
+    object.insert(QStringLiteral("cropX"), state.cropX);
+    object.insert(QStringLiteral("cropY"), state.cropY);
+    object.insert(QStringLiteral("cropWidth"), state.cropWidth);
+    object.insert(QStringLiteral("cropHeight"), state.cropHeight);
+    object.insert(QStringLiteral("cropQuarterTurns"), state.cropQuarterTurns);
+    object.insert(QStringLiteral("cropStraightenHundredths"),
+                  state.cropStraightenHundredths);
+    object.insert(QStringLiteral("cropAspectMode"), state.cropAspectMode);
     return object;
 }
 
 DevelopState developStateFromJson(const QJsonObject &object)
 {
     DevelopState state;
-    state.temperatureKelvin = object.value(QStringLiteral("temperatureKelvin")).toInt();
-    state.tint = object.value(QStringLiteral("tint")).toInt();
-    state.exposureHundredths = object.value(QStringLiteral("exposureHundredths")).toInt();
-    state.highlights = object.value(QStringLiteral("highlights")).toInt();
-    state.shadows = object.value(QStringLiteral("shadows")).toInt();
-    state.whites = object.value(QStringLiteral("whites")).toInt();
-    state.blacks = object.value(QStringLiteral("blacks")).toInt();
-    state.contrast = object.value(QStringLiteral("contrast")).toInt();
-    state.texture = object.value(QStringLiteral("texture")).toInt();
-    state.clarity = object.value(QStringLiteral("clarity")).toInt();
-    state.dehaze = object.value(QStringLiteral("dehaze")).toInt();
-    state.saturation = object.value(QStringLiteral("saturation")).toInt();
-    state.vibrance = object.value(QStringLiteral("vibrance")).toInt();
+    state.temperatureKelvin = object.value(QStringLiteral("temperatureKelvin"))
+                                  .toInt(state.temperatureKelvin);
+    state.tint = object.value(QStringLiteral("tint")).toInt(state.tint);
+    state.exposureHundredths = object.value(QStringLiteral("exposureHundredths"))
+                                   .toInt(state.exposureHundredths);
+    state.highlights = object.value(QStringLiteral("highlights")).toInt(state.highlights);
+    state.shadows = object.value(QStringLiteral("shadows")).toInt(state.shadows);
+    state.whites = object.value(QStringLiteral("whites")).toInt(state.whites);
+    state.blacks = object.value(QStringLiteral("blacks")).toInt(state.blacks);
+    state.contrast = object.value(QStringLiteral("contrast")).toInt(state.contrast);
+    state.texture = object.value(QStringLiteral("texture")).toInt(state.texture);
+    state.clarity = object.value(QStringLiteral("clarity")).toInt(state.clarity);
+    state.dehaze = object.value(QStringLiteral("dehaze")).toInt(state.dehaze);
+    state.saturation = object.value(QStringLiteral("saturation")).toInt(state.saturation);
+    state.vibrance = object.value(QStringLiteral("vibrance")).toInt(state.vibrance);
+    state.cropX = object.value(QStringLiteral("cropX")).toInt(state.cropX);
+    state.cropY = object.value(QStringLiteral("cropY")).toInt(state.cropY);
+    state.cropWidth = object.value(QStringLiteral("cropWidth")).toInt(state.cropWidth);
+    state.cropHeight = object.value(QStringLiteral("cropHeight")).toInt(state.cropHeight);
+    state.cropQuarterTurns = object.value(QStringLiteral("cropQuarterTurns"))
+                                 .toInt(state.cropQuarterTurns);
+    state.cropStraightenHundredths =
+        object.value(QStringLiteral("cropStraightenHundredths"))
+            .toInt(state.cropStraightenHundredths);
+    state.cropAspectMode = object.value(QStringLiteral("cropAspectMode"))
+                               .toInt(state.cropAspectMode);
     return state;
 }
 

@@ -3,6 +3,7 @@
 #include "ui/leftpanel/HistoryPanel.h"
 #include "ui/library/LibraryWorkspaceController.h"
 #include "ui/rightpanel/BasicSliderInteractionController.h"
+#include "ui/rightpanel/CropToolController.h"
 #include "ui/workspace/WorkspaceModeBar.h"
 
 #include <QAction>
@@ -35,6 +36,7 @@ int main(int argc, char *argv[])
         new BasicSliderInteractionController(basicPanel, &window);
     }
 
+    new CropToolController(&window, &window);
     new PhotoExportController(&window, &window);
 
     auto *menuBar = window.menuBar();

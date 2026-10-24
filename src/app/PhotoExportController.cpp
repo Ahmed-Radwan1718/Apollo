@@ -3,6 +3,7 @@
 #include "app/ExportDialog.h"
 #include "app/HistoryModel.h"
 #include "imaging/ArwDecoder.h"
+#include "imaging/CropTransform.h"
 #include "imaging/ImageLoader.h"
 #include "imaging/PhotoMetadata.h"
 #include "ui/filmstrip/FilmstripWidget.h"
@@ -90,17 +91,20 @@ QString exportDirectoryForSettings(const QString &sourcePath,
 ExportRenderResult renderForExport(const QString &filePath)
 {
     ExportRenderResult result;
+    HistoryModel history;
+    const std::optional<DevelopState> savedState = history.currentState(filePath);
 
     if (!isArwPath(filePath)) {
         const imaging::ImageLoadResult loaded = imaging::ImageLoader::load(filePath);
         result.image = loaded.image;
         result.metadata = loaded.metadata;
         result.error = loaded.error;
+        if (savedState && !result.image.isNull()) {
+            result.image = imaging::applyCropTransform(result.image, *savedState);
+        }
         return result;
     }
 
-    HistoryModel history;
-    const std::optional<DevelopState> savedState = history.currentState(filePath);
     if (!savedState) {
         result.image = imaging::ArwDecoder::decode(filePath,
                                                   &result.error,
@@ -126,6 +130,9 @@ ExportRenderResult renderForExport(const QString &filePath)
                                                state.saturation,
                                                state.vibrance,
                                                false);
+    if (!result.image.isNull()) {
+        result.image = imaging::applyCropTransform(result.image, state);
+    }
     return result;
 }
 

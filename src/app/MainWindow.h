@@ -12,6 +12,7 @@
 
 class QAction;
 class BasicPanel;
+class CropToolController;
 class FilmstripWidget;
 class HistogramWidget;
 class HistoryPanel;
@@ -61,6 +62,8 @@ private slots:
     void handleHistoryEntryActivated(int index);
 
 private:
+    friend class CropToolController;
+
     void createActions();
     void previewTemperature(int kelvin);
     void previewTint(int tint);

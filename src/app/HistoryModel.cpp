@@ -99,7 +99,7 @@ bool HistoryModel::commit(const QString &filePath,
     PhotoHistory &history = iterator.value();
     if (history.currentIndex >= 0
         && history.currentIndex < history.entries.size()
-        && history.entries[history.currentIndex].state == state) {
+        && history.entries[history.currentIndex].state.fullyEquals(state)) {
         return false;
     }
 

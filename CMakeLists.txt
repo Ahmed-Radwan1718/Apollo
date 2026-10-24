@@ -36,6 +36,8 @@ qt_add_executable(Nexus WIN32
     src/imaging/ArwDecoder.h
     src/imaging/ArwPreviewSession.h
     src/imaging/ArwPreviewSessionImpl.inc
+    src/imaging/CropTransform.cpp
+    src/imaging/CropTransform.h
     src/imaging/Histogram.cpp
     src/imaging/Histogram.h
     src/imaging/ImageLoader.cpp
@@ -49,6 +51,7 @@ qt_add_executable(Nexus WIN32
     src/imaging/ThumbnailLoader.h
     src/imaging/WhiteBalancePickerService.cpp
     src/imaging/WhiteBalancePickerService.h
+    src/ui/canvas/CropOverlayWidget.h
     src/ui/canvas/PhotoCanvas.cpp
     src/ui/canvas/PhotoCanvas.h
     src/ui/filmstrip/FilmstripWidget.cpp
@@ -69,6 +72,8 @@ qt_add_executable(Nexus WIN32
     src/ui/library/LibraryWorkspaceController.h
     src/ui/rightpanel/BasicPanel.cpp
     src/ui/rightpanel/BasicPanel.h
+    src/ui/rightpanel/CropToolController.cpp
+    src/ui/rightpanel/CropToolController.h
     src/ui/rightpanel/PhotoMetadataWidget.cpp
     src/ui/rightpanel/PhotoMetadataWidget.h
     src/ui/rightpanel/WhiteBalancePickerController.cpp
