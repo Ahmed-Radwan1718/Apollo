@@ -30,10 +30,10 @@ constexpr int kExposureMaximumHundredths = 500;
 constexpr int kHighlightsMinimum = -100;
 constexpr int kHighlightsMaximum = 100;
 constexpr double kSceneMiddleGray = 0.18;
-constexpr double kHighlightsMaskStartEv = 1.0;
-constexpr double kHighlightsMaskFullEv = 3.0;
+constexpr double kHighlightsMaskStartEv = 0.5;
+constexpr double kHighlightsMaskFullEv = 2.0;
 constexpr double kHighlightsMaximumCompression = 0.9;
-constexpr double kHighlightsMaximumExpansion = 0.5;
+constexpr double kHighlightsMaximumExpansion = 0.9;
 constexpr int kShadowsMinimum = -100;
 constexpr int kShadowsMaximum = 100;
 constexpr double kShadowsMaskStartEv = -1.0;
@@ -633,7 +633,7 @@ void applyLinearHighlights(double &red,
     // Work in scene-referred EV relative to 18% middle gray. The integrated
     // smoothstep changes the slope of the highlight response instead of directly
     // subtracting brightness, which keeps the tone curve monotonic and avoids
-    // reversals while smoothly rolling highlights in or out above +1 EV.
+    // reversals while smoothly rolling highlights in or out above +0.5 EV.
     const double sceneEv = std::log2(luminance / kSceneMiddleGray);
     const double weightedEv = integratedHighlightWeightEv(sceneEv);
     if (weightedEv <= 0.0) {
