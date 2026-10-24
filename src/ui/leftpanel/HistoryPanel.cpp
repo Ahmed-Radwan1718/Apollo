@@ -1,6 +1,7 @@
 #include "ui/leftpanel/HistoryPanel.h"
 
 #include <QAbstractItemView>
+#include <QAbstractScrollArea>
 #include <QEasingCurve>
 #include <QKeySequence>
 #include <QListWidget>
@@ -108,6 +109,10 @@ public:
         connect(m_animation, &QVariantAnimation::finished, this,
                 [this]() {
                     updateContentGeometry(m_expanded ? height() : 0);
+                    if (auto *scrollArea = qobject_cast<QAbstractScrollArea *>(m_content)) {
+                        scrollArea->setVerticalScrollBarPolicy(
+                            m_expanded ? Qt::ScrollBarAsNeeded : Qt::ScrollBarAlwaysOff);
+                    }
                 });
     }
 
@@ -120,6 +125,10 @@ public:
 
         m_content->setParent(this);
         m_content->show();
+        if (auto *scrollArea = qobject_cast<QAbstractScrollArea *>(m_content)) {
+            scrollArea->setVerticalScrollBarPolicy(
+                m_expanded ? Qt::ScrollBarAsNeeded : Qt::ScrollBarAlwaysOff);
+        }
         updateContentGeometry(m_expanded ? height() : 0);
     }
 
@@ -131,6 +140,9 @@ public:
 
         m_expanded = expanded;
         m_animation->stop();
+        if (auto *scrollArea = qobject_cast<QAbstractScrollArea *>(m_content)) {
+            scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        }
         m_animation->setStartValue(m_content->height());
         m_animation->setEndValue(expanded ? height() : 0);
         m_animation->start();
