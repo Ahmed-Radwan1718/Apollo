@@ -1,5 +1,6 @@
 #include "imaging/ArwPreviewSession.h"
 
+#include <array>
 #include <cstddef>
 #include <cstring>
 #include <memory>
@@ -9,19 +10,26 @@ namespace imaging {
 struct ArwPreviewSession::Impl
 {
     static constexpr int kMaximumPreviewLongSide = 1280;
+    using Matrix3 = std::array<double, 9>;
 
     ~Impl()
     {
         clearCachedImage();
     }
 
+    static void destroyLinearImage(libraw_processed_image_t *&image)
+    {
+        if (image != nullptr) {
+            std::destroy_at(image);
+            ::operator delete(image);
+            image = nullptr;
+        }
+    }
+
     void clearCachedImage()
     {
-        if (cachedImage != nullptr) {
-            std::destroy_at(cachedImage);
-            ::operator delete(cachedImage);
-            cachedImage = nullptr;
-        }
+        destroyLinearImage(cachedImage);
+        destroyLinearImage(temperaturePreviewImage);
         cachedTemperatureKelvin = std::numeric_limits<int>::min();
         cachedTint = std::numeric_limits<int>::min();
     }
@@ -279,11 +287,270 @@ struct ArwPreviewSession::Impl
         return true;
     }
 
+    static bool invertMatrix(const Matrix3 &matrix, Matrix3 &inverse)
+    {
+        const double a = matrix[0];
+        const double b = matrix[1];
+        const double c = matrix[2];
+        const double d = matrix[3];
+        const double e = matrix[4];
+        const double f = matrix[5];
+        const double g = matrix[6];
+        const double h = matrix[7];
+        const double i = matrix[8];
+
+        const double determinant = a * (e * i - f * h)
+            - b * (d * i - f * g)
+            + c * (d * h - e * g);
+        if (!std::isfinite(determinant) || std::abs(determinant) <= 1e-12) {
+            return false;
+        }
+
+        const double reciprocal = 1.0 / determinant;
+        inverse = {
+            (e * i - f * h) * reciprocal,
+            (c * h - b * i) * reciprocal,
+            (b * f - c * e) * reciprocal,
+            (f * g - d * i) * reciprocal,
+            (a * i - c * g) * reciprocal,
+            (c * d - a * f) * reciprocal,
+            (d * h - e * g) * reciprocal,
+            (b * g - a * h) * reciprocal,
+            (a * e - b * d) * reciprocal,
+        };
+        return true;
+    }
+
+    static Matrix3 multiplyMatrices(const Matrix3 &left, const Matrix3 &right)
+    {
+        Matrix3 product{};
+        for (int row = 0; row < 3; ++row) {
+            for (int column = 0; column < 3; ++column) {
+                double value = 0.0;
+                for (int inner = 0; inner < 3; ++inner) {
+                    value += left[row * 3 + inner] * right[inner * 3 + column];
+                }
+                product[row * 3 + column] = value;
+            }
+        }
+        return product;
+    }
+
+    bool whiteBalanceMultipliers(int temperatureKelvin,
+                                 int tint,
+                                 std::array<double, 3> &multipliers) const
+    {
+        if (!processor) {
+            return false;
+        }
+
+        const int requestedTemperatureKelvin = temperatureKelvin > 0
+            ? std::clamp(temperatureKelvin,
+                         kSonyTemperatureMinimumKelvin,
+                         kSonyTemperatureMaximumKelvin)
+            : 0;
+        const int requestedTint = std::clamp(tint, kTintMinimum, kTintMaximum);
+
+        float customMultipliers[4] = {};
+        const float *sourceMultipliers = processor->imgdata.color.cam_mul;
+
+        if (requestedTemperatureKelvin > 0
+            && (requestedTemperatureKelvin != cameraTemperatureKelvin
+                || requestedTint != 0)) {
+            if (cameraTemperatureKelvin <= 0
+                || !sonyWhiteBalanceMultipliersForDevelopState(
+                    processor->imgdata.color,
+                    calibrations,
+                    cameraTemperatureKelvin,
+                    requestedTemperatureKelvin,
+                    requestedTint,
+                    customMultipliers)) {
+                return false;
+            }
+            sourceMultipliers = customMultipliers;
+        }
+
+        const double green = sourceMultipliers[1] > 0.0f
+            ? static_cast<double>(sourceMultipliers[1])
+            : static_cast<double>(sourceMultipliers[3]);
+        const double red = static_cast<double>(sourceMultipliers[0]);
+        const double blue = static_cast<double>(sourceMultipliers[2]);
+        if (!(red > 0.0) || !(green > 0.0) || !(blue > 0.0)) {
+            return false;
+        }
+
+        multipliers = {red / green, 1.0, blue / green};
+        return std::isfinite(multipliers[0]) && std::isfinite(multipliers[2]);
+    }
+
+    bool temperatureTransform(int targetTemperatureKelvin,
+                              int tint,
+                              Matrix3 &transform) const
+    {
+        if (!processor || cachedImage == nullptr) {
+            return false;
+        }
+
+        std::array<double, 3> sourceMultipliers{};
+        std::array<double, 3> targetMultipliers{};
+        if (!whiteBalanceMultipliers(cachedTemperatureKelvin,
+                                     cachedTint,
+                                     sourceMultipliers)
+            || !whiteBalanceMultipliers(targetTemperatureKelvin,
+                                        tint,
+                                        targetMultipliers)) {
+            return false;
+        }
+
+        std::array<double, 3> multiplierRatios{};
+        for (int channel = 0; channel < 3; ++channel) {
+            if (!(sourceMultipliers[channel] > 0.0)) {
+                return false;
+            }
+            multiplierRatios[channel] =
+                targetMultipliers[channel] / sourceMultipliers[channel];
+            if (!std::isfinite(multiplierRatios[channel])
+                || !(multiplierRatios[channel] > 0.0)) {
+                return false;
+            }
+        }
+
+        Matrix3 cameraToLinearSrgb{};
+        for (int row = 0; row < 3; ++row) {
+            for (int column = 0; column < 3; ++column) {
+                const double value = processor->imgdata.color.rgb_cam[row][column];
+                if (!std::isfinite(value)) {
+                    return false;
+                }
+                cameraToLinearSrgb[row * 3 + column] = value;
+            }
+        }
+
+        Matrix3 linearSrgbToCamera{};
+        if (!invertMatrix(cameraToLinearSrgb, linearSrgbToCamera)) {
+            return false;
+        }
+
+        Matrix3 targetCameraToLinearSrgb = cameraToLinearSrgb;
+        for (int row = 0; row < 3; ++row) {
+            for (int column = 0; column < 3; ++column) {
+                targetCameraToLinearSrgb[row * 3 + column] *=
+                    multiplierRatios[column];
+            }
+        }
+
+        transform = multiplyMatrices(targetCameraToLinearSrgb,
+                                     linearSrgbToCamera);
+        return std::all_of(transform.cbegin(), transform.cend(),
+                           [](double value) { return std::isfinite(value); });
+    }
+
+    bool ensureTemperaturePreviewImage(QString *error)
+    {
+        if (cachedImage == nullptr) {
+            return false;
+        }
+
+        if (temperaturePreviewImage != nullptr
+            && temperaturePreviewImage->width == cachedImage->width
+            && temperaturePreviewImage->height == cachedImage->height
+            && temperaturePreviewImage->data_size == cachedImage->data_size) {
+            return true;
+        }
+
+        destroyLinearImage(temperaturePreviewImage);
+
+        const std::size_t allocationBytes =
+            offsetof(libraw_processed_image_t, data) + cachedImage->data_size;
+        void *storage = ::operator new(allocationBytes, std::nothrow);
+        if (storage == nullptr) {
+            setError(error,
+                     QStringLiteral("Not enough memory to create the interactive temperature preview."));
+            return false;
+        }
+
+        temperaturePreviewImage = ::new (storage) libraw_processed_image_t{};
+        temperaturePreviewImage->type = cachedImage->type;
+        temperaturePreviewImage->width = cachedImage->width;
+        temperaturePreviewImage->height = cachedImage->height;
+        temperaturePreviewImage->colors = cachedImage->colors;
+        temperaturePreviewImage->bits = cachedImage->bits;
+        temperaturePreviewImage->data_size = cachedImage->data_size;
+        return true;
+    }
+
+    libraw_processed_image_t *buildTemperaturePreview(int temperatureKelvin,
+                                                       int tint,
+                                                       QString *error)
+    {
+        Matrix3 transform{};
+        if (!temperatureTransform(temperatureKelvin, tint, transform)
+            || !ensureTemperaturePreviewImage(error)) {
+            return nullptr;
+        }
+
+        const std::size_t pixelCount =
+            static_cast<std::size_t>(cachedImage->width) * cachedImage->height;
+        const auto *source = reinterpret_cast<const std::uint16_t *>(cachedImage->data);
+        auto *destination =
+            reinterpret_cast<std::uint16_t *>(temperaturePreviewImage->data);
+
+        for (std::size_t pixel = 0; pixel < pixelCount; ++pixel) {
+            const std::size_t offset = pixel * 3;
+            const double red = source[offset];
+            const double green = source[offset + 1];
+            const double blue = source[offset + 2];
+
+            const double transformedRed = transform[0] * red
+                + transform[1] * green
+                + transform[2] * blue;
+            const double transformedGreen = transform[3] * red
+                + transform[4] * green
+                + transform[5] * blue;
+            const double transformedBlue = transform[6] * red
+                + transform[7] * green
+                + transform[8] * blue;
+
+            destination[offset] = static_cast<std::uint16_t>(std::lround(
+                std::clamp(transformedRed,
+                           0.0,
+                           static_cast<double>(kLinearMaximum))));
+            destination[offset + 1] = static_cast<std::uint16_t>(std::lround(
+                std::clamp(transformedGreen,
+                           0.0,
+                           static_cast<double>(kLinearMaximum))));
+            destination[offset + 2] = static_cast<std::uint16_t>(std::lround(
+                std::clamp(transformedBlue,
+                           0.0,
+                           static_cast<double>(kLinearMaximum))));
+        }
+
+        return temperaturePreviewImage;
+    }
+
+    bool canUseFastTemperaturePreview(int temperatureKelvin, int tint) const
+    {
+        if (cachedImage == nullptr) {
+            return false;
+        }
+
+        const int requestedTemperatureKelvin = temperatureKelvin > 0
+            ? std::clamp(temperatureKelvin,
+                         kSonyTemperatureMinimumKelvin,
+                         kSonyTemperatureMaximumKelvin)
+            : 0;
+        const int requestedTint = std::clamp(tint, kTintMinimum, kTintMaximum);
+
+        return cachedTint == requestedTint
+            && cachedTemperatureKelvin != requestedTemperatureKelvin;
+    }
+
     QString filePath;
     std::unique_ptr<LibRaw> processor;
     std::vector<TemperatureCalibration> calibrations;
     int cameraTemperatureKelvin = 0;
     libraw_processed_image_t *cachedImage = nullptr;
+    libraw_processed_image_t *temperaturePreviewImage = nullptr;
     int cachedTemperatureKelvin = std::numeric_limits<int>::min();
     int cachedTint = std::numeric_limits<int>::min();
 };
@@ -324,11 +591,32 @@ QImage ArwPreviewSession::render(const QString &filePath,
                                  int saturation,
                                  int vibrance)
 {
-    if (!prepare(filePath, whiteBalanceTemperatureKelvin, tint, error)) {
+    if (error != nullptr) {
+        error->clear();
+    }
+
+    if (!m_impl->ensureRaw(filePath, error)) {
         return {};
     }
 
-    return developedSrgbImage(*m_impl->cachedImage,
+    libraw_processed_image_t *linearPreview = nullptr;
+    if (m_impl->canUseFastTemperaturePreview(whiteBalanceTemperatureKelvin, tint)) {
+        linearPreview = m_impl->buildTemperaturePreview(whiteBalanceTemperatureKelvin,
+                                                        tint,
+                                                        error);
+    }
+
+    if (linearPreview == nullptr) {
+        if (error != nullptr) {
+            error->clear();
+        }
+        if (!m_impl->refreshWhiteBalance(whiteBalanceTemperatureKelvin, tint, error)) {
+            return {};
+        }
+        linearPreview = m_impl->cachedImage;
+    }
+
+    return developedSrgbImage(*linearPreview,
                               exposureHundredths,
                               highlights,
                               shadows,
