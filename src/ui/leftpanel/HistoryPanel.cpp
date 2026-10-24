@@ -84,8 +84,8 @@ protected:
     }
 
 private:
-    bool m_expanded = true;
-    qreal m_angle = 90.0;
+    bool m_expanded = false;
+    qreal m_angle = 0.0;
     QVariantAnimation *m_animation = nullptr;
 };
 
@@ -177,13 +177,14 @@ private:
 
     QWidget *m_content = nullptr;
     QVariantAnimation *m_animation = nullptr;
-    bool m_expanded = true;
+    bool m_expanded = false;
 };
 
 } // namespace
 
 HistoryPanel::HistoryPanel(QWidget *parent)
     : QWidget(parent)
+    , m_expanded(false)
 {
     setObjectName(QStringLiteral("historyPanel"));
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
