@@ -105,11 +105,20 @@ int main(int argc, char *argv[])
     QAction *undoAction = editMenu->addAction(QObject::tr("Undo\tCtrl+Z"));
     QAction *redoAction = editMenu->addAction(QObject::tr("Redo\tCtrl+Shift+Z"));
 
+    auto *resetAdjustmentsShortcut = new QAction(&window);
+    resetAdjustmentsShortcut->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+R")));
+    window.addAction(resetAdjustmentsShortcut);
+
     if (historyPanel) {
         QObject::connect(undoAction, &QAction::triggered,
                          historyPanel, &HistoryPanel::undo);
         QObject::connect(redoAction, &QAction::triggered,
                          historyPanel, &HistoryPanel::redo);
+        QObject::connect(resetAdjustmentsShortcut, &QAction::triggered,
+                         historyPanel,
+                         [historyPanel]() {
+                             historyPanel->entryActivated(0);
+                         });
         QObject::connect(editMenu, &QMenu::aboutToShow,
                          &window,
                          [historyPanel, undoAction, redoAction]() {
@@ -121,6 +130,7 @@ int main(int argc, char *argv[])
     } else {
         undoAction->setEnabled(false);
         redoAction->setEnabled(false);
+        resetAdjustmentsShortcut->setEnabled(false);
     }
 
     editMenu->addSeparator();
@@ -133,7 +143,6 @@ int main(int argc, char *argv[])
     addPlaceholderAction(editMenu, QObject::tr("Paste Settings To…"));
 
     editMenu->addSeparator();
-    addPlaceholderAction(editMenu, QObject::tr("Reset Adjustments"));
     addPlaceholderAction(editMenu, QObject::tr("Reset Selected Adjustment"));
 
     editMenu->addSeparator();
