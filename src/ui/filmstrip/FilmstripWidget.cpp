@@ -140,26 +140,30 @@ protected:
     {
         QMenu menu(this);
 
-        QAction *acceptAction = menu.addAction(tr("Accept"));
-        acceptAction->setCheckable(true);
-        acceptAction->setChecked(m_status == 1);
+        QMenu *flagMenu = menu.addMenu(tr("Set Flag"));
+        QHash<QAction *, int> flagActions;
+        const auto addFlagAction = [&](const QString &text, int status) {
+            QAction *action = flagMenu->addAction(text);
+            action->setCheckable(true);
+            action->setChecked(m_status == status);
+            flagActions.insert(action, status);
+        };
+        addFlagAction(tr("Accept"), 1);
+        addFlagAction(tr("Rejected"), -1);
 
-        QAction *rejectedAction = menu.addAction(tr("Rejected"));
-        rejectedAction->setCheckable(true);
-        rejectedAction->setChecked(m_status == -1);
-
-        menu.addSeparator();
-
-        QMenu *ratingMenu = menu.addMenu(tr("Rating"));
+        QMenu *ratingMenu = menu.addMenu(tr("Set Rating"));
+        QHash<QAction *, int> ratingActions;
         for (int rating = 1; rating <= 5; ++rating) {
-            QAction *action = ratingMenu->addAction(
-                QString(rating, QChar(0x2605)));
+            const QString text = rating == 1
+                ? tr("1 Star")
+                : tr("%1 Stars").arg(rating);
+            QAction *action = ratingMenu->addAction(text);
             action->setCheckable(true);
             action->setChecked(m_rating == rating);
-            action->setData(rating);
+            ratingActions.insert(action, rating);
         }
 
-        QMenu *colorLabelMenu = menu.addMenu(tr("Color Label"));
+        QMenu *colorLabelMenu = menu.addMenu(tr("Set Color Label"));
         QHash<QAction *, int> colorActions;
         const auto addColorAction = [&](const QString &text, int colorLabel) {
             QAction *action = colorLabelMenu->addAction(text);
@@ -177,23 +181,17 @@ protected:
         addColorAction(tr("Purple"), 5);
 
         QAction *selectedAction = menu.exec(event->globalPos());
-        if (selectedAction == acceptAction) {
+        if (selectedAction && flagActions.contains(selectedAction)) {
             if (m_statusChanged) {
-                m_statusChanged(1);
+                m_statusChanged(flagActions.value(selectedAction));
             }
-        } else if (selectedAction == rejectedAction) {
-            if (m_statusChanged) {
-                m_statusChanged(-1);
+        } else if (selectedAction && ratingActions.contains(selectedAction)) {
+            if (m_ratingChanged) {
+                m_ratingChanged(ratingActions.value(selectedAction));
             }
         } else if (selectedAction && colorActions.contains(selectedAction)) {
             if (m_colorLabelChanged) {
                 m_colorLabelChanged(colorActions.value(selectedAction));
-            }
-        } else if (selectedAction && m_ratingChanged) {
-            bool ok = false;
-            const int rating = selectedAction->data().toInt(&ok);
-            if (ok && rating >= 1 && rating <= 5) {
-                m_ratingChanged(rating);
             }
         }
 
