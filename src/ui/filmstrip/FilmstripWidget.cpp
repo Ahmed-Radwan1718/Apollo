@@ -33,6 +33,24 @@ constexpr int kThumbnailHeight = kThumbnailImageHeight + kThumbnailLabelHeight;
 constexpr int kThumbnailPreviewSize = 320;
 constexpr int kFilmstripVerticalMargin = 10;
 
+QColor colorForLabel(int colorLabel)
+{
+    switch (colorLabel) {
+    case 1:
+        return QColor(QStringLiteral("#D75A5A"));
+    case 2:
+        return QColor(QStringLiteral("#D6B84F"));
+    case 3:
+        return QColor(QStringLiteral("#5AA66A"));
+    case 4:
+        return QColor(QStringLiteral("#5B84C4"));
+    case 5:
+        return QColor(QStringLiteral("#9B6BC4"));
+    default:
+        return {};
+    }
+}
+
 class FilmstripThumbnail final : public QWidget
 {
 public:
@@ -40,9 +58,11 @@ public:
                                 const QImage &image,
                                 int rating,
                                 int status,
+                                int colorLabel,
                                 std::function<void()> activated,
                                 std::function<void(int)> ratingChanged,
                                 std::function<void(int)> statusChanged,
+                                std::function<void(int)> colorLabelChanged,
                                 QWidget *parent = nullptr)
         : QWidget(parent)
         , m_thumbnail(image.scaled(kThumbnailPreviewSize,
@@ -53,8 +73,10 @@ public:
         , m_activated(std::move(activated))
         , m_ratingChanged(std::move(ratingChanged))
         , m_statusChanged(std::move(statusChanged))
+        , m_colorLabelChanged(std::move(colorLabelChanged))
         , m_rating(std::clamp(rating, 0, 5))
         , m_status(status == 1 || status == -1 ? status : 0)
+        , m_colorLabel(std::clamp(colorLabel, 0, 5))
     {
         setFixedSize(kThumbnailWidth, kThumbnailHeight);
         setCursor(Qt::PointingHandCursor);
@@ -89,6 +111,17 @@ public:
         }
 
         m_status = normalizedStatus;
+    }
+
+    void setColorLabel(int colorLabel)
+    {
+        const int clampedColorLabel = std::clamp(colorLabel, 0, 5);
+        if (m_colorLabel == clampedColorLabel) {
+            return;
+        }
+
+        m_colorLabel = clampedColorLabel;
+        update();
     }
 
 protected:
@@ -126,6 +159,23 @@ protected:
             action->setData(rating);
         }
 
+        QMenu *colorLabelMenu = menu.addMenu(tr("Color Label"));
+        QHash<QAction *, int> colorActions;
+        const auto addColorAction = [&](const QString &text, int colorLabel) {
+            QAction *action = colorLabelMenu->addAction(text);
+            action->setCheckable(true);
+            action->setChecked(m_colorLabel == colorLabel);
+            colorActions.insert(action, colorLabel);
+        };
+
+        addColorAction(tr("None"), 0);
+        colorLabelMenu->addSeparator();
+        addColorAction(tr("Red"), 1);
+        addColorAction(tr("Yellow"), 2);
+        addColorAction(tr("Green"), 3);
+        addColorAction(tr("Blue"), 4);
+        addColorAction(tr("Purple"), 5);
+
         QAction *selectedAction = menu.exec(event->globalPos());
         if (selectedAction == acceptAction) {
             if (m_statusChanged) {
@@ -134,6 +184,10 @@ protected:
         } else if (selectedAction == rejectedAction) {
             if (m_statusChanged) {
                 m_statusChanged(-1);
+            }
+        } else if (selectedAction && colorActions.contains(selectedAction)) {
+            if (m_colorLabelChanged) {
+                m_colorLabelChanged(colorActions.value(selectedAction));
             }
         } else if (selectedAction && m_ratingChanged) {
             bool ok = false;
@@ -187,13 +241,21 @@ protected:
             painter.drawText(badgeRect, Qt::AlignCenter, stars);
         }
 
-        if (m_selected) {
+        const QColor labelColor = colorForLabel(m_colorLabel);
+        painter.setBrush(Qt::NoBrush);
+        if (labelColor.isValid()) {
+            painter.setPen(QPen(labelColor, 2));
+            painter.drawRect(imageRect.adjusted(1, 1, -2, -2));
+
+            if (m_selected) {
+                painter.setPen(QPen(QColor(232, 232, 232), 1));
+                painter.drawRect(imageRect.adjusted(3, 3, -4, -4));
+            }
+        } else if (m_selected) {
             painter.setPen(QPen(QColor(214, 214, 214), 2));
-            painter.setBrush(Qt::NoBrush);
             painter.drawRect(imageRect.adjusted(1, 1, -2, -2));
         } else {
             painter.setPen(QColor(48, 48, 48));
-            painter.setBrush(Qt::NoBrush);
             painter.drawRect(imageRect.adjusted(0, 0, -1, -1));
         }
 
@@ -220,8 +282,10 @@ private:
     std::function<void()> m_activated;
     std::function<void(int)> m_ratingChanged;
     std::function<void(int)> m_statusChanged;
+    std::function<void(int)> m_colorLabelChanged;
     int m_rating = 0;
     int m_status = 0;
+    int m_colorLabel = 0;
     bool m_selected = false;
 };
 
@@ -231,6 +295,7 @@ FilmstripWidget::FilmstripWidget(QWidget *parent)
     : QWidget(parent)
     , m_photoRatings(ApplicationStateStore::loadPhotoRatings())
     , m_photoStatuses(ApplicationStateStore::loadPhotoStatuses())
+    , m_photoColorLabels(ApplicationStateStore::loadPhotoColorLabels())
 {
     setObjectName(QStringLiteral("filmstripWidget"));
     setFixedHeight(kFilmstripHeight);
@@ -320,6 +385,7 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
         image,
         m_photoRatings.value(absoluteFilePath, 0),
         m_photoStatuses.value(absoluteFilePath, 0),
+        m_photoColorLabels.value(absoluteFilePath, 0),
         [this, filePath]() {
             activatePhoto(filePath);
         },
@@ -328,6 +394,9 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
         },
         [this, filePath](int status) {
             setPhotoStatus(filePath, status);
+        },
+        [this, filePath](int colorLabel) {
+            setPhotoColorLabel(filePath, colorLabel);
         },
         m_content);
 
@@ -422,6 +491,29 @@ void FilmstripWidget::setPhotoStatus(const QString &filePath, int status)
     }
     if (thumbnail) {
         static_cast<FilmstripThumbnail *>(thumbnail)->setStatus(status);
+    }
+}
+
+void FilmstripWidget::setPhotoColorLabel(const QString &filePath, int colorLabel)
+{
+    if (filePath.isEmpty() || colorLabel < 0 || colorLabel > 5) {
+        return;
+    }
+
+    const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
+    if (colorLabel == 0) {
+        m_photoColorLabels.remove(absoluteFilePath);
+    } else {
+        m_photoColorLabels.insert(absoluteFilePath, colorLabel);
+    }
+    ApplicationStateStore::setPhotoColorLabel(absoluteFilePath, colorLabel);
+
+    QWidget *thumbnail = m_thumbnails.value(filePath, nullptr);
+    if (!thumbnail) {
+        thumbnail = m_thumbnails.value(absoluteFilePath, nullptr);
+    }
+    if (thumbnail) {
+        static_cast<FilmstripThumbnail *>(thumbnail)->setColorLabel(colorLabel);
     }
 }
 

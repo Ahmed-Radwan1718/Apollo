@@ -35,6 +35,7 @@ private:
     void setCurrentPhoto(const QString &filePath);
     void setPhotoRating(const QString &filePath, int rating);
     void setPhotoStatus(const QString &filePath, int status);
+    void setPhotoColorLabel(const QString &filePath, int colorLabel);
     void alignToDefaultPhotoBounds(bool updateWhileManual = false);
 
     PhotoCanvas *m_canvas = nullptr;
@@ -44,6 +45,7 @@ private:
     QHash<QString, QWidget *> m_thumbnails;
     QHash<QString, int> m_photoRatings;
     QHash<QString, int> m_photoStatuses;
+    QHash<QString, int> m_photoColorLabels;
     QString m_currentFilePath;
     PhotoOpenedCallback m_photoOpenedCallback;
 };

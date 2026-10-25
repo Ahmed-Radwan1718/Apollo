@@ -21,6 +21,9 @@ public:
     [[nodiscard]] static QHash<QString, int> loadPhotoStatuses();
     static void setPhotoStatus(const QString &filePath, int status);
 
+    [[nodiscard]] static QHash<QString, int> loadPhotoColorLabels();
+    static void setPhotoColorLabel(const QString &filePath, int colorLabel);
+
     [[nodiscard]] static QVector<HistoryModel::Snapshot> loadHistories();
     static void saveHistories(const QVector<HistoryModel::Snapshot> &histories);
 };

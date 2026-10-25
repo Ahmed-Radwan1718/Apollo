@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int kStateSchemaVersion = 4;
+constexpr int kStateSchemaVersion = 5;
 constexpr auto kStateFileName = "apollo-state.json";
 
 QString stateFilePath()
@@ -254,6 +254,41 @@ void ApplicationStateStore::setPhotoStatus(const QString &filePath, int status)
     QJsonObject statuses = root.value(QStringLiteral("photoStatuses")).toObject();
     statuses.insert(absoluteFilePath, status);
     root.insert(QStringLiteral("photoStatuses"), statuses);
+    saveStateObject(std::move(root));
+}
+
+QHash<QString, int> ApplicationStateStore::loadPhotoColorLabels()
+{
+    QHash<QString, int> result;
+    const QJsonObject colorLabels =
+        loadStateObject().value(QStringLiteral("photoColorLabels")).toObject();
+
+    for (auto iterator = colorLabels.constBegin(); iterator != colorLabels.constEnd(); ++iterator) {
+        const QString filePath = normalizedPath(iterator.key());
+        const int colorLabel = iterator.value().toInt(0);
+        if (!filePath.isEmpty() && colorLabel >= 1 && colorLabel <= 5) {
+            result.insert(filePath, colorLabel);
+        }
+    }
+
+    return result;
+}
+
+void ApplicationStateStore::setPhotoColorLabel(const QString &filePath, int colorLabel)
+{
+    const QString absoluteFilePath = normalizedPath(filePath);
+    if (absoluteFilePath.isEmpty() || colorLabel < 0 || colorLabel > 5) {
+        return;
+    }
+
+    QJsonObject root = loadStateObject();
+    QJsonObject colorLabels = root.value(QStringLiteral("photoColorLabels")).toObject();
+    if (colorLabel == 0) {
+        colorLabels.remove(absoluteFilePath);
+    } else {
+        colorLabels.insert(absoluteFilePath, colorLabel);
+    }
+    root.insert(QStringLiteral("photoColorLabels"), colorLabels);
     saveStateObject(std::move(root));
 }
 
