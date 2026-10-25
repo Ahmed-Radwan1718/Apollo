@@ -10,11 +10,13 @@
 #include <QFont>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QMenu>
 #include <QMetaObject>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPaintEvent>
+#include <QPixmap>
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QVBoxLayout>
@@ -68,6 +70,31 @@ QColor colorForLabel(int colorLabel)
     default:
         return {};
     }
+}
+
+QIcon colorLabelIcon(int colorLabel)
+{
+    const QColor color = colorForLabel(colorLabel);
+    if (!color.isValid()) {
+        return {};
+    }
+
+    constexpr int iconSize = 14;
+    constexpr qreal circleInset = 2.0;
+
+    QPixmap pixmap(iconSize, iconSize);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(color);
+    painter.drawEllipse(QRectF(circleInset,
+                               circleInset,
+                               iconSize - circleInset * 2.0,
+                               iconSize - circleInset * 2.0));
+
+    return QIcon(pixmap);
 }
 
 class FilmstripThumbnail final : public QWidget
@@ -190,6 +217,9 @@ protected:
         QHash<QAction *, int> colorActions;
         const auto addColorAction = [&](const QString &text, int colorLabel) {
             QAction *action = colorLabelMenu->addAction(text);
+            if (colorLabel > 0) {
+                action->setIcon(colorLabelIcon(colorLabel));
+            }
             action->setCheckable(true);
             action->setChecked(m_colorLabel == colorLabel);
             colorActions.insert(action, colorLabel);
