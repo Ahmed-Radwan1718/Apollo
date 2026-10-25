@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int kStateSchemaVersion = 2;
+constexpr int kStateSchemaVersion = 3;
 constexpr auto kStateFileName = "apollo-state.json";
 
 QString stateFilePath()
@@ -192,6 +192,37 @@ void ApplicationStateStore::addLibraryPhoto(const QString &filePath)
 
     photos.append(absoluteFilePath);
     root.insert(QStringLiteral("libraryPhotos"), photos);
+    saveStateObject(std::move(root));
+}
+
+QHash<QString, int> ApplicationStateStore::loadPhotoRatings()
+{
+    QHash<QString, int> result;
+    const QJsonObject ratings =
+        loadStateObject().value(QStringLiteral("photoRatings")).toObject();
+
+    for (auto iterator = ratings.constBegin(); iterator != ratings.constEnd(); ++iterator) {
+        const QString filePath = normalizedPath(iterator.key());
+        const int rating = iterator.value().toInt(0);
+        if (!filePath.isEmpty() && rating >= 1 && rating <= 5) {
+            result.insert(filePath, rating);
+        }
+    }
+
+    return result;
+}
+
+void ApplicationStateStore::setPhotoRating(const QString &filePath, int rating)
+{
+    const QString absoluteFilePath = normalizedPath(filePath);
+    if (absoluteFilePath.isEmpty() || rating < 1 || rating > 5) {
+        return;
+    }
+
+    QJsonObject root = loadStateObject();
+    QJsonObject ratings = root.value(QStringLiteral("photoRatings")).toObject();
+    ratings.insert(absoluteFilePath, rating);
+    root.insert(QStringLiteral("photoRatings"), ratings);
     saveStateObject(std::move(root));
 }
 

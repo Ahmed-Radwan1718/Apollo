@@ -2,6 +2,7 @@
 
 #include "app/HistoryModel.h"
 
+#include <QHash>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -13,6 +14,9 @@ public:
 
     [[nodiscard]] static QStringList loadLibraryPhotos();
     static void addLibraryPhoto(const QString &filePath);
+
+    [[nodiscard]] static QHash<QString, int> loadPhotoRatings();
+    static void setPhotoRating(const QString &filePath, int rating);
 
     [[nodiscard]] static QVector<HistoryModel::Snapshot> loadHistories();
     static void saveHistories(const QVector<HistoryModel::Snapshot> &histories);

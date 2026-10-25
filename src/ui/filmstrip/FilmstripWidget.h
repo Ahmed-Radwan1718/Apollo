@@ -33,6 +33,7 @@ protected:
 private:
     void activatePhoto(const QString &filePath);
     void setCurrentPhoto(const QString &filePath);
+    void setPhotoRating(const QString &filePath, int rating);
     void alignToDefaultPhotoBounds(bool updateWhileManual = false);
 
     PhotoCanvas *m_canvas = nullptr;
@@ -40,6 +41,7 @@ private:
     QWidget *m_content = nullptr;
     QHBoxLayout *m_contentLayout = nullptr;
     QHash<QString, QWidget *> m_thumbnails;
+    QHash<QString, int> m_photoRatings;
     QString m_currentFilePath;
     PhotoOpenedCallback m_photoOpenedCallback;
 };
