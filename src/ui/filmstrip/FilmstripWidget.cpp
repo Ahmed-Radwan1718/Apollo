@@ -39,8 +39,10 @@ public:
     explicit FilmstripThumbnail(const QString &filePath,
                                 const QImage &image,
                                 int rating,
+                                int status,
                                 std::function<void()> activated,
                                 std::function<void(int)> ratingChanged,
+                                std::function<void(int)> statusChanged,
                                 QWidget *parent = nullptr)
         : QWidget(parent)
         , m_thumbnail(image.scaled(kThumbnailPreviewSize,
@@ -50,7 +52,9 @@ public:
         , m_fileName(QFileInfo(filePath).fileName())
         , m_activated(std::move(activated))
         , m_ratingChanged(std::move(ratingChanged))
+        , m_statusChanged(std::move(statusChanged))
         , m_rating(std::clamp(rating, 0, 5))
+        , m_status(status == 1 || status == -1 ? status : 0)
     {
         setFixedSize(kThumbnailWidth, kThumbnailHeight);
         setCursor(Qt::PointingHandCursor);
@@ -77,6 +81,16 @@ public:
         update();
     }
 
+    void setStatus(int status)
+    {
+        const int normalizedStatus = status == 1 || status == -1 ? status : 0;
+        if (m_status == normalizedStatus) {
+            return;
+        }
+
+        m_status = normalizedStatus;
+    }
+
 protected:
     void mouseReleaseEvent(QMouseEvent *event) override
     {
@@ -92,8 +106,18 @@ protected:
     void contextMenuEvent(QContextMenuEvent *event) override
     {
         QMenu menu(this);
-        QMenu *ratingMenu = menu.addMenu(tr("Rating"));
 
+        QAction *acceptAction = menu.addAction(tr("Accept"));
+        acceptAction->setCheckable(true);
+        acceptAction->setChecked(m_status == 1);
+
+        QAction *rejectedAction = menu.addAction(tr("Rejected"));
+        rejectedAction->setCheckable(true);
+        rejectedAction->setChecked(m_status == -1);
+
+        menu.addSeparator();
+
+        QMenu *ratingMenu = menu.addMenu(tr("Rating"));
         for (int rating = 1; rating <= 5; ++rating) {
             QAction *action = ratingMenu->addAction(
                 QString(rating, QChar(0x2605)));
@@ -103,7 +127,15 @@ protected:
         }
 
         QAction *selectedAction = menu.exec(event->globalPos());
-        if (selectedAction && m_ratingChanged) {
+        if (selectedAction == acceptAction) {
+            if (m_statusChanged) {
+                m_statusChanged(1);
+            }
+        } else if (selectedAction == rejectedAction) {
+            if (m_statusChanged) {
+                m_statusChanged(-1);
+            }
+        } else if (selectedAction && m_ratingChanged) {
             bool ok = false;
             const int rating = selectedAction->data().toInt(&ok);
             if (ok && rating >= 1 && rating <= 5) {
@@ -187,7 +219,9 @@ private:
     QString m_fileName;
     std::function<void()> m_activated;
     std::function<void(int)> m_ratingChanged;
+    std::function<void(int)> m_statusChanged;
     int m_rating = 0;
+    int m_status = 0;
     bool m_selected = false;
 };
 
@@ -196,6 +230,7 @@ private:
 FilmstripWidget::FilmstripWidget(QWidget *parent)
     : QWidget(parent)
     , m_photoRatings(ApplicationStateStore::loadPhotoRatings())
+    , m_photoStatuses(ApplicationStateStore::loadPhotoStatuses())
 {
     setObjectName(QStringLiteral("filmstripWidget"));
     setFixedHeight(kFilmstripHeight);
@@ -284,11 +319,15 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
         filePath,
         image,
         m_photoRatings.value(absoluteFilePath, 0),
+        m_photoStatuses.value(absoluteFilePath, 0),
         [this, filePath]() {
             activatePhoto(filePath);
         },
         [this, filePath](int rating) {
             setPhotoRating(filePath, rating);
+        },
+        [this, filePath](int status) {
+            setPhotoStatus(filePath, status);
         },
         m_content);
 
@@ -364,6 +403,25 @@ void FilmstripWidget::setPhotoRating(const QString &filePath, int rating)
     }
     if (thumbnail) {
         static_cast<FilmstripThumbnail *>(thumbnail)->setRating(rating);
+    }
+}
+
+void FilmstripWidget::setPhotoStatus(const QString &filePath, int status)
+{
+    if (filePath.isEmpty() || (status != 1 && status != -1)) {
+        return;
+    }
+
+    const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
+    m_photoStatuses.insert(absoluteFilePath, status);
+    ApplicationStateStore::setPhotoStatus(absoluteFilePath, status);
+
+    QWidget *thumbnail = m_thumbnails.value(filePath, nullptr);
+    if (!thumbnail) {
+        thumbnail = m_thumbnails.value(absoluteFilePath, nullptr);
+    }
+    if (thumbnail) {
+        static_cast<FilmstripThumbnail *>(thumbnail)->setStatus(status);
     }
 }
 

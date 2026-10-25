@@ -18,6 +18,9 @@ public:
     [[nodiscard]] static QHash<QString, int> loadPhotoRatings();
     static void setPhotoRating(const QString &filePath, int rating);
 
+    [[nodiscard]] static QHash<QString, int> loadPhotoStatuses();
+    static void setPhotoStatus(const QString &filePath, int status);
+
     [[nodiscard]] static QVector<HistoryModel::Snapshot> loadHistories();
     static void saveHistories(const QVector<HistoryModel::Snapshot> &histories);
 };
