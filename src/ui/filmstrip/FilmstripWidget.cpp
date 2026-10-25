@@ -151,7 +151,7 @@ protected:
             painter.setPen(Qt::NoPen);
             painter.setBrush(QColor(0, 0, 0, 145));
             painter.drawRoundedRect(badgeRect, 3.0, 3.0);
-            painter.setPen(QColor(238, 238, 238));
+            painter.setPen(QColor(QStringLiteral("#C09A5C")));
             painter.drawText(badgeRect, Qt::AlignCenter, stars);
         }
 
