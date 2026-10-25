@@ -32,6 +32,25 @@ constexpr int kThumbnailLabelHeight = 18;
 constexpr int kThumbnailHeight = kThumbnailImageHeight + kThumbnailLabelHeight;
 constexpr int kThumbnailPreviewSize = 320;
 constexpr int kFilmstripVerticalMargin = 10;
+constexpr int kContextMenuWidth = 220;
+constexpr int kContextSubmenuWidth = 210;
+
+void configureContextMenu(QMenu *menu, int minimumWidth)
+{
+    if (!menu) {
+        return;
+    }
+
+    menu->setMinimumWidth(minimumWidth);
+    menu->setStyleSheet(QStringLiteral(
+        "QMenu::item {"
+        "  padding: 7px 34px 7px 14px;"
+        "}"
+        "QMenu::separator {"
+        "  height: 1px;"
+        "  margin: 5px 10px;"
+        "}"));
+}
 
 QColor colorForLabel(int colorLabel)
 {
@@ -139,8 +158,10 @@ protected:
     void contextMenuEvent(QContextMenuEvent *event) override
     {
         QMenu menu(this);
+        configureContextMenu(&menu, kContextMenuWidth);
 
         QMenu *flagMenu = menu.addMenu(tr("Set Flag"));
+        configureContextMenu(flagMenu, kContextSubmenuWidth);
         QHash<QAction *, int> flagActions;
         const auto addFlagAction = [&](const QString &text, int status) {
             QAction *action = flagMenu->addAction(text);
@@ -152,6 +173,7 @@ protected:
         addFlagAction(tr("Rejected"), -1);
 
         QMenu *ratingMenu = menu.addMenu(tr("Set Rating"));
+        configureContextMenu(ratingMenu, kContextSubmenuWidth);
         QHash<QAction *, int> ratingActions;
         for (int rating = 1; rating <= 5; ++rating) {
             const QString text = rating == 1
@@ -164,6 +186,7 @@ protected:
         }
 
         QMenu *colorLabelMenu = menu.addMenu(tr("Set Color Label"));
+        configureContextMenu(colorLabelMenu, kContextSubmenuWidth);
         QHash<QAction *, int> colorActions;
         const auto addColorAction = [&](const QString &text, int colorLabel) {
             QAction *action = colorLabelMenu->addAction(text);
