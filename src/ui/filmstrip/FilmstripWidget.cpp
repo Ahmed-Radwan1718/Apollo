@@ -113,6 +113,41 @@ QIcon colorLabelIcon(int colorLabel)
     return QIcon(pixmap);
 }
 
+QIcon statusIcon(int status)
+{
+    constexpr int iconSize = 14;
+
+    QPixmap pixmap(iconSize, iconSize);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+
+    if (status == 1) {
+        const QColor color(QStringLiteral("#5AA66A"));
+        painter.setPen(QPen(color, 1.5, Qt::SolidLine, Qt::RoundCap));
+        painter.drawLine(QPointF(3.5, 2.0), QPointF(3.5, 12.0));
+
+        const QPointF flag[] = {
+            QPointF(4.0, 2.5),
+            QPointF(11.0, 4.5),
+            QPointF(4.0, 6.5)
+        };
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(color);
+        painter.drawPolygon(flag, 3);
+    } else if (status == -1) {
+        painter.setPen(QPen(QColor(QStringLiteral("#D75A5A")),
+                            2.0,
+                            Qt::SolidLine,
+                            Qt::RoundCap));
+        painter.drawLine(QPointF(3.5, 3.5), QPointF(10.5, 10.5));
+        painter.drawLine(QPointF(10.5, 3.5), QPointF(3.5, 10.5));
+    }
+
+    return QIcon(pixmap);
+}
+
 class FilmstripThumbnail final : public QWidget
 {
 public:
@@ -208,6 +243,8 @@ protected:
         QHash<QAction *, int> flagActions;
         const auto addFlagAction = [&](const QString &text, int status) {
             QAction *action = flagMenu->addAction(text);
+            action->setIcon(statusIcon(status));
+            action->setIconVisibleInMenu(true);
             action->setCheckable(true);
             action->setChecked(m_status == status);
             flagActions.insert(action, status);
