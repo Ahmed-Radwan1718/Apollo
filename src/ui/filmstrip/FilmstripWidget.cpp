@@ -256,10 +256,12 @@ protected:
         Q_UNUSED(event);
 
         QPainter painter(this);
-        painter.fillRect(rect(), QColor(21, 21, 21));
+        painter.fillRect(rect(), m_selected ? QColor(36, 36, 36)
+                                            : QColor(21, 21, 21));
 
         const QRect imageRect(0, 0, width(), kThumbnailImageHeight);
-        painter.fillRect(imageRect, QColor(17, 17, 17));
+        painter.fillRect(imageRect, m_selected ? QColor(31, 31, 31)
+                                               : QColor(17, 17, 17));
 
         if (!m_thumbnail.isNull()) {
             painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
@@ -300,14 +302,6 @@ protected:
         if (labelColor.isValid()) {
             painter.setPen(QPen(labelColor, 2));
             painter.drawRect(imageRect.adjusted(1, 1, -2, -2));
-
-            if (m_selected) {
-                painter.setPen(QPen(QColor(232, 232, 232), 1));
-                painter.drawRect(imageRect.adjusted(3, 3, -4, -4));
-            }
-        } else if (m_selected) {
-            painter.setPen(QPen(QColor(214, 214, 214), 2));
-            painter.drawRect(imageRect.adjusted(1, 1, -2, -2));
         } else {
             painter.setPen(QColor(48, 48, 48));
             painter.drawRect(imageRect.adjusted(0, 0, -1, -1));
@@ -317,7 +311,8 @@ protected:
         fileNameFont.setPointSizeF(7.5);
         fileNameFont.setBold(false);
         painter.setFont(fileNameFont);
-        painter.setPen(QColor(166, 166, 166));
+        painter.setPen(m_selected ? QColor(214, 214, 214)
+                                  : QColor(166, 166, 166));
 
         const QRect labelRect(2,
                               kThumbnailImageHeight + 1,
