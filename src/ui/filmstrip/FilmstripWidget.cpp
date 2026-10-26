@@ -36,6 +36,7 @@ constexpr int kThumbnailPreviewSize = 320;
 constexpr int kFilmstripVerticalMargin = 10;
 constexpr int kContextMenuWidth = 220;
 constexpr int kContextSubmenuWidth = 210;
+constexpr int kColorLabelSubmenuWidth = 176;
 
 void configureContextMenu(QMenu *menu, int minimumWidth)
 {
@@ -47,6 +48,23 @@ void configureContextMenu(QMenu *menu, int minimumWidth)
     menu->setStyleSheet(QStringLiteral(
         "QMenu::item {"
         "  padding: 7px 34px 7px 14px;"
+        "}"
+        "QMenu::separator {"
+        "  height: 1px;"
+        "  margin: 5px 10px;"
+        "}"));
+}
+
+void configureColorLabelMenu(QMenu *menu)
+{
+    if (!menu) {
+        return;
+    }
+
+    menu->setMinimumWidth(kColorLabelSubmenuWidth);
+    menu->setStyleSheet(QStringLiteral(
+        "QMenu::item {"
+        "  padding: 7px 18px;"
         "}"
         "QMenu::separator {"
         "  height: 1px;"
@@ -74,25 +92,23 @@ QColor colorForLabel(int colorLabel)
 
 QIcon colorLabelIcon(int colorLabel)
 {
-    const QColor color = colorForLabel(colorLabel);
-    if (!color.isValid()) {
-        return {};
-    }
-
     constexpr int iconSize = 14;
     constexpr qreal circleInset = 2.0;
 
     QPixmap pixmap(iconSize, iconSize);
     pixmap.fill(Qt::transparent);
 
-    QPainter painter(&pixmap);
-    painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(color);
-    painter.drawEllipse(QRectF(circleInset,
-                               circleInset,
-                               iconSize - circleInset * 2.0,
-                               iconSize - circleInset * 2.0));
+    const QColor color = colorForLabel(colorLabel);
+    if (color.isValid()) {
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(color);
+        painter.drawEllipse(QRectF(circleInset,
+                                   circleInset,
+                                   iconSize - circleInset * 2.0,
+                                   iconSize - circleInset * 2.0));
+    }
 
     return QIcon(pixmap);
 }
@@ -213,13 +229,11 @@ protected:
         }
 
         QMenu *colorLabelMenu = menu.addMenu(tr("Set Color Label"));
-        configureContextMenu(colorLabelMenu, kContextSubmenuWidth);
+        configureColorLabelMenu(colorLabelMenu);
         QHash<QAction *, int> colorActions;
         const auto addColorAction = [&](const QString &text, int colorLabel) {
             QAction *action = colorLabelMenu->addAction(text);
-            if (colorLabel > 0) {
-                action->setIcon(colorLabelIcon(colorLabel));
-            }
+            action->setIcon(colorLabelIcon(colorLabel));
             action->setCheckable(true);
             action->setChecked(m_colorLabel == colorLabel);
             colorActions.insert(action, colorLabel);
