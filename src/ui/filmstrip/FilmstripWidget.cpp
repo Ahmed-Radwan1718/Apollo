@@ -27,11 +27,14 @@
 
 namespace {
 
-constexpr int kFilmstripHeight = 128;
+constexpr int kFilmstripHeight = 146;
 constexpr int kThumbnailWidth = 112;
 constexpr int kThumbnailImageHeight = 78;
+constexpr int kThumbnailRatingHeight = 18;
 constexpr int kThumbnailLabelHeight = 18;
-constexpr int kThumbnailHeight = kThumbnailImageHeight + kThumbnailLabelHeight;
+constexpr int kThumbnailHeight = kThumbnailImageHeight
+    + kThumbnailRatingHeight
+    + kThumbnailLabelHeight;
 constexpr int kThumbnailPreviewSize = 320;
 constexpr int kFilmstripVerticalMargin = 10;
 constexpr int kContextMenuWidth = 220;
@@ -275,21 +278,22 @@ protected:
         }
 
         if (m_rating > 0) {
-            QFont ratingFont = painter.font();
+            QFont ratingFont(QStringLiteral("Segoe UI Symbol"));
             ratingFont.setPointSizeF(8.5);
-            ratingFont.setBold(true);
+            ratingFont.setWeight(QFont::Normal);
+            ratingFont.setLetterSpacing(QFont::AbsoluteSpacing, 1.0);
             painter.setFont(ratingFont);
+            painter.setRenderHint(QPainter::TextAntialiasing, true);
+            painter.setPen(QColor(QStringLiteral("#C09A5C")));
 
             const QString stars(m_rating, QChar(0x2605));
-            const int textWidth = painter.fontMetrics().horizontalAdvance(stars);
-            const int textHeight = painter.fontMetrics().height();
-            const QRect badgeRect(5, 5, textWidth + 7, textHeight + 2);
-
-            painter.setPen(Qt::NoPen);
-            painter.setBrush(QColor(0, 0, 0, 145));
-            painter.drawRoundedRect(badgeRect, 3.0, 3.0);
-            painter.setPen(QColor(QStringLiteral("#C09A5C")));
-            painter.drawText(badgeRect, Qt::AlignCenter, stars);
+            const QRect ratingRect(2,
+                                   kThumbnailImageHeight,
+                                   width() - 4,
+                                   kThumbnailRatingHeight);
+            painter.drawText(ratingRect,
+                             Qt::AlignHCenter | Qt::AlignVCenter,
+                             stars);
         }
 
         const QColor labelColor = colorForLabel(m_colorLabel);
@@ -311,13 +315,15 @@ protected:
         }
 
         QFont fileNameFont = painter.font();
+        fileNameFont.setFamily(QString());
+        fileNameFont.setLetterSpacing(QFont::PercentageSpacing, 100.0);
         fileNameFont.setPointSizeF(7.5);
         fileNameFont.setBold(false);
         painter.setFont(fileNameFont);
         painter.setPen(QColor(166, 166, 166));
 
         const QRect labelRect(2,
-                              kThumbnailImageHeight + 1,
+                              kThumbnailImageHeight + kThumbnailRatingHeight + 1,
                               width() - 4,
                               kThumbnailLabelHeight - 1);
         const QString displayName = painter.fontMetrics().elidedText(
