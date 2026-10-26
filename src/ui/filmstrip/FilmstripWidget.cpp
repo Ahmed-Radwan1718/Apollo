@@ -64,7 +64,7 @@ void configureColorLabelMenu(QMenu *menu)
     menu->setMinimumWidth(kColorLabelSubmenuWidth);
     menu->setStyleSheet(QStringLiteral(
         "QMenu::item {"
-        "  padding: 7px 18px;"
+        "  padding: 7px 16px 7px 20px;"
         "}"
         "QMenu::separator {"
         "  height: 1px;"
