@@ -27,14 +27,11 @@
 
 namespace {
 
-constexpr int kFilmstripHeight = 146;
+constexpr int kFilmstripHeight = 128;
 constexpr int kThumbnailWidth = 112;
 constexpr int kThumbnailImageHeight = 78;
-constexpr int kThumbnailRatingHeight = 18;
 constexpr int kThumbnailLabelHeight = 18;
-constexpr int kThumbnailHeight = kThumbnailImageHeight
-    + kThumbnailRatingHeight
-    + kThumbnailLabelHeight;
+constexpr int kThumbnailHeight = kThumbnailImageHeight + kThumbnailLabelHeight;
 constexpr int kThumbnailPreviewSize = 320;
 constexpr int kFilmstripVerticalMargin = 10;
 constexpr int kContextMenuWidth = 220;
@@ -287,12 +284,14 @@ protected:
             painter.setPen(QColor(QStringLiteral("#C09A5C")));
 
             const QString stars(m_rating, QChar(0x2605));
-            const QRect ratingRect(2,
-                                   kThumbnailImageHeight,
-                                   width() - 4,
-                                   kThumbnailRatingHeight);
+            const int textWidth = painter.fontMetrics().horizontalAdvance(stars);
+            const int textHeight = painter.fontMetrics().height();
+            const QRect ratingRect(5,
+                                   imageRect.bottom() - textHeight - 3,
+                                   textWidth,
+                                   textHeight);
             painter.drawText(ratingRect,
-                             Qt::AlignHCenter | Qt::AlignVCenter,
+                             Qt::AlignLeft | Qt::AlignVCenter,
                              stars);
         }
 
@@ -314,16 +313,14 @@ protected:
             painter.drawRect(imageRect.adjusted(0, 0, -1, -1));
         }
 
-        QFont fileNameFont = painter.font();
-        fileNameFont.setFamily(QString());
-        fileNameFont.setLetterSpacing(QFont::PercentageSpacing, 100.0);
+        QFont fileNameFont = font();
         fileNameFont.setPointSizeF(7.5);
         fileNameFont.setBold(false);
         painter.setFont(fileNameFont);
         painter.setPen(QColor(166, 166, 166));
 
         const QRect labelRect(2,
-                              kThumbnailImageHeight + kThumbnailRatingHeight + 1,
+                              kThumbnailImageHeight + 1,
                               width() - 4,
                               kThumbnailLabelHeight - 1);
         const QString displayName = painter.fontMetrics().elidedText(
