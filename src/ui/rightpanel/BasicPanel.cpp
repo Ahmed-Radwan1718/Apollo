@@ -1,6 +1,7 @@
 #include "ui/rightpanel/BasicPanel.h"
 
-#include <QEasingCurve>
+#include <QChronoTimer>
+#include <QElapsedTimer>
 #include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -16,19 +17,29 @@
 #include <QSizePolicy>
 #include <QSlider>
 #include <QToolButton>
-#include <QVariantAnimation>
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <functional>
+#include <numbers>
 
 namespace {
 
-constexpr int kPanelAnimationDurationMs = 280;
+constexpr int kPanelAnimationDurationMs = 360;
+constexpr int kPanelAnimationMinimumDurationMs = 90;
+constexpr auto kPanelAnimationTick = std::chrono::nanoseconds(2'777'778);
 constexpr int kTemperatureMinimumKelvin = 2000;
 constexpr int kTemperatureMaximumKelvin = 20000;
 constexpr int kDefaultTemperatureKelvin = 6500;
 constexpr int kTemperatureSliderResolution = 1000000;
+
+qreal easedPanelProgress(qreal progress)
+{
+    progress = std::clamp(progress, 0.0, 1.0);
+    return 0.5 - 0.5 * std::cos(progress * std::numbers::pi_v<qreal>);
+}
 
 enum class ValueFormat {
     Temperature,
@@ -206,32 +217,21 @@ class ChevronButton final : public QToolButton
 public:
     explicit ChevronButton(QWidget *parent = nullptr)
         : QToolButton(parent)
-        , m_animation(new QVariantAnimation(this))
     {
         setFixedSize(26, 30);
         setCursor(Qt::PointingHandCursor);
         setFocusPolicy(Qt::NoFocus);
-
-        m_animation->setDuration(kPanelAnimationDurationMs);
-        m_animation->setEasingCurve(QEasingCurve::InOutCubic);
-        connect(m_animation, &QVariantAnimation::valueChanged, this,
-                [this](const QVariant &value) {
-                    m_angle = value.toReal();
-                    update();
-                });
     }
 
-    void setExpanded(bool expanded)
+    void setExpansionProgress(qreal progress)
     {
-        if (m_expanded == expanded) {
+        progress = std::clamp(progress, 0.0, 1.0);
+        if (qFuzzyCompare(m_progress, progress)) {
             return;
         }
 
-        m_expanded = expanded;
-        m_animation->stop();
-        m_animation->setStartValue(m_angle);
-        m_animation->setEndValue(expanded ? 90.0 : 0.0);
-        m_animation->start();
+        m_progress = progress;
+        update();
     }
 
 protected:
@@ -249,16 +249,14 @@ protected:
 
         const QPointF center(width() / 2.0, height() / 2.0);
         painter.translate(center);
-        painter.rotate(m_angle);
+        painter.rotate(90.0 * m_progress);
 
         painter.drawLine(QPointF(-1.5, -3.5), QPointF(2.0, 0.0));
         painter.drawLine(QPointF(2.0, 0.0), QPointF(-1.5, 3.5));
     }
 
 private:
-    bool m_expanded = true;
-    qreal m_angle = 90.0;
-    QVariantAnimation *m_animation = nullptr;
+    qreal m_progress = 1.0;
 };
 
 class RevealContainer final : public QWidget
@@ -266,31 +264,14 @@ class RevealContainer final : public QWidget
 public:
     explicit RevealContainer(QWidget *parent = nullptr)
         : QWidget(parent)
-        , m_animation(new QVariantAnimation(this))
+        , m_timer(new QChronoTimer(this))
     {
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-        m_animation->setDuration(kPanelAnimationDurationMs);
-        m_animation->setEasingCurve(QEasingCurve::InOutCubic);
-
-        connect(m_animation, &QVariantAnimation::valueChanged, this,
-                [this](const QVariant &value) {
-                    const int nextHeight = value.toInt();
-                    if (height() != nextHeight) {
-                        setFixedHeight(nextHeight);
-                    }
-                    update();
-                });
-
-        connect(m_animation, &QVariantAnimation::finished, this,
-                [this]() {
-                    setFixedHeight(m_expanded ? m_expandedHeight : 0);
-                    if (m_content) {
-                        m_content->setVisible(m_expanded);
-                    }
-                    m_animationPixmap = {};
-                    update();
-                });
+        m_timer->setTimerType(Qt::PreciseTimer);
+        m_timer->setInterval(kPanelAnimationTick);
+        connect(m_timer, &QChronoTimer::timeout, this,
+                [this]() { advanceAnimation(); });
     }
 
     void setContentWidget(QWidget *content)
@@ -303,6 +284,12 @@ public:
         m_content->setParent(this);
         m_content->show();
         refreshExpandedHeight();
+    }
+
+    void setProgressCallback(std::function<void(qreal)> callback)
+    {
+        m_progressCallback = std::move(callback);
+        notifyProgress(height());
     }
 
     void refreshExpandedHeight()
@@ -323,18 +310,19 @@ public:
         m_content->setFixedHeight(m_expandedHeight);
         updateContentGeometry();
 
-        if (m_animation->state() != QAbstractAnimation::Running) {
+        if (!m_timer->isActive()) {
             setFixedHeight(m_expanded ? m_expandedHeight : 0);
+            notifyProgress(height());
         }
     }
 
     void setExpanded(bool expanded)
     {
-        if (m_expanded == expanded) {
+        if (m_expanded == expanded && !m_timer->isActive()) {
             return;
         }
 
-        m_animation->stop();
+        m_timer->stop();
 
         if (expanded) {
             refreshExpandedHeight();
@@ -346,9 +334,32 @@ public:
         }
 
         m_expanded = expanded;
-        m_animation->setStartValue(height());
-        m_animation->setEndValue(expanded ? m_expandedHeight : 0);
-        m_animation->start();
+        m_startHeight = static_cast<qreal>(height());
+        m_endHeight = expanded ? static_cast<qreal>(m_expandedHeight) : 0.0;
+
+        const qreal fullDistance = qMax<qreal>(1.0, m_expandedHeight);
+        const qreal distanceFraction = std::clamp(
+            std::abs(m_endHeight - m_startHeight) / fullDistance,
+            0.0,
+            1.0);
+        const qint64 baseDurationNs =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::milliseconds(kPanelAnimationDurationMs)).count();
+        const qint64 minimumDurationNs =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::milliseconds(kPanelAnimationMinimumDurationMs)).count();
+        m_durationNs = qMax<qint64>(
+            minimumDurationNs,
+            static_cast<qint64>(std::llround(baseDurationNs * distanceFraction)));
+
+        if (std::abs(m_endHeight - m_startHeight) < 0.5) {
+            finishAnimation();
+            return;
+        }
+
+        m_elapsed.restart();
+        m_timer->start();
+        advanceAnimation();
     }
 
 protected:
@@ -369,6 +380,60 @@ protected:
     }
 
 private:
+    void advanceAnimation()
+    {
+        if (!m_timer->isActive() || m_durationNs <= 0) {
+            return;
+        }
+
+        const qint64 elapsedNs = m_elapsed.nsecsElapsed();
+        const qreal linearProgress = std::clamp(
+            static_cast<qreal>(elapsedNs) / static_cast<qreal>(m_durationNs),
+            0.0,
+            1.0);
+        const qreal easedProgress = easedPanelProgress(linearProgress);
+        const qreal animatedHeight = m_startHeight
+            + (m_endHeight - m_startHeight) * easedProgress;
+        const int nextHeight = qRound(animatedHeight);
+
+        if (height() != nextHeight) {
+            setFixedHeight(nextHeight);
+        }
+        notifyProgress(animatedHeight);
+        update();
+
+        if (linearProgress >= 1.0) {
+            finishAnimation();
+        }
+    }
+
+    void finishAnimation()
+    {
+        m_timer->stop();
+        const int finalHeight = m_expanded ? m_expandedHeight : 0;
+        if (height() != finalHeight) {
+            setFixedHeight(finalHeight);
+        }
+        if (m_content) {
+            m_content->setVisible(m_expanded);
+        }
+        m_animationPixmap = {};
+        notifyProgress(finalHeight);
+        update();
+    }
+
+    void notifyProgress(qreal currentHeight)
+    {
+        if (!m_progressCallback) {
+            return;
+        }
+
+        const qreal progress = m_expandedHeight > 0
+            ? std::clamp(currentHeight / static_cast<qreal>(m_expandedHeight), 0.0, 1.0)
+            : (m_expanded ? 1.0 : 0.0);
+        m_progressCallback(progress);
+    }
+
     void cacheContentPixmap()
     {
         if (!m_content || !m_animationPixmap.isNull() || m_expandedHeight <= 0) {
@@ -404,8 +469,13 @@ private:
     }
 
     QWidget *m_content = nullptr;
-    QVariantAnimation *m_animation = nullptr;
+    QChronoTimer *m_timer = nullptr;
+    QElapsedTimer m_elapsed;
     QPixmap m_animationPixmap;
+    std::function<void(qreal)> m_progressCallback;
+    qreal m_startHeight = 0.0;
+    qreal m_endHeight = 0.0;
+    qint64 m_durationNs = 0;
     int m_expandedHeight = 0;
     bool m_expanded = true;
 };
@@ -819,11 +889,14 @@ BasicPanel::BasicPanel(QWidget *parent)
                      QStringLiteral("basicSlider"), content);
 
     revealContainer->setContentWidget(content);
+    revealContainer->setProgressCallback(
+        [chevronButton](qreal progress) {
+            chevronButton->setExpansionProgress(progress);
+        });
     outerLayout->addWidget(revealContainer);
 
     connect(titleButton, &QToolButton::toggled, this,
-            [revealContainer, chevronButton](bool expanded) {
-                chevronButton->setExpanded(expanded);
+            [revealContainer](bool expanded) {
                 revealContainer->setExpanded(expanded);
             });
 
