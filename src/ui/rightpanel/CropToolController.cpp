@@ -86,7 +86,7 @@ protected:
                                            : QColor(190, 190, 190));
         painter.setPen(QPen(iconColor, 1.55, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
 
-        const QPointF center = QRectF(rect()).center();
+        const QPointF center = QRectF(rect()).center() + QPointF(0.0, 4.5);
         painter.translate(center);
         painter.drawLine(QPointF(-6.0, -7.0), QPointF(-6.0, 4.0));
         painter.drawLine(QPointF(-6.0, 4.0), QPointF(5.0, 4.0));
