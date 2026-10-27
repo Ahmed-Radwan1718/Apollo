@@ -53,6 +53,77 @@ void copyCropGeometry(const DevelopState &from, DevelopState &to)
     to.cropAspectMode = from.cropAspectMode;
 }
 
+class MinimalAspectComboBox final : public QComboBox
+{
+public:
+    explicit MinimalAspectComboBox(QWidget *parent = nullptr)
+        : QComboBox(parent)
+    {
+        setCursor(Qt::PointingHandCursor);
+        setFocusPolicy(Qt::NoFocus);
+        setFixedHeight(24);
+    }
+
+    void showPopup() override
+    {
+        m_popupOpen = true;
+        update();
+        QComboBox::showPopup();
+    }
+
+    void hidePopup() override
+    {
+        QComboBox::hidePopup();
+        m_popupOpen = false;
+        update();
+    }
+
+protected:
+    bool event(QEvent *event) override
+    {
+        if (event->type() == QEvent::Enter || event->type() == QEvent::Leave) {
+            update();
+        }
+        return QComboBox::event(event);
+    }
+
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        const bool highlighted = underMouse() || m_popupOpen;
+        if (highlighted) {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(37, 37, 37));
+            painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5),
+                                    4.0,
+                                    4.0);
+        }
+
+        painter.setPen(highlighted ? QColor(242, 242, 242) : QColor(222, 222, 222));
+        painter.drawText(QRectF(rect()).adjusted(6.0, 0.0, -22.0, 0.0),
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         currentText());
+
+        const QColor chevronColor = highlighted ? QColor(225, 225, 225)
+                                                 : QColor(166, 166, 166);
+        painter.setPen(QPen(chevronColor,
+                            1.15,
+                            Qt::SolidLine,
+                            Qt::RoundCap,
+                            Qt::RoundJoin));
+        const QPointF center(width() - 10.0, height() * 0.5 + 0.5);
+        painter.drawLine(center + QPointF(-3.0, -1.5), center + QPointF(0.0, 1.5));
+        painter.drawLine(center + QPointF(0.0, 1.5), center + QPointF(3.0, -1.5));
+    }
+
+private:
+    bool m_popupOpen = false;
+};
+
 class CropSelectorButton final : public QToolButton
 {
 public:
@@ -323,10 +394,8 @@ void CropToolController::buildUi()
     aspectLabel->setObjectName(QStringLiteral("cropControlLabel"));
     aspectRow->addWidget(aspectLabel);
     aspectRow->addStretch(1);
-    m_aspectCombo = new QComboBox(m_panel);
+    m_aspectCombo = new MinimalAspectComboBox(m_panel);
     m_aspectCombo->setObjectName(QStringLiteral("cropAspectSelector"));
-    m_aspectCombo->setCursor(Qt::PointingHandCursor);
-    m_aspectCombo->setFocusPolicy(Qt::NoFocus);
     m_aspectCombo->addItems({tr("Free"), tr("Original"), tr("1 : 1"),
                              tr("3 : 2"), tr("4 : 3"), tr("16 : 9")});
     m_aspectCombo->setFixedWidth(92);
@@ -400,26 +469,6 @@ void CropToolController::buildUi()
         "  color: #d7d7d7;"
         "  font-size: 11px;"
         "  min-width: 46px;"
-        "}"
-        "QComboBox#cropAspectSelector {"
-        "  color: #dedede;"
-        "  background: transparent;"
-        "  border: 0;"
-        "  border-radius: 4px;"
-        "  padding: 3px 20px 3px 6px;"
-        "  font-size: 11px;"
-        "}"
-        "QComboBox#cropAspectSelector:hover,"
-        "QComboBox#cropAspectSelector:on {"
-        "  color: #f2f2f2;"
-        "  background: #252525;"
-        "}"
-        "QComboBox#cropAspectSelector::drop-down {"
-        "  subcontrol-origin: padding;"
-        "  subcontrol-position: top right;"
-        "  width: 18px;"
-        "  border: 0;"
-        "  background: transparent;"
         "}"
         "QComboBox#cropAspectSelector QAbstractItemView {"
         "  color: #dedede;"
