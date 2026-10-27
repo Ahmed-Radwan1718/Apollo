@@ -264,14 +264,20 @@ protected:
         QMenu *ratingMenu = menu.addMenu(tr("Set Rating"));
         configureContextMenu(ratingMenu, kContextSubmenuWidth);
         QHash<QAction *, int> ratingActions;
-        for (int rating = 1; rating <= 5; ++rating) {
-            const QString text = rating == 1
-                ? tr("1 Star")
-                : tr("%1 Stars").arg(rating);
+        const auto addRatingAction = [&](const QString &text, int rating) {
             QAction *action = ratingMenu->addAction(text);
             action->setCheckable(true);
             action->setChecked(m_rating == rating);
             ratingActions.insert(action, rating);
+        };
+
+        addRatingAction(tr("None"), 0);
+        ratingMenu->addSeparator();
+        for (int rating = 1; rating <= 5; ++rating) {
+            const QString text = rating == 1
+                ? tr("1 Star")
+                : tr("%1 Stars").arg(rating);
+            addRatingAction(text, rating);
         }
 
         QMenu *colorLabelMenu = menu.addMenu(tr("Set Color Label"));
@@ -567,12 +573,16 @@ void FilmstripWidget::setCurrentPhoto(const QString &filePath)
 
 void FilmstripWidget::setPhotoRating(const QString &filePath, int rating)
 {
-    if (filePath.isEmpty() || rating < 1 || rating > 5) {
+    if (filePath.isEmpty() || rating < 0 || rating > 5) {
         return;
     }
 
     const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
-    m_photoRatings.insert(absoluteFilePath, rating);
+    if (rating == 0) {
+        m_photoRatings.remove(absoluteFilePath);
+    } else {
+        m_photoRatings.insert(absoluteFilePath, rating);
+    }
     ApplicationStateStore::setPhotoRating(absoluteFilePath, rating);
 
     QWidget *thumbnail = m_thumbnails.value(filePath, nullptr);
