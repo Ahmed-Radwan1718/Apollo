@@ -271,8 +271,6 @@ protected:
         const auto addColorAction = [&](const QString &text, int colorLabel) {
             QAction *action = colorLabelMenu->addAction(text);
             action->setIcon(colorLabelIcon(colorLabel));
-            action->setCheckable(true);
-            action->setChecked(m_colorLabel == colorLabel);
             colorActions.insert(action, colorLabel);
         };
 
