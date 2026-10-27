@@ -14,6 +14,7 @@ public:
 
     [[nodiscard]] static QStringList loadLibraryPhotos();
     static void addLibraryPhoto(const QString &filePath);
+    static void removeLibraryPhoto(const QString &filePath);
 
     [[nodiscard]] static QHash<QString, int> loadPhotoRatings();
     static void setPhotoRating(const QString &filePath, int rating);

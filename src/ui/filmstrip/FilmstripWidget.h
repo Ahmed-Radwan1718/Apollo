@@ -17,11 +17,13 @@ class FilmstripWidget final : public QWidget
 {
 public:
     using PhotoOpenedCallback = std::function<void(const QString &, const QImage &)>;
+    using PhotoRemovedCallback = std::function<void(const QString &)>;
 
     explicit FilmstripWidget(QWidget *parent = nullptr);
 
     void addPhoto(const QString &filePath, const QImage &image);
     void setPhotoOpenedCallback(PhotoOpenedCallback callback);
+    void setPhotoRemovedCallback(PhotoRemovedCallback callback);
     [[nodiscard]] const QString &currentPhotoPath() const noexcept
     {
         return m_currentFilePath;
@@ -32,6 +34,7 @@ protected:
 
 private:
     void activatePhoto(const QString &filePath);
+    void removePhoto(const QString &filePath);
     void setCurrentPhoto(const QString &filePath);
     void setPhotoRating(const QString &filePath, int rating);
     void setPhotoStatus(const QString &filePath, int status);
@@ -48,4 +51,5 @@ private:
     QHash<QString, int> m_photoColorLabels;
     QString m_currentFilePath;
     PhotoOpenedCallback m_photoOpenedCallback;
+    PhotoRemovedCallback m_photoRemovedCallback;
 };

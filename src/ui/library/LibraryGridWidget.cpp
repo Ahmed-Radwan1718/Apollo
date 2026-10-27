@@ -289,6 +289,45 @@ void LibraryGridWidget::addPhoto(const QString &filePath, const QImage &image)
     reflow();
 }
 
+void LibraryGridWidget::removePhoto(const QString &filePath)
+{
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    QString storedPath = filePath;
+    QWidget *thumbnail = m_thumbnails.value(storedPath, nullptr);
+    if (!thumbnail) {
+        const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
+        for (auto iterator = m_thumbnails.constBegin(); iterator != m_thumbnails.constEnd(); ++iterator) {
+            if (QFileInfo(iterator.key()).absoluteFilePath() == absoluteFilePath) {
+                storedPath = iterator.key();
+                thumbnail = iterator.value();
+                break;
+            }
+        }
+    }
+    if (!thumbnail) {
+        return;
+    }
+
+    m_thumbnails.remove(storedPath);
+    m_order.removeAll(storedPath);
+    if (m_currentFilePath == storedPath) {
+        m_currentFilePath.clear();
+    }
+
+    thumbnail->deleteLater();
+    if (m_order.isEmpty()) {
+        if (m_stack) {
+            m_stack->setCurrentIndex(0);
+        }
+    } else {
+        reflow();
+    }
+    updateHeader();
+}
+
 void LibraryGridWidget::setPhotoActivatedCallback(PhotoActivatedCallback callback)
 {
     m_photoActivated = std::move(callback);

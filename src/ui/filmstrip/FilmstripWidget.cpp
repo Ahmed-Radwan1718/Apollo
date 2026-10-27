@@ -198,6 +198,7 @@ public:
                                 std::function<void(int)> ratingChanged,
                                 std::function<void(int)> statusChanged,
                                 std::function<void(int)> colorLabelChanged,
+                                std::function<void()> removed,
                                 QWidget *parent = nullptr)
         : QWidget(parent)
         , m_thumbnail(image.scaled(kThumbnailPreviewSize,
@@ -210,6 +211,7 @@ public:
         , m_ratingChanged(std::move(ratingChanged))
         , m_statusChanged(std::move(statusChanged))
         , m_colorLabelChanged(std::move(colorLabelChanged))
+        , m_removed(std::move(removed))
         , m_rating(std::clamp(rating, 0, 5))
         , m_status(status == 1 || status == -1 ? status : 0)
         , m_colorLabel(std::clamp(colorLabel, 0, 5))
@@ -331,6 +333,8 @@ protected:
 
         menu.addSeparator();
         QAction *showInExplorerAction = menu.addAction(tr("Show in File Explorer"));
+        menu.addSeparator();
+        QAction *removeFromApolloAction = menu.addAction(tr("Remove from Apollo"));
 
         QAction *selectedAction = menu.exec(event->globalPos());
         if (selectedAction && flagActions.contains(selectedAction)) {
@@ -347,6 +351,8 @@ protected:
             }
         } else if (selectedAction == showInExplorerAction) {
             revealInFileExplorer(m_filePath);
+        } else if (selectedAction == removeFromApolloAction && m_removed) {
+            m_removed();
         }
 
         event->accept();
@@ -434,6 +440,7 @@ private:
     std::function<void(int)> m_ratingChanged;
     std::function<void(int)> m_statusChanged;
     std::function<void(int)> m_colorLabelChanged;
+    std::function<void()> m_removed;
     int m_rating = 0;
     int m_status = 0;
     int m_colorLabel = 0;
@@ -549,6 +556,9 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
         [this, filePath](int colorLabel) {
             setPhotoColorLabel(filePath, colorLabel);
         },
+        [this, filePath]() {
+            removePhoto(filePath);
+        },
         m_content);
 
     m_thumbnails.insert(filePath, thumbnail);
@@ -563,6 +573,11 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
 void FilmstripWidget::setPhotoOpenedCallback(PhotoOpenedCallback callback)
 {
     m_photoOpenedCallback = std::move(callback);
+}
+
+void FilmstripWidget::setPhotoRemovedCallback(PhotoRemovedCallback callback)
+{
+    m_photoRemovedCallback = std::move(callback);
 }
 
 bool FilmstripWidget::eventFilter(QObject *watched, QEvent *event)
@@ -588,6 +603,73 @@ void FilmstripWidget::activatePhoto(const QString &filePath)
                               "openImage",
                               Qt::QueuedConnection,
                               Q_ARG(QString, filePath));
+}
+
+void FilmstripWidget::removePhoto(const QString &filePath)
+{
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
+    QString storedPath = filePath;
+    QWidget *thumbnail = m_thumbnails.value(storedPath, nullptr);
+    if (!thumbnail) {
+        for (auto iterator = m_thumbnails.constBegin(); iterator != m_thumbnails.constEnd(); ++iterator) {
+            if (QFileInfo(iterator.key()).absoluteFilePath() == absoluteFilePath) {
+                storedPath = iterator.key();
+                thumbnail = iterator.value();
+                break;
+            }
+        }
+    }
+    if (!thumbnail) {
+        return;
+    }
+
+    QString nextPath;
+    if (m_contentLayout) {
+        const int index = m_contentLayout->indexOf(thumbnail);
+        if (index >= 0) {
+            if (QLayoutItem *nextItem = m_contentLayout->itemAt(index + 1)) {
+                if (QWidget *nextWidget = nextItem->widget()) {
+                    nextPath = m_thumbnails.key(nextWidget);
+                }
+            }
+            if (nextPath.isEmpty() && index > 0) {
+                if (QLayoutItem *previousItem = m_contentLayout->itemAt(index - 1)) {
+                    if (QWidget *previousWidget = previousItem->widget()) {
+                        nextPath = m_thumbnails.key(previousWidget);
+                    }
+                }
+            }
+        }
+    }
+
+    const bool removingCurrent =
+        m_currentFilePath == storedPath
+        || (!m_currentFilePath.isEmpty()
+            && QFileInfo(m_currentFilePath).absoluteFilePath() == absoluteFilePath);
+    if (removingCurrent) {
+        m_currentFilePath.clear();
+    }
+
+    m_thumbnails.remove(storedPath);
+    if (m_contentLayout) {
+        m_contentLayout->removeWidget(thumbnail);
+    }
+    thumbnail->deleteLater();
+
+    if (m_photoRemovedCallback) {
+        m_photoRemovedCallback(absoluteFilePath);
+    }
+
+    if (removingCurrent && !nextPath.isEmpty()) {
+        activatePhoto(nextPath);
+        setCurrentPhoto(nextPath);
+    }
+
+    alignToDefaultPhotoBounds(true);
 }
 
 void FilmstripWidget::setCurrentPhoto(const QString &filePath)

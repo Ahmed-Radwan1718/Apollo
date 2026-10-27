@@ -195,6 +195,28 @@ void ApplicationStateStore::addLibraryPhoto(const QString &filePath)
     saveStateObject(std::move(root));
 }
 
+void ApplicationStateStore::removeLibraryPhoto(const QString &filePath)
+{
+    const QString absoluteFilePath = normalizedPath(filePath);
+    if (absoluteFilePath.isEmpty()) {
+        return;
+    }
+
+    QJsonObject root = loadStateObject();
+    const QJsonArray photos = root.value(QStringLiteral("libraryPhotos")).toArray();
+    QJsonArray remainingPhotos;
+
+    for (const QJsonValue &value : photos) {
+        if (!value.isString()
+            || normalizedPath(value.toString()) != absoluteFilePath) {
+            remainingPhotos.append(value);
+        }
+    }
+
+    root.insert(QStringLiteral("libraryPhotos"), remainingPhotos);
+    saveStateObject(std::move(root));
+}
+
 QHash<QString, int> ApplicationStateStore::loadPhotoRatings()
 {
     QHash<QString, int> result;

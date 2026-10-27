@@ -133,6 +133,18 @@ LibraryWorkspaceController::LibraryWorkspaceController(
                     m_sidebar->addFolder(QFileInfo(filePath).absolutePath());
                 }
             });
+
+        m_filmstrip->setPhotoRemovedCallback(
+            [this](const QString &filePath) {
+                const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
+                ApplicationStateStore::removeLibraryPhoto(absoluteFilePath);
+                m_libraryMetadata.remove(filePath);
+                m_libraryMetadata.remove(absoluteFilePath);
+
+                if (m_grid) {
+                    m_grid->removePhoto(absoluteFilePath);
+                }
+            });
     }
 
     if (m_grid) {

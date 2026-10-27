@@ -28,6 +28,7 @@ public:
     explicit LibraryGridWidget(QWidget *parent = nullptr);
 
     void addPhoto(const QString &filePath, const QImage &image);
+    void removePhoto(const QString &filePath);
     void setPhotoActivatedCallback(PhotoActivatedCallback callback);
     void setFilesDroppedCallback(FilesDroppedCallback callback);
 
