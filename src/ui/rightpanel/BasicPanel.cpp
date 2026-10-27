@@ -258,15 +258,57 @@ private:
     qreal m_progress = 1.0;
 };
 
+class RevealSnapshot final : public QWidget
+{
+public:
+    explicit RevealSnapshot(QWidget *parent = nullptr)
+        : QWidget(parent)
+    {
+        setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        setAttribute(Qt::WA_NoSystemBackground, true);
+        hide();
+    }
+
+    void setSnapshot(const QPixmap &pixmap, const QSize &logicalSize)
+    {
+        m_pixmap = pixmap;
+        setFixedSize(logicalSize);
+        update();
+    }
+
+    void clearSnapshot()
+    {
+        hide();
+        m_pixmap = {};
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+
+        if (m_pixmap.isNull()) {
+            return;
+        }
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
+        painter.drawPixmap(0, 0, m_pixmap);
+    }
+
+private:
+    QPixmap m_pixmap;
+};
+
 class RevealContainer final : public QWidget
 {
 public:
     explicit RevealContainer(QWidget *parent = nullptr)
         : QWidget(parent)
         , m_timer(new QChronoTimer(this))
+        , m_snapshot(new RevealSnapshot(this))
     {
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        setAttribute(Qt::WA_StaticContents, true);
 
         m_timer->setTimerType(Qt::PreciseTimer);
         m_timer->setInterval(kPanelAnimationTick);
@@ -332,6 +374,12 @@ public:
         if (m_content) {
             m_content->hide();
         }
+        if (!m_animationPixmap.isNull()) {
+            m_snapshot->setSnapshot(m_animationPixmap,
+                                    QSize(width(), m_expandedHeight));
+            m_snapshot->show();
+            m_snapshot->raise();
+        }
 
         m_expanded = expanded;
         m_startHeight = static_cast<qreal>(height());
@@ -363,21 +411,12 @@ public:
     }
 
 protected:
-    void paintEvent(QPaintEvent *event) override
-    {
-        QWidget::paintEvent(event);
-
-        if (!m_animationPixmap.isNull()) {
-            QPainter painter(this);
-            painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
-            painter.drawPixmap(0, 0, m_animationPixmap);
-        }
-    }
-
     void resizeEvent(QResizeEvent *event) override
     {
         QWidget::resizeEvent(event);
-        updateContentGeometry();
+        if (!m_timer->isActive() && event->size().width() != event->oldSize().width()) {
+            updateContentGeometry();
+        }
     }
 
 private:
@@ -399,7 +438,6 @@ private:
 
         if (height() != nextHeight) {
             setFixedHeight(nextHeight);
-            update();
         }
         notifyProgress(animatedHeight);
 
@@ -418,6 +456,7 @@ private:
         if (m_content) {
             m_content->setVisible(m_expanded);
         }
+        m_snapshot->clearSnapshot();
         m_animationPixmap = {};
         notifyProgress(finalHeight);
         update();
@@ -475,6 +514,7 @@ private:
 
     QWidget *m_content = nullptr;
     QChronoTimer *m_timer = nullptr;
+    RevealSnapshot *m_snapshot = nullptr;
     QElapsedTimer m_elapsed;
     QPixmap m_animationPixmap;
     std::function<void(qreal)> m_progressCallback;
