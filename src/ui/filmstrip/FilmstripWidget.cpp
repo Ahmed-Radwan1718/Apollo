@@ -5,6 +5,7 @@
 
 #include <QAction>
 #include <QContextMenuEvent>
+#include <QDir>
 #include <QEvent>
 #include <QFileInfo>
 #include <QFont>
@@ -17,6 +18,7 @@
 #include <QPainter>
 #include <QPaintEvent>
 #include <QPixmap>
+#include <QProcess>
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QVBoxLayout>
@@ -77,6 +79,30 @@ void configureColorLabelMenu(QMenu *menu)
         "  height: 1px;"
         "  margin: 5px 10px;"
         "}"));
+}
+
+void revealInFileExplorer(const QString &filePath)
+{
+    const QFileInfo fileInfo(filePath);
+    if (!fileInfo.exists()) {
+        return;
+    }
+
+    QString explorerPath;
+    const QString windowsDirectory = qEnvironmentVariable("WINDIR");
+    if (!windowsDirectory.isEmpty()) {
+        explorerPath = QDir(windowsDirectory).filePath(QStringLiteral("explorer.exe"));
+    }
+    if (explorerPath.isEmpty() || !QFileInfo::exists(explorerPath)) {
+        explorerPath = QStringLiteral("explorer.exe");
+    }
+
+    QProcess explorer;
+    explorer.setProgram(explorerPath);
+    explorer.setNativeArguments(
+        QStringLiteral("/select,\"%1\"")
+            .arg(QDir::toNativeSeparators(fileInfo.absoluteFilePath())));
+    explorer.startDetached();
 }
 
 QColor colorForLabel(int colorLabel)
@@ -175,6 +201,7 @@ public:
                                    kThumbnailPreviewSize,
                                    Qt::KeepAspectRatio,
                                    Qt::SmoothTransformation))
+        , m_filePath(QFileInfo(filePath).absoluteFilePath())
         , m_fileName(QFileInfo(filePath).fileName())
         , m_activated(std::move(activated))
         , m_ratingChanged(std::move(ratingChanged))
@@ -299,6 +326,9 @@ protected:
         addColorAction(tr("Blue"), 4);
         addColorAction(tr("Purple"), 5);
 
+        menu.addSeparator();
+        QAction *showInExplorerAction = menu.addAction(tr("Show in File Explorer"));
+
         QAction *selectedAction = menu.exec(event->globalPos());
         if (selectedAction && flagActions.contains(selectedAction)) {
             if (m_statusChanged) {
@@ -312,6 +342,8 @@ protected:
             if (m_colorLabelChanged) {
                 m_colorLabelChanged(colorActions.value(selectedAction));
             }
+        } else if (selectedAction == showInExplorerAction) {
+            revealInFileExplorer(m_filePath);
         }
 
         event->accept();
@@ -393,6 +425,7 @@ protected:
 
 private:
     QImage m_thumbnail;
+    QString m_filePath;
     QString m_fileName;
     std::function<void()> m_activated;
     std::function<void(int)> m_ratingChanged;
