@@ -678,7 +678,12 @@ void CropToolController::applyGeometryToCanvas(const DevelopState &state,
     imageItem->setTransformOriginPoint(imageItem->boundingRect().center());
     imageItem->setRotation(imaging::cropRotationDegrees(state));
     const QRectF imageSceneRect = imageItem->sceneBoundingRect();
-    m_window->m_canvas->scene()->setSceneRect(imageSceneRect);
+    const bool geometry = imaging::hasCropGeometry(state);
+    const QRectF committedCropRect = geometry ? cropSceneRect(state) : QRectF();
+    const QRectF displaySceneRect = !editing && !committedCropRect.isEmpty()
+        ? committedCropRect
+        : imageSceneRect;
+    m_window->m_canvas->scene()->setSceneRect(displaySceneRect);
 
     if (m_overlay) {
         m_overlay->setAllowedRect(editing
@@ -690,11 +695,10 @@ void CropToolController::applyGeometryToCanvas(const DevelopState &state,
         m_overlay->setGeometry(m_window->m_canvas->viewport()->rect());
     }
 
-    const bool geometry = imaging::hasCropGeometry(state);
     if (editing) {
         fitSceneRect(imageSceneRect, 24);
     } else if (geometry && (forceFit || m_window->m_canvas->isFitZoom())) {
-        fitSceneRect(cropSceneRect(state), 24);
+        fitSceneRect(displaySceneRect, 24);
     } else if (!geometry && hadGeometry && (forceFit || m_window->m_canvas->isFitZoom())) {
         m_window->m_canvas->fitToView();
     }
