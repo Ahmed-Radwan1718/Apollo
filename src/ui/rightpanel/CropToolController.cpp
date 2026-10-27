@@ -289,7 +289,6 @@ void CropToolController::buildUi()
         "QWidget#developToolStrip {"
         "  background: transparent;"
         "  border-top: 1px solid #292929;"
-        "  border-bottom: 1px solid #292929;"
         "}"));
 
     m_panel = new QWidget(rightPanel);
