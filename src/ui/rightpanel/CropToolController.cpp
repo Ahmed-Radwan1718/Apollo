@@ -324,9 +324,12 @@ void CropToolController::buildUi()
     aspectRow->addWidget(aspectLabel);
     aspectRow->addStretch(1);
     m_aspectCombo = new QComboBox(m_panel);
+    m_aspectCombo->setObjectName(QStringLiteral("cropAspectSelector"));
+    m_aspectCombo->setCursor(Qt::PointingHandCursor);
+    m_aspectCombo->setFocusPolicy(Qt::NoFocus);
     m_aspectCombo->addItems({tr("Free"), tr("Original"), tr("1 : 1"),
                              tr("3 : 2"), tr("4 : 3"), tr("16 : 9")});
-    m_aspectCombo->setFixedWidth(112);
+    m_aspectCombo->setFixedWidth(92);
     aspectRow->addWidget(m_aspectCombo);
     panelLayout->addLayout(aspectRow);
     panelLayout->addSpacing(12);
@@ -398,16 +401,27 @@ void CropToolController::buildUi()
         "  font-size: 11px;"
         "  min-width: 46px;"
         "}"
-        "QComboBox {"
+        "QComboBox#cropAspectSelector {"
         "  color: #dedede;"
-        "  background: #222222;"
-        "  border: 1px solid #363636;"
+        "  background: transparent;"
+        "  border: 0;"
         "  border-radius: 4px;"
-        "  padding: 3px 7px;"
+        "  padding: 3px 20px 3px 6px;"
         "  font-size: 11px;"
         "}"
-        "QComboBox:hover { border-color: #505050; }"
-        "QComboBox QAbstractItemView {"
+        "QComboBox#cropAspectSelector:hover,"
+        "QComboBox#cropAspectSelector:on {"
+        "  color: #f2f2f2;"
+        "  background: #252525;"
+        "}"
+        "QComboBox#cropAspectSelector::drop-down {"
+        "  subcontrol-origin: padding;"
+        "  subcontrol-position: top right;"
+        "  width: 18px;"
+        "  border: 0;"
+        "  background: transparent;"
+        "}"
+        "QComboBox#cropAspectSelector QAbstractItemView {"
         "  color: #dedede;"
         "  background: #222222;"
         "  selection-background-color: #383838;"
