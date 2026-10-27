@@ -574,6 +574,9 @@ void CropToolController::beginEditing()
     if (m_panel) {
         m_panel->show();
     }
+    if (QWidget *basicPanel = m_window->findChild<QWidget *>(QStringLiteral("basicPanel"))) {
+        basicPanel->hide();
+    }
     updateControlsFromState(m_workingState);
     applyGeometryToCanvas(m_workingState, true, true);
 }
@@ -599,6 +602,9 @@ void CropToolController::finishEditing(bool commitChanges)
     m_workingFilePath.clear();
     if (m_panel) {
         m_panel->hide();
+    }
+    if (QWidget *basicPanel = m_window->findChild<QWidget *>(QStringLiteral("basicPanel"))) {
+        basicPanel->show();
     }
     if (m_selectorButton && m_selectorButton->isChecked()) {
         const QSignalBlocker blocker(m_selectorButton);
