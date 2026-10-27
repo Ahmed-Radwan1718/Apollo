@@ -332,6 +332,8 @@ protected:
         addColorAction(tr("Purple"), 5);
 
         menu.addSeparator();
+        QAction *resetAllEditsAction = menu.addAction(tr("Reset All Edits"));
+        menu.addSeparator();
         QAction *showInExplorerAction = menu.addAction(tr("Show in File Explorer"));
         menu.addSeparator();
         QAction *removeFromApolloAction = menu.addAction(tr("Remove from Apollo"));
@@ -349,6 +351,15 @@ protected:
             if (m_colorLabelChanged) {
                 m_colorLabelChanged(colorActions.value(selectedAction));
             }
+        } else if (selectedAction == resetAllEditsAction) {
+            QMetaObject::invokeMethod(window(),
+                                      "openImage",
+                                      Qt::QueuedConnection,
+                                      Q_ARG(QString, m_filePath));
+            QMetaObject::invokeMethod(window(),
+                                      "handleHistoryEntryActivated",
+                                      Qt::QueuedConnection,
+                                      Q_ARG(int, 0));
         } else if (selectedAction == showInExplorerAction) {
             revealInFileExplorer(m_filePath);
         } else if (selectedAction == removeFromApolloAction && m_removed) {
