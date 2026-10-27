@@ -215,13 +215,17 @@ QHash<QString, int> ApplicationStateStore::loadPhotoRatings()
 void ApplicationStateStore::setPhotoRating(const QString &filePath, int rating)
 {
     const QString absoluteFilePath = normalizedPath(filePath);
-    if (absoluteFilePath.isEmpty() || rating < 1 || rating > 5) {
+    if (absoluteFilePath.isEmpty() || rating < 0 || rating > 5) {
         return;
     }
 
     QJsonObject root = loadStateObject();
     QJsonObject ratings = root.value(QStringLiteral("photoRatings")).toObject();
-    ratings.insert(absoluteFilePath, rating);
+    if (rating == 0) {
+        ratings.remove(absoluteFilePath);
+    } else {
+        ratings.insert(absoluteFilePath, rating);
+    }
     root.insert(QStringLiteral("photoRatings"), ratings);
     saveStateObject(std::move(root));
 }
