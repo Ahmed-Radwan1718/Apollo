@@ -428,12 +428,17 @@ void CropToolController::buildUi()
 
     m_panel->hide();
 
-    int histogramIndex = rightLayout->indexOf(m_window->m_histogram);
-    if (histogramIndex < 0) {
-        histogramIndex = 0;
+    QWidget *metadataWidget = rightPanel->findChild<QWidget *>(
+        QStringLiteral("photoMetadataWidget"), Qt::FindDirectChildrenOnly);
+    int insertionIndex = metadataWidget ? rightLayout->indexOf(metadataWidget) : -1;
+    if (insertionIndex < 0) {
+        insertionIndex = rightLayout->indexOf(m_window->m_histogram);
     }
-    rightLayout->insertWidget(histogramIndex + 1, m_toolStrip);
-    rightLayout->insertWidget(histogramIndex + 2, m_panel);
+    if (insertionIndex < 0) {
+        insertionIndex = 0;
+    }
+    rightLayout->insertWidget(insertionIndex + 1, m_toolStrip);
+    rightLayout->insertWidget(insertionIndex + 2, m_panel);
 
     connect(m_selectorButton, &QToolButton::toggled,
             this,
