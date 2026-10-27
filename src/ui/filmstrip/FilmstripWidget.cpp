@@ -66,6 +66,10 @@ void configureColorLabelMenu(QMenu *menu)
         "QMenu::item {"
         "  padding: 7px 16px 7px 20px;"
         "}"
+        "QMenu::icon {"
+        "  position: relative;"
+        "  left: 18px;"
+        "}"
         "QMenu::separator {"
         "  height: 1px;"
         "  margin: 5px 10px;"
@@ -271,6 +275,8 @@ protected:
         const auto addColorAction = [&](const QString &text, int colorLabel) {
             QAction *action = colorLabelMenu->addAction(text);
             action->setIcon(colorLabelIcon(colorLabel));
+            action->setCheckable(true);
+            action->setChecked(m_colorLabel == colorLabel);
             colorActions.insert(action, colorLabel);
         };
 
