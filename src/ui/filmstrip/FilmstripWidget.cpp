@@ -248,7 +248,7 @@ protected:
         configureContextMenu(&menu, kContextMenuWidth);
 
         QMenu *flagMenu = menu.addMenu(tr("Set Flag"));
-        configureContextMenu(flagMenu, kContextSubmenuWidth);
+        configureColorLabelMenu(flagMenu);
         QHash<QAction *, int> flagActions;
         const auto addFlagAction = [&](const QString &text, int status) {
             QAction *action = flagMenu->addAction(text);
