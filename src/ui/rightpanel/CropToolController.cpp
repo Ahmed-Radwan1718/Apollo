@@ -115,11 +115,10 @@ protected:
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing, true);
 
-        if (underMouse()) {
-            painter.setPen(Qt::NoPen);
-            painter.setBrush(QColor(45, 45, 45));
-            painter.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 4.0, 4.0);
-        }
+        const QRectF buttonRect = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+        painter.setPen(QPen(underMouse() ? QColor(80, 80, 80) : QColor(54, 54, 54), 1.0));
+        painter.setBrush(underMouse() ? QColor(45, 45, 45) : QColor(34, 34, 34));
+        painter.drawRoundedRect(buttonRect, 4.0, 4.0);
 
         const QColor color = underMouse() ? QColor(245, 245, 245) : QColor(194, 194, 194);
         painter.setPen(QPen(color, 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
@@ -295,7 +294,7 @@ void CropToolController::buildUi()
     m_panel->setObjectName(QStringLiteral("cropToolPanel"));
     auto *panelLayout = new QVBoxLayout(m_panel);
     panelLayout->setContentsMargins(2, 4, 2, 7);
-    panelLayout->setSpacing(7);
+    panelLayout->setSpacing(0);
 
     auto *titleRow = new QHBoxLayout();
     titleRow->setContentsMargins(0, 0, 0, 0);
@@ -304,11 +303,19 @@ void CropToolController::buildUi()
     titleRow->addWidget(title);
     titleRow->addStretch(1);
     m_resetButton = new QToolButton(m_panel);
+    m_resetButton->setObjectName(QStringLiteral("cropResetButton"));
     m_resetButton->setText(tr("Reset"));
     m_resetButton->setCursor(Qt::PointingHandCursor);
     m_resetButton->setFocusPolicy(Qt::NoFocus);
     titleRow->addWidget(m_resetButton);
     panelLayout->addLayout(titleRow);
+    panelLayout->addSpacing(5);
+
+    auto *headerSeparator = new QWidget(m_panel);
+    headerSeparator->setObjectName(QStringLiteral("cropHeaderSeparator"));
+    headerSeparator->setFixedHeight(1);
+    panelLayout->addWidget(headerSeparator);
+    panelLayout->addSpacing(10);
 
     auto *aspectRow = new QHBoxLayout();
     aspectRow->setContentsMargins(0, 0, 0, 0);
@@ -322,10 +329,12 @@ void CropToolController::buildUi()
     m_aspectCombo->setFixedWidth(112);
     aspectRow->addWidget(m_aspectCombo);
     panelLayout->addLayout(aspectRow);
+    panelLayout->addSpacing(12);
 
     auto *rotateRow = new QHBoxLayout();
     rotateRow->setContentsMargins(0, 0, 0, 0);
-    auto *rotateLabel = new QLabel(tr("Rotate 90°"), m_panel);
+    rotateRow->setSpacing(4);
+    auto *rotateLabel = new QLabel(tr("Rotate"), m_panel);
     rotateLabel->setObjectName(QStringLiteral("cropControlLabel"));
     rotateRow->addWidget(rotateLabel);
     rotateRow->addStretch(1);
@@ -336,6 +345,7 @@ void CropToolController::buildUi()
     rotateRow->addWidget(m_rotateLeftButton);
     rotateRow->addWidget(m_rotateRightButton);
     panelLayout->addLayout(rotateRow);
+    panelLayout->addSpacing(12);
 
     auto *straightenHeader = new QHBoxLayout();
     straightenHeader->setContentsMargins(0, 0, 0, 0);
@@ -345,14 +355,17 @@ void CropToolController::buildUi()
     straightenHeader->addStretch(1);
     m_straightenValue = new QLabel(QStringLiteral("0.00°"), m_panel);
     m_straightenValue->setObjectName(QStringLiteral("cropValueLabel"));
+    m_straightenValue->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     straightenHeader->addWidget(m_straightenValue);
     panelLayout->addLayout(straightenHeader);
+    panelLayout->addSpacing(5);
 
     m_straightenSlider = new QSlider(Qt::Horizontal, m_panel);
     m_straightenSlider->setRange(-4500, 4500);
     m_straightenSlider->setSingleStep(10);
     m_straightenSlider->setPageStep(100);
     panelLayout->addWidget(m_straightenSlider);
+    panelLayout->addSpacing(12);
 
     m_doneButton = new QToolButton(m_panel);
     m_doneButton->setText(tr("Done"));
@@ -367,6 +380,9 @@ void CropToolController::buildUi()
         "  background: #181818;"
         "  border-bottom: 1px solid #292929;"
         "  font-family: \"Segoe UI Variable\";"
+        "}"
+        "QWidget#cropHeaderSeparator {"
+        "  background: #292929;"
         "}"
         "QLabel#cropPanelTitle {"
         "  color: #dedede;"
@@ -417,6 +433,14 @@ void CropToolController::buildUi()
         "  font-size: 11px;"
         "}"
         "QToolButton:hover { color: #ffffff; background: #292929; }"
+        "QToolButton#cropResetButton {"
+        "  color: #a8a8a8;"
+        "  padding: 3px 5px;"
+        "}"
+        "QToolButton#cropResetButton:hover {"
+        "  color: #dedede;"
+        "  background: #252525;"
+        "}"
         "QToolButton[text=\"Done\"] {"
         "  color: #eeeeee;"
         "  background: #343434;"
