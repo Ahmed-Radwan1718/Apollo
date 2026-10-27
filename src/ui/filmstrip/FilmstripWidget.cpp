@@ -4,14 +4,18 @@
 #include "ui/canvas/PhotoCanvas.h"
 
 #include <QAction>
+#include <QClipboard>
 #include <QContextMenuEvent>
 #include <QDir>
 #include <QEvent>
 #include <QFileInfo>
 #include <QFont>
 #include <QFrame>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMenu>
 #include <QMetaObject>
 #include <QMouseEvent>
@@ -106,6 +110,69 @@ void revealInFileExplorer(const QString &filePath)
         QStringLiteral("/select,\"%1\"")
             .arg(QDir::toNativeSeparators(fileInfo.absoluteFilePath())));
     explorer.startDetached();
+}
+
+DevelopState currentDevelopStateForPhoto(const QString &filePath)
+{
+    DevelopState state;
+    const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
+
+    const QVector<HistoryModel::Snapshot> histories =
+        ApplicationStateStore::loadHistories();
+    for (const HistoryModel::Snapshot &snapshot : histories) {
+        if (QFileInfo(snapshot.filePath).absoluteFilePath() != absoluteFilePath
+            || snapshot.currentIndex < 0
+            || snapshot.currentIndex >= snapshot.entries.size()) {
+            continue;
+        }
+
+        state = snapshot.entries.at(snapshot.currentIndex).state;
+        break;
+    }
+
+    return state;
+}
+
+void copyDevelopSettingsToClipboard(const QString &filePath)
+{
+    QClipboard *clipboard = QGuiApplication::clipboard();
+    if (!clipboard || filePath.isEmpty()) {
+        return;
+    }
+
+    const DevelopState state = currentDevelopStateForPhoto(filePath);
+
+    QJsonObject settings;
+    settings.insert(QStringLiteral("temperatureKelvin"), state.temperatureKelvin);
+    settings.insert(QStringLiteral("tint"), state.tint);
+    settings.insert(QStringLiteral("exposureHundredths"), state.exposureHundredths);
+    settings.insert(QStringLiteral("highlights"), state.highlights);
+    settings.insert(QStringLiteral("shadows"), state.shadows);
+    settings.insert(QStringLiteral("whites"), state.whites);
+    settings.insert(QStringLiteral("blacks"), state.blacks);
+    settings.insert(QStringLiteral("contrast"), state.contrast);
+    settings.insert(QStringLiteral("texture"), state.texture);
+    settings.insert(QStringLiteral("clarity"), state.clarity);
+    settings.insert(QStringLiteral("dehaze"), state.dehaze);
+    settings.insert(QStringLiteral("saturation"), state.saturation);
+    settings.insert(QStringLiteral("vibrance"), state.vibrance);
+    settings.insert(QStringLiteral("cropX"), state.cropX);
+    settings.insert(QStringLiteral("cropY"), state.cropY);
+    settings.insert(QStringLiteral("cropWidth"), state.cropWidth);
+    settings.insert(QStringLiteral("cropHeight"), state.cropHeight);
+    settings.insert(QStringLiteral("cropQuarterTurns"), state.cropQuarterTurns);
+    settings.insert(QStringLiteral("cropStraightenHundredths"),
+                    state.cropStraightenHundredths);
+    settings.insert(QStringLiteral("cropAspectMode"), state.cropAspectMode);
+
+    QJsonObject payload;
+    payload.insert(QStringLiteral("format"),
+                   QStringLiteral("apollo-develop-settings"));
+    payload.insert(QStringLiteral("version"), 1);
+    payload.insert(QStringLiteral("settings"), settings);
+
+    clipboard->setText(QString::fromUtf8(
+        QJsonDocument(payload).toJson(QJsonDocument::Compact)));
 }
 
 QColor colorForLabel(int colorLabel)
@@ -332,6 +399,7 @@ protected:
         addColorAction(tr("Purple"), 5);
 
         menu.addSeparator();
+        QAction *copyEditSettingsAction = menu.addAction(tr("Copy Edit Settings"));
         QAction *resetAllEditsAction = menu.addAction(tr("Reset All Edits"));
         menu.addSeparator();
         QAction *showInExplorerAction = menu.addAction(tr("Show in File Explorer"));
@@ -351,6 +419,8 @@ protected:
             if (m_colorLabelChanged) {
                 m_colorLabelChanged(colorActions.value(selectedAction));
             }
+        } else if (selectedAction == copyEditSettingsAction) {
+            copyDevelopSettingsToClipboard(m_filePath);
         } else if (selectedAction == resetAllEditsAction) {
             QMetaObject::invokeMethod(window(),
                                       "openImage",
