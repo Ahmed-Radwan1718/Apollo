@@ -102,7 +102,9 @@ QIcon colorLabelIcon(int colorLabel)
     QPixmap pixmap(iconSize, iconSize);
     pixmap.fill(Qt::transparent);
 
-    const QColor color = colorForLabel(colorLabel);
+    const QColor color = colorLabel == 0
+        ? QColor(128, 128, 128, 150)
+        : colorForLabel(colorLabel);
     if (color.isValid()) {
         QPainter painter(&pixmap);
         painter.setRenderHint(QPainter::Antialiasing, true);
