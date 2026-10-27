@@ -115,7 +115,7 @@ protected:
         outside.addRect(QRectF(rect()));
         outside.addRect(cropRect);
         painter.fillPath(outside,
-                         m_editing ? QColor(0, 0, 0, 145)
+                         m_editing ? QColor(0, 0, 0, 0)
                                    : QColor(24, 24, 24));
 
         if (!m_editing) {
