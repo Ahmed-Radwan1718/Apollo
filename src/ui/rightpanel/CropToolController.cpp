@@ -439,14 +439,6 @@ void CropToolController::buildUi()
     panelLayout->addWidget(m_straightenSlider);
     panelLayout->addSpacing(12);
 
-    m_doneButton = new QToolButton(m_panel);
-    m_doneButton->setText(tr("Done"));
-    m_doneButton->setCursor(Qt::PointingHandCursor);
-    m_doneButton->setFocusPolicy(Qt::NoFocus);
-    m_doneButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    m_doneButton->setFixedHeight(28);
-    panelLayout->addWidget(m_doneButton);
-
     m_panel->setStyleSheet(QStringLiteral(
         "QWidget#cropToolPanel {"
         "  background: #181818;"
@@ -533,13 +525,6 @@ void CropToolController::buildUi()
                     beginEditing();
                 } else if (m_editing) {
                     finishEditing(true);
-                }
-            });
-    connect(m_doneButton, &QToolButton::clicked,
-            this,
-            [this]() {
-                if (m_selectorButton) {
-                    m_selectorButton->setChecked(false);
                 }
             });
     connect(m_resetButton, &QToolButton::clicked,
