@@ -436,8 +436,12 @@ private:
             + (m_endHeight - m_startHeight) * easedProgress;
         const int nextHeight = qRound(animatedHeight);
 
-        if (height() != nextHeight) {
-            setFixedHeight(nextHeight);
+        if (m_expanded) {
+            if (height() != nextHeight) {
+                setFixedHeight(nextHeight);
+            }
+        } else if (m_snapshot->height() != nextHeight) {
+            m_snapshot->setFixedHeight(nextHeight);
         }
         notifyProgress(animatedHeight);
 
