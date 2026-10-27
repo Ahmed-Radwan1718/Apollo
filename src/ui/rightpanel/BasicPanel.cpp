@@ -126,8 +126,7 @@ int temperatureKelvinForSliderPosition(int position, int minimum, int maximum)
         - normalized * (minimumReciprocal - maximumReciprocal);
 
     return std::clamp(static_cast<int>(std::lround(1.0 / reciprocal)),
-                      minimum,
-                      maximum);
+                      minimum, maximum);
 }
 
 class BasicTitleButton final : public QToolButton
@@ -267,6 +266,7 @@ public:
         , m_timer(new QChronoTimer(this))
     {
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        setAttribute(Qt::WA_StaticContents, true);
 
         m_timer->setTimerType(Qt::PreciseTimer);
         m_timer->setInterval(kPanelAnimationTick);
@@ -369,6 +369,7 @@ protected:
 
         if (!m_animationPixmap.isNull()) {
             QPainter painter(this);
+            painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
             painter.drawPixmap(0, 0, m_animationPixmap);
         }
     }
@@ -398,9 +399,9 @@ private:
 
         if (height() != nextHeight) {
             setFixedHeight(nextHeight);
+            update();
         }
         notifyProgress(animatedHeight);
-        update();
 
         if (linearProgress >= 1.0) {
             finishAnimation();
@@ -448,7 +449,11 @@ private:
         updateContentGeometry();
         m_content->ensurePolished();
 
-        m_animationPixmap = QPixmap(m_content->size());
+        const qreal devicePixelRatio = m_content->devicePixelRatioF();
+        const QSize pixelSize(qMax(1, qRound(m_content->width() * devicePixelRatio)),
+                              qMax(1, qRound(m_content->height() * devicePixelRatio)));
+        m_animationPixmap = QPixmap(pixelSize);
+        m_animationPixmap.setDevicePixelRatio(devicePixelRatio);
         m_animationPixmap.fill(Qt::transparent);
         m_content->render(&m_animationPixmap);
 
