@@ -15,7 +15,6 @@
 #include <QMenuBar>
 #include <QScrollArea>
 #include <QScrollBar>
-#include <QToolButton>
 
 int main(int argc, char *argv[])
 {
@@ -48,14 +47,6 @@ int main(int argc, char *argv[])
 
     new CropToolController(&window, &window);
     installDevelopToolPlaceholderButtons(&window);
-    if (auto *cropButton =
-            window.findChild<QToolButton *>(QStringLiteral("cropToolSelector"))) {
-        if (auto *adjustmentsScrollArea =
-                window.findChild<QScrollArea *>(QStringLiteral("adjustmentsScrollArea"))) {
-            QObject::connect(cropButton, &QToolButton::toggled,
-                             adjustmentsScrollArea, &QWidget::setHidden);
-        }
-    }
     new PhotoExportController(&window, &window);
 
     auto *menuBar = window.menuBar();
