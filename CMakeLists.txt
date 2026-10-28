@@ -36,6 +36,8 @@ qt_add_executable(Nexus WIN32
     src/imaging/ArwDecoder.h
     src/imaging/ArwPreviewSession.h
     src/imaging/ArwPreviewSessionImpl.inc
+    src/imaging/AutoStraighten.cpp
+    src/imaging/AutoStraighten.h
     src/imaging/CropTransform.cpp
     src/imaging/CropTransform.h
     src/imaging/Histogram.cpp
@@ -72,6 +74,8 @@ qt_add_executable(Nexus WIN32
     src/ui/library/LibrarySidebar.h
     src/ui/library/LibraryWorkspaceController.cpp
     src/ui/library/LibraryWorkspaceController.h
+    src/ui/rightpanel/AutoStraightenController.cpp
+    src/ui/rightpanel/AutoStraightenController.h
     src/ui/rightpanel/BasicPanel.cpp
     src/ui/rightpanel/BasicPanel.h
     src/ui/rightpanel/CalibrationPanel.cpp
