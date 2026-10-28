@@ -23,6 +23,12 @@ int main(int argc, char *argv[])
 
     MainWindow window;
 
+    if (QWidget *adjustmentsScrollArea =
+            window.findChild<QWidget *>(QStringLiteral("adjustmentsScrollArea"))) {
+        adjustmentsScrollArea->setStyleSheet(QStringLiteral(
+            "QScrollBar:vertical { width: 0px; margin: 0px; }"));
+    }
+
     WorkspaceModeBar *workspaceModeBar = nullptr;
     if (QWidget *centerPanel = window.findChild<QWidget *>(QStringLiteral("centerPanel"))) {
         workspaceModeBar = WorkspaceModeBar::install(centerPanel);
