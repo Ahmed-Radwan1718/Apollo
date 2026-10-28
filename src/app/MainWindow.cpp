@@ -622,10 +622,7 @@ void MainWindow::openImage(const QString &filePath)
         QMessageBox::critical(
             this,
             tr("Could not open photo"),
-            tr("Nexus could not decode:\
-%1\
-\
-%2")
+            tr("Nexus could not decode:\n%1\n\n%2")
                 .arg(QDir::toNativeSeparators(filePath), result.error));
         return;
     }
@@ -977,10 +974,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
             QMessageBox::critical(
                 this,
                 tr("Could not render adjustments"),
-                tr("Nexus could not render the requested RAW adjustments:\
-%1\
-\
-%2")
+                tr("Nexus could not render the requested RAW adjustments:\n%1\n\n%2")
                     .arg(QDir::toNativeSeparators(m_currentFilePath), error));
         }
         return;
@@ -1018,9 +1012,7 @@ void MainWindow::handleWhiteBalancePick(const QString &filePath,
         QMessageBox::warning(
             this,
             tr("Could not set white balance"),
-            tr("Nexus could not use that area as a neutral white-balance sample.\
-\
-%1")
+            tr("Nexus could not use that area as a neutral white-balance sample.\n\n%1")
                 .arg(error));
         return;
     }
