@@ -4,6 +4,9 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QPaintEvent>
+#include <QPainter>
+#include <QPainterPath>
 #include <QSizePolicy>
 #include <QSlider>
 #include <QToolButton>
@@ -19,6 +22,135 @@ QString signedValue(int value)
         ? QStringLiteral("+%1").arg(value)
         : QString::number(value);
 }
+
+class CalibrationTitleButton final : public QToolButton
+{
+public:
+    explicit CalibrationTitleButton(QWidget *parent = nullptr)
+        : QToolButton(parent)
+    {
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::TextAntialiasing, true);
+        painter.setPen(underMouse() ? QColor(255, 255, 255) : QColor(214, 214, 214));
+        painter.drawText(rect(), Qt::AlignLeft | Qt::AlignVCenter, text());
+    }
+};
+
+class CalibrationEyeButton final : public QToolButton
+{
+public:
+    explicit CalibrationEyeButton(QWidget *parent = nullptr)
+        : QToolButton(parent)
+    {
+        setFixedSize(28, 30);
+        setCursor(Qt::PointingHandCursor);
+        setFocusPolicy(Qt::NoFocus);
+        setToolTip(tr("Calibration adjustments visibility"));
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        const QColor color = underMouse()
+            ? QColor(255, 255, 255)
+            : QColor(194, 194, 194);
+
+        constexpr qreal iconScale = 0.95;
+        painter.translate(width() / 2.0, (height() / 2.0) - 0.25);
+        painter.scale(iconScale, iconScale);
+        painter.translate(-12.0, -13.0);
+
+        QPainterPath eye;
+        eye.moveTo(12.0, 7.5);
+        eye.cubicTo(7.69517, 7.5,
+                    4.47617, 11.0833,
+                    3.39473, 12.4653);
+        eye.cubicTo(3.14595, 12.7832,
+                    3.14595, 13.2168,
+                    3.39473, 13.5347);
+        eye.cubicTo(4.47617, 14.9167,
+                    7.69517, 18.5,
+                    12.0, 18.5);
+        eye.cubicTo(16.3048, 18.5,
+                    19.5238, 14.9167,
+                    20.6053, 13.5347);
+        eye.cubicTo(20.8541, 13.2168,
+                    20.8541, 12.7832,
+                    20.6053, 12.4653);
+        eye.cubicTo(19.5238, 11.0833,
+                    16.3048, 7.5,
+                    12.0, 7.5);
+        eye.closeSubpath();
+
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(color,
+                            1.2 / iconScale,
+                            Qt::SolidLine,
+                            Qt::RoundCap,
+                            Qt::RoundJoin));
+        painter.drawPath(eye);
+        painter.drawEllipse(QPointF(12.0, 13.0), 2.0, 2.0);
+    }
+};
+
+class CalibrationChevronButton final : public QToolButton
+{
+public:
+    explicit CalibrationChevronButton(QWidget *parent = nullptr)
+        : QToolButton(parent)
+    {
+        setFixedSize(26, 30);
+        setCursor(Qt::PointingHandCursor);
+        setFocusPolicy(Qt::NoFocus);
+    }
+
+    void setExpanded(bool expanded)
+    {
+        const qreal progress = expanded ? 1.0 : 0.0;
+        if (qFuzzyCompare(m_progress, progress)) {
+            return;
+        }
+
+        m_progress = progress;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        const QColor color = underMouse()
+            ? QColor(255, 255, 255)
+            : QColor(190, 190, 190);
+        painter.setPen(QPen(color, 1.45, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+
+        const QPointF center(width() / 2.0, height() / 2.0);
+        painter.translate(center);
+        painter.rotate(90.0 * m_progress);
+
+        painter.drawLine(QPointF(-1.5, -3.5), QPointF(2.0, 0.0));
+        painter.drawLine(QPointF(2.0, 0.0), QPointF(-1.5, 3.5));
+    }
+
+private:
+    qreal m_progress = 0.0;
+};
 
 class ResetLabel final : public QLabel
 {
@@ -73,7 +205,7 @@ CalibrationPanel::CalibrationPanel(QWidget *parent)
     headerLayout->setContentsMargins(6, 5, 0, 0);
     headerLayout->setSpacing(2);
 
-    auto *titleButton = new QToolButton(header);
+    auto *titleButton = new CalibrationTitleButton(header);
     titleButton->setObjectName(QStringLiteral("calibrationTitle"));
     titleButton->setText(tr("Calibration"));
     titleButton->setCheckable(true);
@@ -83,15 +215,14 @@ CalibrationPanel::CalibrationPanel(QWidget *parent)
     titleButton->setCursor(Qt::PointingHandCursor);
     titleButton->setFocusPolicy(Qt::NoFocus);
 
-    m_chevronButton = new QToolButton(header);
-    m_chevronButton->setObjectName(QStringLiteral("calibrationChevron"));
-    m_chevronButton->setArrowType(Qt::RightArrow);
-    m_chevronButton->setFixedSize(26, 30);
-    m_chevronButton->setCursor(Qt::PointingHandCursor);
-    m_chevronButton->setFocusPolicy(Qt::NoFocus);
+    auto *eyeButton = new CalibrationEyeButton(header);
+    auto *chevronButton = new CalibrationChevronButton(header);
+    chevronButton->setObjectName(QStringLiteral("calibrationChevron"));
+    m_chevronButton = chevronButton;
 
     headerLayout->addWidget(titleButton, 1);
-    headerLayout->addWidget(m_chevronButton);
+    headerLayout->addWidget(eyeButton);
+    headerLayout->addWidget(chevronButton);
     outerLayout->addWidget(header);
 
     m_content = new QFrame(this);
@@ -143,10 +274,9 @@ CalibrationPanel::CalibrationPanel(QWidget *parent)
     outerLayout->addWidget(m_content);
 
     connect(titleButton, &QToolButton::toggled, this,
-            [this](bool expanded) {
+            [this, chevronButton](bool expanded) {
                 m_content->setVisible(expanded);
-                m_chevronButton->setArrowType(
-                    expanded ? Qt::DownArrow : Qt::RightArrow);
+                chevronButton->setExpanded(expanded);
             });
     connect(m_chevronButton, &QToolButton::clicked,
             titleButton, &QToolButton::toggle);
@@ -168,7 +298,6 @@ CalibrationPanel::CalibrationPanel(QWidget *parent)
         "  font-size: 13px;"
         "  font-weight: 600;"
         "  padding: 0;"
-        "  text-align: left;"
         "}"
         "QToolButton#calibrationTitle:hover { color: #ffffff; }"
         "QToolButton#calibrationChevron {"
