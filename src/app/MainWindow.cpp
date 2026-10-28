@@ -20,8 +20,10 @@
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
+#include <QLayout>
 #include <QList>
 #include <QMessageBox>
+#include <QScrollArea>
 #include <QSlider>
 #include <QStringList>
 #include <QVBoxLayout>
@@ -210,13 +212,30 @@ MainWindow::MainWindow(QWidget *parent)
     m_photoMetadata = new PhotoMetadataWidget(rightPanel);
     rightLayout->addWidget(m_photoMetadata);
 
-    m_basicPanel = new BasicPanel(rightPanel);
-    rightLayout->addWidget(m_basicPanel);
+    auto *adjustmentsScrollArea = new QScrollArea(rightPanel);
+    adjustmentsScrollArea->setObjectName(QStringLiteral("adjustmentsScrollArea"));
+    adjustmentsScrollArea->setWidgetResizable(true);
+    adjustmentsScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    adjustmentsScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    adjustmentsScrollArea->setFrameShape(QFrame::NoFrame);
 
-    m_calibrationPanel = new CalibrationPanel(rightPanel);
+    auto *adjustmentsContainer = new QWidget(adjustmentsScrollArea);
+    adjustmentsContainer->setObjectName(QStringLiteral("adjustmentsContainer"));
+    auto *adjustmentsLayout = new QVBoxLayout(adjustmentsContainer);
+    adjustmentsLayout->setContentsMargins(0, 0, 0, 0);
+    adjustmentsLayout->setSpacing(8);
+    adjustmentsLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
+
+    m_basicPanel = new BasicPanel(adjustmentsContainer);
+    adjustmentsLayout->addWidget(m_basicPanel);
+
+    m_calibrationPanel = new CalibrationPanel(adjustmentsContainer);
     m_calibrationPanel->setEnabled(false);
-    rightLayout->addWidget(m_calibrationPanel);
-    rightLayout->addStretch(1);
+    adjustmentsLayout->addWidget(m_calibrationPanel);
+    adjustmentsLayout->addStretch(1);
+
+    adjustmentsScrollArea->setWidget(adjustmentsContainer);
+    rightLayout->addWidget(adjustmentsScrollArea, 1);
 
     workspaceLayout->addWidget(rightPanel);
     setCentralWidget(workspace);
@@ -235,6 +254,10 @@ MainWindow::MainWindow(QWidget *parent)
         "  background: #181818;"
         "  border-left: 1px solid #252525;"
         "  font-family: \"Segoe UI Variable\";"
+        "}"
+        "QScrollArea#adjustmentsScrollArea, QWidget#adjustmentsContainer {"
+        "  background: #181818;"
+        "  border: 0;"
         "}"
         "QLabel#histogramTitle {"
         "  color: #b9b9b9;"
