@@ -1,4 +1,5 @@
 #include "ui/rightpanel/CalibrationPanel.h"
+#include "ui/rightpanel/WheelIgnoringSlider.h"
 
 #include <QFrame>
 #include <QHBoxLayout>
@@ -399,7 +400,7 @@ QSlider *CalibrationPanel::addSlider(QFrame *content,
     labelRow->setContentsMargins(0, 0, 0, 0);
     labelRow->setSpacing(8);
 
-    auto *slider = new QSlider(Qt::Horizontal, control);
+    auto *slider = new WheelIgnoringSlider(Qt::Horizontal, control);
     slider->setObjectName(QStringLiteral("calibrationSlider"));
     slider->setRange(-100, 100);
     slider->setValue(0);

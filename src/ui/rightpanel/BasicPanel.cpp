@@ -1,4 +1,5 @@
 #include "ui/rightpanel/BasicPanel.h"
+#include "ui/rightpanel/WheelIgnoringSlider.h"
 
 #include <QChronoTimer>
 #include <QElapsedTimer>
@@ -529,13 +530,13 @@ private:
     bool m_expanded = true;
 };
 
-class BasicSlider final : public QSlider
+class BasicSlider final : public WheelIgnoringSlider
 {
 public:
     BasicSlider(bool showNeutralMarker,
                 ValueFormat format,
                 QWidget *parent = nullptr)
-        : QSlider(Qt::Horizontal, parent)
+        : WheelIgnoringSlider(Qt::Horizontal, parent)
         , m_showNeutralMarker(showNeutralMarker)
         , m_format(format)
     {
