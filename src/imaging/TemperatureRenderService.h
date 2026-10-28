@@ -1,5 +1,7 @@
 #pragma once
 
+#include "imaging/RawCalibration.h"
+
 #include <QImage>
 #include <QObject>
 #include <QString>
@@ -22,10 +24,12 @@ public:
 
     void preparePreview(const QString &filePath,
                         int kelvin,
-                        int tint);
+                        int tint,
+                        const RawCalibration &calibration);
     void requestPreview(const QString &filePath,
                         int kelvin,
                         int tint,
+                        const RawCalibration &calibration,
                         int exposureHundredths,
                         int highlights,
                         int shadows,
@@ -40,6 +44,7 @@ public:
     void requestFullRender(const QString &filePath,
                            int kelvin,
                            int tint,
+                           const RawCalibration &calibration,
                            int exposureHundredths,
                            int highlights,
                            int shadows,
@@ -56,6 +61,7 @@ signals:
     void renderReady(const QString &filePath,
                      int kelvin,
                      int tint,
+                     const RawCalibration &calibration,
                      int exposureHundredths,
                      int highlights,
                      int shadows,
@@ -76,6 +82,7 @@ private:
         QString filePath;
         int kelvin = 0;
         int tint = 0;
+        RawCalibration calibration;
         int exposureHundredths = 0;
         int highlights = 0;
         int shadows = 0;

@@ -1788,6 +1788,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                           int dehaze,
                           int saturation,
                           int vibrance,
+                          const RawCalibration &calibration,
                           bool halfSizePreview)
 {
     if (error != nullptr) {
@@ -1797,12 +1798,12 @@ QImage ArwDecoder::decode(const QString &filePath,
         *metadata = {};
     }
 
-    LibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
+    CalibratedLibRaw processor(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
+    processor.setRawCalibration(calibration);
 
-    // Ask LibRaw for a high-precision linear sRGB render. Nexus performs the
-    // final exposure, scene-referred tonal and black-point controls, texture and
-    // clarity local contrast, atmospheric dehaze, perceptual vibrance, saturation,
-    // and sRGB transfer itself instead of editing an already rendered 8-bit image.
+    // Ask LibRaw for a high-precision linear sRGB render. Apollo's Calibration
+    // is applied inside LibRaw's camera-to-RGB conversion; the remaining develop
+    // controls and final sRGB transfer operate on that calibrated linear result.
     processor.imgdata.params.use_camera_wb = 1;
     processor.imgdata.params.use_camera_matrix = 1;
     processor.imgdata.params.output_color = 1; // linear sRGB primaries
@@ -1884,7 +1885,7 @@ QImage ArwDecoder::decode(const QString &filePath,
 
     // dcraw_make_mem_image() owns its returned buffer independently of the
     // LibRaw instance, so release the decoded RAW and postprocessed buffers before
-    // allocating Nexus's final display image.
+    // allocating Apollo's final display image.
     processor.recycle();
 
     QImage image = developedSrgbImage(*processed,

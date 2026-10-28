@@ -12,6 +12,7 @@
 
 class QAction;
 class BasicPanel;
+class CalibrationPanel;
 class CropToolController;
 class FilmstripWidget;
 class HistogramWidget;
@@ -41,6 +42,7 @@ private slots:
     void handleDevelopRender(const QString &filePath,
                              int temperatureKelvin,
                              int tint,
+                             const imaging::RawCalibration &calibration,
                              int exposureHundredths,
                              int highlights,
                              int shadows,
@@ -102,6 +104,7 @@ private:
     HistogramWidget *m_histogram = nullptr;
     PhotoMetadataWidget *m_photoMetadata = nullptr;
     BasicPanel *m_basicPanel = nullptr;
+    CalibrationPanel *m_calibrationPanel = nullptr;
     QSlider *m_temperatureSlider = nullptr;
     QSlider *m_tintSlider = nullptr;
     QSlider *m_exposureSlider = nullptr;

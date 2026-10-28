@@ -32,6 +32,7 @@ struct ArwPreviewSession::Impl
         destroyLinearImage(temperaturePreviewImage);
         cachedTemperatureKelvin = std::numeric_limits<int>::min();
         cachedTint = std::numeric_limits<int>::min();
+        cachedCalibration = {};
     }
 
     void reset()
@@ -51,7 +52,8 @@ struct ArwPreviewSession::Impl
 
         reset();
 
-        auto candidate = std::make_unique<LibRaw>(LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
+        auto candidate = std::make_unique<CalibratedLibRaw>(
+            LIBRAW_OPTIONS_NO_DATAERR_CALLBACK);
         candidate->imgdata.params.use_camera_wb = 1;
         candidate->imgdata.params.use_camera_matrix = 1;
         candidate->imgdata.params.output_color = 1; // linear sRGB primaries
@@ -211,6 +213,7 @@ struct ArwPreviewSession::Impl
 
     bool refreshWhiteBalance(int whiteBalanceTemperatureKelvin,
                              int tint,
+                             const RawCalibration &calibration,
                              QString *error)
     {
         const int requestedTemperatureKelvin = whiteBalanceTemperatureKelvin > 0
@@ -222,11 +225,13 @@ struct ArwPreviewSession::Impl
 
         if (cachedImage != nullptr
             && cachedTemperatureKelvin == requestedTemperatureKelvin
-            && cachedTint == requestedTint) {
+            && cachedTint == requestedTint
+            && cachedCalibration == calibration) {
             return true;
         }
 
         processor->free_image();
+        processor->setRawCalibration(calibration);
         processor->imgdata.params.use_auto_wb = 0;
         processor->imgdata.params.use_camera_wb = 1;
         for (int channel = 0; channel < 4; ++channel) {
@@ -284,6 +289,7 @@ struct ArwPreviewSession::Impl
 
         cachedTemperatureKelvin = requestedTemperatureKelvin;
         cachedTint = requestedTint;
+        cachedCalibration = calibration;
         return true;
     }
 
@@ -528,9 +534,13 @@ struct ArwPreviewSession::Impl
         return temperaturePreviewImage;
     }
 
-    bool canUseFastTemperaturePreview(int temperatureKelvin, int tint) const
+    bool canUseFastTemperaturePreview(int temperatureKelvin,
+                                      int tint,
+                                      const RawCalibration &calibration) const
     {
-        if (cachedImage == nullptr) {
+        if (cachedImage == nullptr
+            || !calibration.isNeutral()
+            || !cachedCalibration.isNeutral()) {
             return false;
         }
 
@@ -546,13 +556,14 @@ struct ArwPreviewSession::Impl
     }
 
     QString filePath;
-    std::unique_ptr<LibRaw> processor;
+    std::unique_ptr<CalibratedLibRaw> processor;
     std::vector<TemperatureCalibration> calibrations;
     int cameraTemperatureKelvin = 0;
     libraw_processed_image_t *cachedImage = nullptr;
     libraw_processed_image_t *temperaturePreviewImage = nullptr;
     int cachedTemperatureKelvin = std::numeric_limits<int>::min();
     int cachedTint = std::numeric_limits<int>::min();
+    RawCalibration cachedCalibration;
 };
 
 ArwPreviewSession::ArwPreviewSession()
@@ -565,6 +576,7 @@ ArwPreviewSession::~ArwPreviewSession() = default;
 bool ArwPreviewSession::prepare(const QString &filePath,
                                 int whiteBalanceTemperatureKelvin,
                                 int tint,
+                                const RawCalibration &calibration,
                                 QString *error)
 {
     if (error != nullptr) {
@@ -572,13 +584,17 @@ bool ArwPreviewSession::prepare(const QString &filePath,
     }
 
     return m_impl->ensureRaw(filePath, error)
-        && m_impl->refreshWhiteBalance(whiteBalanceTemperatureKelvin, tint, error);
+        && m_impl->refreshWhiteBalance(whiteBalanceTemperatureKelvin,
+                                       tint,
+                                       calibration,
+                                       error);
 }
 
 QImage ArwPreviewSession::render(const QString &filePath,
                                  QString *error,
                                  int whiteBalanceTemperatureKelvin,
                                  int tint,
+                                 const RawCalibration &calibration,
                                  int exposureHundredths,
                                  int highlights,
                                  int shadows,
@@ -600,7 +616,9 @@ QImage ArwPreviewSession::render(const QString &filePath,
     }
 
     libraw_processed_image_t *linearPreview = nullptr;
-    if (m_impl->canUseFastTemperaturePreview(whiteBalanceTemperatureKelvin, tint)) {
+    if (m_impl->canUseFastTemperaturePreview(whiteBalanceTemperatureKelvin,
+                                             tint,
+                                             calibration)) {
         linearPreview = m_impl->buildTemperaturePreview(whiteBalanceTemperatureKelvin,
                                                         tint,
                                                         error);
@@ -610,7 +628,10 @@ QImage ArwPreviewSession::render(const QString &filePath,
         if (error != nullptr) {
             error->clear();
         }
-        if (!m_impl->refreshWhiteBalance(whiteBalanceTemperatureKelvin, tint, error)) {
+        if (!m_impl->refreshWhiteBalance(whiteBalanceTemperatureKelvin,
+                                         tint,
+                                         calibration,
+                                         error)) {
             return {};
         }
         linearPreview = m_impl->cachedImage;

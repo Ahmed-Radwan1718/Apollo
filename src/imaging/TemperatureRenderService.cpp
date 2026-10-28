@@ -33,12 +33,14 @@ TemperatureRenderService::~TemperatureRenderService()
 
 void TemperatureRenderService::preparePreview(const QString &filePath,
                                               int kelvin,
-                                              int tint)
+                                              int tint,
+                                              const RawCalibration &calibration)
 {
     Request request;
     request.filePath = filePath;
     request.kelvin = kelvin;
     request.tint = tint;
+    request.calibration = calibration;
     request.prepareOnly = true;
     this->request(std::move(request), true);
 }
@@ -46,6 +48,7 @@ void TemperatureRenderService::preparePreview(const QString &filePath,
 void TemperatureRenderService::requestPreview(const QString &filePath,
                                               int kelvin,
                                               int tint,
+                                              const RawCalibration &calibration,
                                               int exposureHundredths,
                                               int highlights,
                                               int shadows,
@@ -58,7 +61,7 @@ void TemperatureRenderService::requestPreview(const QString &filePath,
                                               int saturation,
                                               int vibrance)
 {
-    request({filePath, kelvin, tint, exposureHundredths, highlights, shadows,
+    request({filePath, kelvin, tint, calibration, exposureHundredths, highlights, shadows,
              whites, blacks, contrast, texture, clarity, dehaze, saturation, vibrance},
             true);
 }
@@ -66,6 +69,7 @@ void TemperatureRenderService::requestPreview(const QString &filePath,
 void TemperatureRenderService::requestFullRender(const QString &filePath,
                                                  int kelvin,
                                                  int tint,
+                                                 const RawCalibration &calibration,
                                                  int exposureHundredths,
                                                  int highlights,
                                                  int shadows,
@@ -83,7 +87,7 @@ void TemperatureRenderService::requestFullRender(const QString &filePath,
         m_pendingPreview.reset();
     }
 
-    request({filePath, kelvin, tint, exposureHundredths, highlights, shadows,
+    request({filePath, kelvin, tint, calibration, exposureHundredths, highlights, shadows,
              whites, blacks, contrast, texture, clarity, dehaze, saturation, vibrance},
             false);
 }
@@ -140,6 +144,7 @@ void TemperatureRenderService::workerLoop(bool preview)
             previewSession->prepare(request.filePath,
                                     request.kelvin,
                                     request.tint,
+                                    request.calibration,
                                     &ignoredError);
             continue;
         }
@@ -151,6 +156,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                            &error,
                                            request.kelvin,
                                            request.tint,
+                                           request.calibration,
                                            request.exposureHundredths,
                                            request.highlights,
                                            request.shadows,
@@ -179,6 +185,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                        request.dehaze,
                                        request.saturation,
                                        request.vibrance,
+                                       request.calibration,
                                        false);
         }
 
@@ -192,6 +199,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                 emit renderReady(request.filePath,
                                  request.kelvin,
                                  request.tint,
+                                 request.calibration,
                                  request.exposureHundredths,
                                  request.highlights,
                                  request.shadows,

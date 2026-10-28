@@ -9,6 +9,7 @@
 #include "ui/leftpanel/HistoryPanel.h"
 #include "ui/leftpanel/NavigatorPanel.h"
 #include "ui/rightpanel/BasicPanel.h"
+#include "ui/rightpanel/CalibrationPanel.h"
 #include "ui/rightpanel/PhotoMetadataWidget.h"
 #include "ui/rightpanel/WhiteBalancePickerController.h"
 
@@ -211,6 +212,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_basicPanel = new BasicPanel(rightPanel);
     rightLayout->addWidget(m_basicPanel);
+
+    m_calibrationPanel = new CalibrationPanel(rightPanel);
+    m_calibrationPanel->setEnabled(false);
+    rightLayout->addWidget(m_calibrationPanel);
     rightLayout->addStretch(1);
 
     workspaceLayout->addWidget(rightPanel);
@@ -534,6 +539,28 @@ MainWindow::MainWindow(QWidget *parent)
                 });
     }
 
+    connect(m_calibrationPanel, &CalibrationPanel::previewRequested, this,
+            [this](const imaging::RawCalibration &calibration) {
+                if (m_settingDevelopControls) {
+                    return;
+                }
+
+                DevelopState state = m_requestedState;
+                state.calibration = calibration;
+                requestPreview(state);
+            });
+    connect(m_calibrationPanel, &CalibrationPanel::commitRequested, this,
+            [this](const imaging::RawCalibration &calibration,
+                   const QString &historyLabel) {
+                if (m_settingDevelopControls) {
+                    return;
+                }
+
+                DevelopState state = m_requestedState;
+                state.calibration = calibration;
+                requestFullRender(state, historyLabel);
+            });
+
     connect(m_whiteBalancePickerController,
             &WhiteBalancePickerController::pointPicked,
             this,
@@ -598,8 +625,10 @@ void MainWindow::openImage(const QString &filePath)
         ? std::optional<DevelopState>(m_requestedState)
         : std::nullopt;
 
+    const bool rawPhoto = isArwPath(m_currentFilePath);
     m_whiteBalancePickerController->setActive(false);
-    m_whiteBalancePickerController->setEnabled(isArwPath(m_currentFilePath));
+    m_whiteBalancePickerController->setEnabled(rawPhoto);
+    m_calibrationPanel->setEnabled(rawPhoto);
 
     m_canvas->setImage(result.image);
     m_navigator->setImage(result.image);
@@ -613,12 +642,13 @@ void MainWindow::openImage(const QString &filePath)
 
     setWindowTitle(QStringLiteral("%1 — Apollo").arg(QFileInfo(filePath).fileName()));
 
-    if (!showingOriginal && isArwPath(m_currentFilePath)) {
+    if (!showingOriginal && rawPhoto) {
         requestFullRender(m_requestedState);
-    } else if (showingOriginal && isArwPath(m_currentFilePath)) {
+    } else if (showingOriginal && rawPhoto) {
         m_renderService->preparePreview(m_currentFilePath,
                                         m_requestedState.temperatureKelvin,
-                                        m_requestedState.tint);
+                                        m_requestedState.tint,
+                                        m_requestedState.calibration);
     }
 }
 
@@ -828,6 +858,7 @@ void MainWindow::requestPreview(const DevelopState &state)
     m_renderService->requestPreview(m_currentFilePath,
                                     state.temperatureKelvin,
                                     state.tint,
+                                    state.calibration,
                                     state.exposureHundredths,
                                     state.highlights,
                                     state.shadows,
@@ -857,6 +888,7 @@ void MainWindow::requestFullRender(const DevelopState &state, const QString &his
     m_renderService->requestFullRender(m_currentFilePath,
                                        state.temperatureKelvin,
                                        state.tint,
+                                       state.calibration,
                                        state.exposureHundredths,
                                        state.highlights,
                                        state.shadows,
@@ -873,6 +905,7 @@ void MainWindow::requestFullRender(const DevelopState &state, const QString &his
 void MainWindow::handleDevelopRender(const QString &filePath,
                                      int temperatureKelvin,
                                      int tint,
+                                     const imaging::RawCalibration &calibration,
                                      int exposureHundredths,
                                      int highlights,
                                      int shadows,
@@ -888,28 +921,30 @@ void MainWindow::handleDevelopRender(const QString &filePath,
                                      const QImage &image,
                                      const QString &error)
 {
-    const DevelopState renderedState{
-        temperatureKelvin,
-        tint,
-        exposureHundredths,
-        highlights,
-        shadows,
-        whites,
-        blacks,
-        contrast,
-        texture,
-        clarity,
-        dehaze,
-        saturation,
-        vibrance,
-    };
+    DevelopState renderedState;
+    renderedState.temperatureKelvin = temperatureKelvin;
+    renderedState.tint = tint;
+    renderedState.exposureHundredths = exposureHundredths;
+    renderedState.highlights = highlights;
+    renderedState.shadows = shadows;
+    renderedState.whites = whites;
+    renderedState.blacks = blacks;
+    renderedState.contrast = contrast;
+    renderedState.texture = texture;
+    renderedState.clarity = clarity;
+    renderedState.dehaze = dehaze;
+    renderedState.saturation = saturation;
+    renderedState.vibrance = vibrance;
+    renderedState.calibration = calibration;
 
     if (filePath != m_currentFilePath) {
         return;
     }
 
     if (renderedState != m_requestedState
-        && (!preview || !hasActiveDevelopSlider(m_basicPanel))) {
+        && (!preview
+            || (!hasActiveDevelopSlider(m_basicPanel)
+                && !m_calibrationPanel->isEditing()))) {
         return;
     }
 
@@ -935,7 +970,8 @@ void MainWindow::handleDevelopRender(const QString &filePath,
         m_fullQualityState = renderedState;
         m_renderService->preparePreview(filePath,
                                         temperatureKelvin,
-                                        tint);
+                                        tint,
+                                        calibration);
     }
 
     m_navigator->setImage(image);
@@ -1037,6 +1073,9 @@ void MainWindow::setDevelopControlsFromState(const DevelopState &state)
     }
     if (m_vibranceSlider) {
         m_vibranceSlider->setValue(state.vibrance);
+    }
+    if (m_calibrationPanel) {
+        m_calibrationPanel->setCalibration(state.calibration);
     }
 
     m_settingDevelopControls = false;

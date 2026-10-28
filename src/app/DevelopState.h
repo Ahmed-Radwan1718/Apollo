@@ -1,5 +1,7 @@
 #pragma once
 
+#include "imaging/RawCalibration.h"
+
 struct DevelopState {
     int temperatureKelvin = 0;
     int tint = 0;
@@ -14,6 +16,7 @@ struct DevelopState {
     int dehaze = 0;
     int saturation = 0;
     int vibrance = 0;
+    imaging::RawCalibration calibration;
 
     // Geometry is stored non-destructively. Crop coordinates use a normalized
     // 0..100000 space relative to the rotated image bounding box.
@@ -41,7 +44,8 @@ struct DevelopState {
             && clarity == other.clarity
             && dehaze == other.dehaze
             && saturation == other.saturation
-            && vibrance == other.vibrance;
+            && vibrance == other.vibrance
+            && calibration == other.calibration;
     }
 
     [[nodiscard]] bool fullyEquals(const DevelopState &other) const noexcept

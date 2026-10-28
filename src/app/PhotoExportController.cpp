@@ -129,6 +129,7 @@ ExportRenderResult renderForExport(const QString &filePath)
                                                state.dehaze,
                                                state.saturation,
                                                state.vibrance,
+                                               state.calibration,
                                                false);
     if (!result.image.isNull()) {
         result.image = imaging::applyCropTransform(result.image, state);

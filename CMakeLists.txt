@@ -45,6 +45,8 @@ qt_add_executable(Nexus WIN32
     src/imaging/PhotoMetadata.h
     src/imaging/PhotoMetadataLoader.cpp
     src/imaging/PhotoMetadataLoader.h
+    src/imaging/RawCalibration.cpp
+    src/imaging/RawCalibration.h
     src/imaging/TemperatureRenderService.cpp
     src/imaging/TemperatureRenderService.h
     src/imaging/ThumbnailLoader.cpp
@@ -72,6 +74,8 @@ qt_add_executable(Nexus WIN32
     src/ui/library/LibraryWorkspaceController.h
     src/ui/rightpanel/BasicPanel.cpp
     src/ui/rightpanel/BasicPanel.h
+    src/ui/rightpanel/CalibrationPanel.cpp
+    src/ui/rightpanel/CalibrationPanel.h
     src/ui/rightpanel/CropToolController.cpp
     src/ui/rightpanel/CropToolController.h
     src/ui/rightpanel/PhotoMetadataWidget.cpp

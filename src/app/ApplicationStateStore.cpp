@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int kStateSchemaVersion = 5;
+constexpr int kStateSchemaVersion = 6;
 constexpr auto kStateFileName = "apollo-state.json";
 
 QString stateFilePath()
@@ -84,6 +84,38 @@ void saveStateObject(QJsonObject root)
     file.commit();
 }
 
+QJsonObject calibrationToJson(const imaging::RawCalibration &calibration)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("shadowsTint"), calibration.shadowsTint);
+    object.insert(QStringLiteral("redPrimaryHue"), calibration.redPrimaryHue);
+    object.insert(QStringLiteral("redPrimarySaturation"), calibration.redPrimarySaturation);
+    object.insert(QStringLiteral("greenPrimaryHue"), calibration.greenPrimaryHue);
+    object.insert(QStringLiteral("greenPrimarySaturation"),
+                  calibration.greenPrimarySaturation);
+    object.insert(QStringLiteral("bluePrimaryHue"), calibration.bluePrimaryHue);
+    object.insert(QStringLiteral("bluePrimarySaturation"),
+                  calibration.bluePrimarySaturation);
+    return object;
+}
+
+imaging::RawCalibration calibrationFromJson(const QJsonObject &object)
+{
+    imaging::RawCalibration calibration;
+    const auto value = [&object](const char *name) {
+        return std::clamp(object.value(QString::fromLatin1(name)).toInt(0), -100, 100);
+    };
+
+    calibration.shadowsTint = value("shadowsTint");
+    calibration.redPrimaryHue = value("redPrimaryHue");
+    calibration.redPrimarySaturation = value("redPrimarySaturation");
+    calibration.greenPrimaryHue = value("greenPrimaryHue");
+    calibration.greenPrimarySaturation = value("greenPrimarySaturation");
+    calibration.bluePrimaryHue = value("bluePrimaryHue");
+    calibration.bluePrimarySaturation = value("bluePrimarySaturation");
+    return calibration;
+}
+
 QJsonObject developStateToJson(const DevelopState &state)
 {
     QJsonObject object;
@@ -100,6 +132,7 @@ QJsonObject developStateToJson(const DevelopState &state)
     object.insert(QStringLiteral("dehaze"), state.dehaze);
     object.insert(QStringLiteral("saturation"), state.saturation);
     object.insert(QStringLiteral("vibrance"), state.vibrance);
+    object.insert(QStringLiteral("calibration"), calibrationToJson(state.calibration));
     object.insert(QStringLiteral("cropX"), state.cropX);
     object.insert(QStringLiteral("cropY"), state.cropY);
     object.insert(QStringLiteral("cropWidth"), state.cropWidth);
@@ -129,6 +162,8 @@ DevelopState developStateFromJson(const QJsonObject &object)
     state.dehaze = object.value(QStringLiteral("dehaze")).toInt(state.dehaze);
     state.saturation = object.value(QStringLiteral("saturation")).toInt(state.saturation);
     state.vibrance = object.value(QStringLiteral("vibrance")).toInt(state.vibrance);
+    state.calibration = calibrationFromJson(
+        object.value(QStringLiteral("calibration")).toObject());
     state.cropX = object.value(QStringLiteral("cropX")).toInt(state.cropX);
     state.cropY = object.value(QStringLiteral("cropY")).toInt(state.cropY);
     state.cropWidth = object.value(QStringLiteral("cropWidth")).toInt(state.cropWidth);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "imaging/PhotoMetadata.h"
+#include "imaging/RawCalibration.h"
 
 #include <QImage>
 #include <QPointF>
@@ -40,6 +41,7 @@ public:
                                        int dehaze = 0,
                                        int saturation = 0,
                                        int vibrance = 0,
+                                       const RawCalibration &calibration = RawCalibration{},
                                        bool halfSizePreview = false);
 
     [[nodiscard]] static WhiteBalancePickResult pickWhiteBalance(

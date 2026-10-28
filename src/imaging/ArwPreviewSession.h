@@ -1,5 +1,7 @@
 #pragma once
 
+#include "imaging/RawCalibration.h"
+
 #include <QImage>
 #include <QString>
 
@@ -19,12 +21,14 @@ public:
     [[nodiscard]] bool prepare(const QString &filePath,
                                int whiteBalanceTemperatureKelvin,
                                int tint,
+                               const RawCalibration &calibration,
                                QString *error = nullptr);
 
     [[nodiscard]] QImage render(const QString &filePath,
                                 QString *error,
                                 int whiteBalanceTemperatureKelvin,
                                 int tint,
+                                const RawCalibration &calibration,
                                 int exposureHundredths,
                                 int highlights,
                                 int shadows,
