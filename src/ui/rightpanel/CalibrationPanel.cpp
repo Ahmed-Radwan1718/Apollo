@@ -236,6 +236,7 @@ CalibrationPanel::CalibrationPanel(QWidget *parent)
                                     contentLayout,
                                     tr("Tint"),
                                     tr("Shadows Tint"));
+    m_shadowsTintSlider->setProperty("gradientRole", QStringLiteral("shadowsTint"));
 
     contentLayout->addSpacing(7);
     contentLayout->addWidget(sectionLabel(tr("Red Primary"), m_content));
@@ -243,10 +244,12 @@ CalibrationPanel::CalibrationPanel(QWidget *parent)
                                contentLayout,
                                tr("Hue"),
                                tr("Red Primary Hue"));
+    m_redHueSlider->setProperty("gradientRole", QStringLiteral("redHue"));
     m_redSaturationSlider = addSlider(m_content,
                                       contentLayout,
                                       tr("Saturation"),
                                       tr("Red Primary Saturation"));
+    m_redSaturationSlider->setProperty("gradientRole", QStringLiteral("redSaturation"));
 
     contentLayout->addSpacing(7);
     contentLayout->addWidget(sectionLabel(tr("Green Primary"), m_content));
@@ -254,10 +257,12 @@ CalibrationPanel::CalibrationPanel(QWidget *parent)
                                  contentLayout,
                                  tr("Hue"),
                                  tr("Green Primary Hue"));
+    m_greenHueSlider->setProperty("gradientRole", QStringLiteral("greenHue"));
     m_greenSaturationSlider = addSlider(m_content,
                                         contentLayout,
                                         tr("Saturation"),
                                         tr("Green Primary Saturation"));
+    m_greenSaturationSlider->setProperty("gradientRole", QStringLiteral("greenSaturation"));
 
     contentLayout->addSpacing(7);
     contentLayout->addWidget(sectionLabel(tr("Blue Primary"), m_content));
@@ -265,10 +270,12 @@ CalibrationPanel::CalibrationPanel(QWidget *parent)
                                 contentLayout,
                                 tr("Hue"),
                                 tr("Blue Primary Hue"));
+    m_blueHueSlider->setProperty("gradientRole", QStringLiteral("blueHue"));
     m_blueSaturationSlider = addSlider(m_content,
                                        contentLayout,
                                        tr("Saturation"),
                                        tr("Blue Primary Saturation"));
+    m_blueSaturationSlider->setProperty("gradientRole", QStringLiteral("blueSaturation"));
 
     m_content->hide();
     outerLayout->addWidget(m_content);
@@ -334,6 +341,34 @@ CalibrationPanel::CalibrationPanel(QWidget *parent)
         "  border-radius: 1px;"
         "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
         "    stop:0 #303030, stop:0.5 #626262, stop:1 #9b9b9b);"
+        "}"
+        "QSlider#calibrationSlider[gradientRole=\"shadowsTint\"]::groove:horizontal {"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+        "    stop:0 #38b96b, stop:0.5 #696969, stop:1 #c94fb3);"
+        "}"
+        "QSlider#calibrationSlider[gradientRole=\"redHue\"]::groove:horizontal {"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+        "    stop:0 #c843a1, stop:0.5 #d84d4d, stop:1 #e9953f);"
+        "}"
+        "QSlider#calibrationSlider[gradientRole=\"redSaturation\"]::groove:horizontal {"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+        "    stop:0 #555555, stop:0.5 #8c4646, stop:1 #d95650);"
+        "}"
+        "QSlider#calibrationSlider[gradientRole=\"greenHue\"]::groove:horizontal {"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+        "    stop:0 #b8a83f, stop:0.5 #48aa58, stop:1 #3db6a4);"
+        "}"
+        "QSlider#calibrationSlider[gradientRole=\"greenSaturation\"]::groove:horizontal {"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+        "    stop:0 #555555, stop:0.5 #477b4e, stop:1 #4db45e);"
+        "}"
+        "QSlider#calibrationSlider[gradientRole=\"blueHue\"]::groove:horizontal {"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+        "    stop:0 #43b7b5, stop:0.5 #4779c4, stop:1 #7950bd);"
+        "}"
+        "QSlider#calibrationSlider[gradientRole=\"blueSaturation\"]::groove:horizontal {"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+        "    stop:0 #555555, stop:0.5 #466d7d, stop:1 #42aabd);"
         "}"
         "QSlider#calibrationSlider::sub-page:horizontal,"
         "QSlider#calibrationSlider::add-page:horizontal { background: transparent; }"
