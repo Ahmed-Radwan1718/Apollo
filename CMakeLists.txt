@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Widgets Svg)
 qt_standard_project_setup()
 
 include(cmake/LibRaw.cmake)
@@ -78,6 +78,8 @@ qt_add_executable(Nexus WIN32
     src/ui/rightpanel/CalibrationPanel.h
     src/ui/rightpanel/CropToolController.cpp
     src/ui/rightpanel/CropToolController.h
+    src/ui/rightpanel/DevelopToolPlaceholderButtons.cpp
+    src/ui/rightpanel/DevelopToolPlaceholderButtons.h
     src/ui/rightpanel/PhotoMetadataWidget.cpp
     src/ui/rightpanel/PhotoMetadataWidget.h
     src/ui/rightpanel/WhiteBalancePickerController.cpp
@@ -86,9 +88,17 @@ qt_add_executable(Nexus WIN32
     src/ui/workspace/WorkspaceModeBar.h
 )
 
+qt_add_resources(Nexus "apollo_icons"
+    PREFIX "/"
+    FILES
+        resources/icons/mask.svg
+        resources/icons/eraser.svg
+)
+
 target_include_directories(Nexus PRIVATE src)
 target_link_libraries(Nexus PRIVATE
     Qt6::Widgets
+    Qt6::Svg
     libraw::libraw_r
 )
 
