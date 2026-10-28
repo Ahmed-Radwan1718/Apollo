@@ -216,7 +216,7 @@ MainWindow::MainWindow(QWidget *parent)
     adjustmentsScrollArea->setObjectName(QStringLiteral("adjustmentsScrollArea"));
     adjustmentsScrollArea->setWidgetResizable(true);
     adjustmentsScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    adjustmentsScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    adjustmentsScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     adjustmentsScrollArea->setFrameShape(QFrame::NoFrame);
 
     auto *adjustmentsContainer = new QWidget(adjustmentsScrollArea);
