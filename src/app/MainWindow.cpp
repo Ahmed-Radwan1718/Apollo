@@ -230,7 +230,6 @@ MainWindow::MainWindow(QWidget *parent)
     adjustmentsLayout->addWidget(m_basicPanel);
 
     m_calibrationPanel = new CalibrationPanel(adjustmentsContainer);
-    m_calibrationPanel->setEnabled(false);
     adjustmentsLayout->addWidget(m_calibrationPanel);
     adjustmentsLayout->addStretch(1);
 
@@ -623,7 +622,10 @@ void MainWindow::openImage(const QString &filePath)
         QMessageBox::critical(
             this,
             tr("Could not open photo"),
-            tr("Nexus could not decode:\n%1\n\n%2")
+            tr("Nexus could not decode:\
+%1\
+\
+%2")
                 .arg(QDir::toNativeSeparators(filePath), result.error));
         return;
     }
@@ -651,7 +653,6 @@ void MainWindow::openImage(const QString &filePath)
     const bool rawPhoto = isArwPath(m_currentFilePath);
     m_whiteBalancePickerController->setActive(false);
     m_whiteBalancePickerController->setEnabled(rawPhoto);
-    m_calibrationPanel->setEnabled(rawPhoto);
 
     m_canvas->setImage(result.image);
     m_navigator->setImage(result.image);
@@ -976,7 +977,10 @@ void MainWindow::handleDevelopRender(const QString &filePath,
             QMessageBox::critical(
                 this,
                 tr("Could not render adjustments"),
-                tr("Nexus could not render the requested RAW adjustments:\n%1\n\n%2")
+                tr("Nexus could not render the requested RAW adjustments:\
+%1\
+\
+%2")
                     .arg(QDir::toNativeSeparators(m_currentFilePath), error));
         }
         return;
@@ -1014,7 +1018,9 @@ void MainWindow::handleWhiteBalancePick(const QString &filePath,
         QMessageBox::warning(
             this,
             tr("Could not set white balance"),
-            tr("Nexus could not use that area as a neutral white-balance sample.\n\n%1")
+            tr("Nexus could not use that area as a neutral white-balance sample.\
+\
+%1")
                 .arg(error));
         return;
     }
