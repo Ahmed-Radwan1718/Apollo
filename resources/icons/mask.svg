@@ -1,20 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" shape-rendering="geometricPrecision">
   <g fill="#ffffff">
-    <circle cx="12.000" cy="4.000" r="0.82"/>
-    <circle cx="15.061" cy="4.609" r="0.82"/>
-    <circle cx="17.657" cy="6.343" r="0.82"/>
-    <circle cx="19.391" cy="8.939" r="0.82"/>
-    <circle cx="20.000" cy="12.000" r="0.82"/>
-    <circle cx="19.391" cy="15.061" r="0.82"/>
-    <circle cx="17.657" cy="17.657" r="0.82"/>
-    <circle cx="15.061" cy="19.391" r="0.82"/>
-    <circle cx="12.000" cy="20.000" r="0.82"/>
-    <circle cx="8.939" cy="19.391" r="0.82"/>
-    <circle cx="6.343" cy="17.657" r="0.82"/>
-    <circle cx="4.609" cy="15.061" r="0.82"/>
-    <circle cx="4.000" cy="12.000" r="0.82"/>
-    <circle cx="4.609" cy="8.939" r="0.82"/>
-    <circle cx="6.343" cy="6.343" r="0.82"/>
-    <circle cx="8.939" cy="4.609" r="0.82"/>
+    <circle cx="12.000" cy="2.750" r="0.84"/>
+    <circle cx="15.540" cy="3.454" r="0.84"/>
+    <circle cx="18.541" cy="5.459" r="0.84"/>
+    <circle cx="20.546" cy="8.460" r="0.84"/>
+    <circle cx="21.250" cy="12.000" r="0.84"/>
+    <circle cx="20.546" cy="15.540" r="0.84"/>
+    <circle cx="18.541" cy="18.541" r="0.84"/>
+    <circle cx="15.540" cy="20.546" r="0.84"/>
+    <circle cx="12.000" cy="21.250" r="0.84"/>
+    <circle cx="8.460" cy="20.546" r="0.84"/>
+    <circle cx="5.459" cy="18.541" r="0.84"/>
+    <circle cx="3.454" cy="15.540" r="0.84"/>
+    <circle cx="2.750" cy="12.000" r="0.84"/>
+    <circle cx="3.454" cy="8.460" r="0.84"/>
+    <circle cx="5.459" cy="5.459" r="0.84"/>
+    <circle cx="8.460" cy="3.454" r="0.84"/>
   </g>
 </svg>
