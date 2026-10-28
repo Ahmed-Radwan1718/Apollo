@@ -12,6 +12,8 @@
 #include <QKeySequence>
 #include <QMenu>
 #include <QMenuBar>
+#include <QScrollArea>
+#include <QScrollBar>
 
 int main(int argc, char *argv[])
 {
@@ -23,9 +25,9 @@ int main(int argc, char *argv[])
 
     MainWindow window;
 
-    if (QWidget *adjustmentsScrollArea =
-            window.findChild<QWidget *>(QStringLiteral("adjustmentsScrollArea"))) {
-        adjustmentsScrollArea->setStyleSheet(QStringLiteral(
+    if (QScrollArea *adjustmentsScrollArea =
+            window.findChild<QScrollArea *>(QStringLiteral("adjustmentsScrollArea"))) {
+        adjustmentsScrollArea->verticalScrollBar()->setStyleSheet(QStringLiteral(
             "QScrollBar:vertical { width: 0px; margin: 0px; }"));
     }
 
