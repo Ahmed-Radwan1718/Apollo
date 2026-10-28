@@ -1,20 +1,109 @@
 #include "imaging/ArwPreviewSession.h"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <memory>
+#include <numbers>
 
 namespace imaging {
 
 struct ArwPreviewSession::Impl
 {
     static constexpr int kMaximumPreviewLongSide = 1280;
+    static constexpr double kSceneMiddleGray = 0.18;
+    static constexpr double kShadowTintStartEv = -0.5;
+    static constexpr double kShadowTintFullEv = -3.0;
+    static constexpr double kShadowTintMaximumLogShift = 0.30010459245033816; // ln(1.35)
+    static constexpr double kMaximumPrimaryHueDegrees = 30.0;
+    static constexpr double kLinearSrgbRedLuminance = 0.2126;
+    static constexpr double kLinearSrgbGreenLuminance = 0.7152;
+    static constexpr double kLinearSrgbBlueLuminance = 0.0722;
     using Matrix3 = std::array<double, 9>;
 
     ~Impl()
     {
         clearCachedImage();
+    }
+
+    static int clampedCalibrationValue(int value)
+    {
+        return std::clamp(value, -100, 100);
+    }
+
+    static double smoothstep01(double value)
+    {
+        const double clamped = std::clamp(value, 0.0, 1.0);
+        return clamped * clamped * (3.0 - 2.0 * clamped);
+    }
+
+    static double shadowTintWeight(double linearLuminance)
+    {
+        if (!(linearLuminance > 0.0)) {
+            return 1.0;
+        }
+
+        const double sceneEv = std::log2(linearLuminance / kSceneMiddleGray);
+        if (sceneEv >= kShadowTintStartEv) {
+            return 0.0;
+        }
+        if (sceneEv <= kShadowTintFullEv) {
+            return 1.0;
+        }
+
+        const double normalized = (kShadowTintStartEv - sceneEv)
+            / (kShadowTintStartEv - kShadowTintFullEv);
+        return smoothstep01(normalized);
+    }
+
+    static void adjustPrimaryColumn(Matrix3 &matrix,
+                                    int column,
+                                    int hue,
+                                    int saturation)
+    {
+        const int clampedHue = clampedCalibrationValue(hue);
+        const int clampedSaturation = clampedCalibrationValue(saturation);
+        if (clampedHue == 0 && clampedSaturation == 0) {
+            return;
+        }
+
+        const double red = matrix[column];
+        const double green = matrix[3 + column];
+        const double blue = matrix[6 + column];
+        const double luminance = red * kLinearSrgbRedLuminance
+            + green * kLinearSrgbGreenLuminance
+            + blue * kLinearSrgbBlueLuminance;
+
+        const double redOpponent = red - luminance;
+        const double blueOpponent = blue - luminance;
+        const double angle = (static_cast<double>(clampedHue) / 100.0)
+            * kMaximumPrimaryHueDegrees
+            * std::numbers::pi_v<double> / 180.0;
+        const double chromaScale = std::max(
+            0.0, 1.0 + static_cast<double>(clampedSaturation) / 100.0);
+        const double cosine = std::cos(angle);
+        const double sine = std::sin(angle);
+        const double rotatedRed = chromaScale
+            * (cosine * redOpponent - sine * blueOpponent);
+        const double rotatedBlue = chromaScale
+            * (sine * redOpponent + cosine * blueOpponent);
+
+        const double calibratedRed = luminance + rotatedRed;
+        const double calibratedBlue = luminance + rotatedBlue;
+        const double calibratedGreen =
+            (luminance
+             - kLinearSrgbRedLuminance * calibratedRed
+             - kLinearSrgbBlueLuminance * calibratedBlue)
+            / kLinearSrgbGreenLuminance;
+
+        if (std::isfinite(calibratedRed)
+            && std::isfinite(calibratedGreen)
+            && std::isfinite(calibratedBlue)) {
+            matrix[column] = calibratedRed;
+            matrix[3 + column] = calibratedGreen;
+            matrix[6 + column] = calibratedBlue;
+        }
     }
 
     static void destroyLinearImage(libraw_processed_image_t *&image)
@@ -327,21 +416,6 @@ struct ArwPreviewSession::Impl
         return true;
     }
 
-    static Matrix3 multiplyMatrices(const Matrix3 &left, const Matrix3 &right)
-    {
-        Matrix3 product{};
-        for (int row = 0; row < 3; ++row) {
-            for (int column = 0; column < 3; ++column) {
-                double value = 0.0;
-                for (int inner = 0; inner < 3; ++inner) {
-                    value += left[row * 3 + inner] * right[inner * 3 + column];
-                }
-                product[row * 3 + column] = value;
-            }
-        }
-        return product;
-    }
-
     bool whiteBalanceMultipliers(int temperatureKelvin,
                                  int tint,
                                  std::array<double, 3> &multipliers) const
@@ -389,11 +463,18 @@ struct ArwPreviewSession::Impl
         return std::isfinite(multipliers[0]) && std::isfinite(multipliers[2]);
     }
 
-    bool temperatureTransform(int targetTemperatureKelvin,
-                              int tint,
-                              Matrix3 &transform) const
+    bool interactivePreviewParameters(int targetTemperatureKelvin,
+                                      int tint,
+                                      const RawCalibration &calibration,
+                                      Matrix3 &cameraToLinearSrgb,
+                                      Matrix3 &linearSrgbToCamera,
+                                      Matrix3 &targetCameraToLinearSrgb,
+                                      std::array<double, 3> &multiplierRatios) const
     {
-        if (!processor || cachedImage == nullptr) {
+        if (!processor
+            || cachedImage == nullptr
+            || !cachedCalibration.isNeutral()
+            || processor->imgdata.idata.colors != 3) {
             return false;
         }
 
@@ -408,7 +489,6 @@ struct ArwPreviewSession::Impl
             return false;
         }
 
-        std::array<double, 3> multiplierRatios{};
         for (int channel = 0; channel < 3; ++channel) {
             if (!(sourceMultipliers[channel] > 0.0)) {
                 return false;
@@ -421,7 +501,6 @@ struct ArwPreviewSession::Impl
             }
         }
 
-        Matrix3 cameraToLinearSrgb{};
         for (int row = 0; row < 3; ++row) {
             for (int column = 0; column < 3; ++column) {
                 const double value = processor->imgdata.color.rgb_cam[row][column];
@@ -432,23 +511,24 @@ struct ArwPreviewSession::Impl
             }
         }
 
-        Matrix3 linearSrgbToCamera{};
         if (!invertMatrix(cameraToLinearSrgb, linearSrgbToCamera)) {
             return false;
         }
 
-        Matrix3 targetCameraToLinearSrgb = cameraToLinearSrgb;
-        for (int row = 0; row < 3; ++row) {
-            for (int column = 0; column < 3; ++column) {
-                targetCameraToLinearSrgb[row * 3 + column] *=
-                    multiplierRatios[column];
-            }
-        }
-
-        transform = multiplyMatrices(targetCameraToLinearSrgb,
-                                     linearSrgbToCamera);
-        return std::all_of(transform.cbegin(), transform.cend(),
-                           [](double value) { return std::isfinite(value); });
+        targetCameraToLinearSrgb = cameraToLinearSrgb;
+        adjustPrimaryColumn(targetCameraToLinearSrgb,
+                            0,
+                            calibration.redPrimaryHue,
+                            calibration.redPrimarySaturation);
+        adjustPrimaryColumn(targetCameraToLinearSrgb,
+                            1,
+                            calibration.greenPrimaryHue,
+                            calibration.greenPrimarySaturation);
+        adjustPrimaryColumn(targetCameraToLinearSrgb,
+                            2,
+                            calibration.bluePrimaryHue,
+                            calibration.bluePrimarySaturation);
+        return true;
     }
 
     bool ensureTemperaturePreviewImage(QString *error)
@@ -471,7 +551,7 @@ struct ArwPreviewSession::Impl
         void *storage = ::operator new(allocationBytes, std::nothrow);
         if (storage == nullptr) {
             setError(error,
-                     QStringLiteral("Not enough memory to create the interactive temperature preview."));
+                     QStringLiteral("Not enough memory to create the interactive develop preview."));
             return false;
         }
 
@@ -485,16 +565,28 @@ struct ArwPreviewSession::Impl
         return true;
     }
 
-    libraw_processed_image_t *buildTemperaturePreview(int temperatureKelvin,
+    libraw_processed_image_t *buildInteractivePreview(int temperatureKelvin,
                                                        int tint,
+                                                       const RawCalibration &calibration,
                                                        QString *error)
     {
-        Matrix3 transform{};
-        if (!temperatureTransform(temperatureKelvin, tint, transform)
+        Matrix3 cameraToLinearSrgb{};
+        Matrix3 linearSrgbToCamera{};
+        Matrix3 targetCameraToLinearSrgb{};
+        std::array<double, 3> multiplierRatios{};
+        if (!interactivePreviewParameters(temperatureKelvin,
+                                          tint,
+                                          calibration,
+                                          cameraToLinearSrgb,
+                                          linearSrgbToCamera,
+                                          targetCameraToLinearSrgb,
+                                          multiplierRatios)
             || !ensureTemperaturePreviewImage(error)) {
             return nullptr;
         }
 
+        const double shadowTintAmount =
+            static_cast<double>(clampedCalibrationValue(calibration.shadowsTint)) / 100.0;
         const std::size_t pixelCount =
             static_cast<std::size_t>(cachedImage->width) * cachedImage->height;
         const auto *source = reinterpret_cast<const std::uint16_t *>(cachedImage->data);
@@ -503,19 +595,65 @@ struct ArwPreviewSession::Impl
 
         for (std::size_t pixel = 0; pixel < pixelCount; ++pixel) {
             const std::size_t offset = pixel * 3;
-            const double red = source[offset];
-            const double green = source[offset + 1];
-            const double blue = source[offset + 2];
+            const double sourceRed = source[offset];
+            const double sourceGreen = source[offset + 1];
+            const double sourceBlue = source[offset + 2];
 
-            const double transformedRed = transform[0] * red
-                + transform[1] * green
-                + transform[2] * blue;
-            const double transformedGreen = transform[3] * red
-                + transform[4] * green
-                + transform[5] * blue;
-            const double transformedBlue = transform[6] * red
-                + transform[7] * green
-                + transform[8] * blue;
+            std::array<double, 3> camera{
+                linearSrgbToCamera[0] * sourceRed
+                    + linearSrgbToCamera[1] * sourceGreen
+                    + linearSrgbToCamera[2] * sourceBlue,
+                linearSrgbToCamera[3] * sourceRed
+                    + linearSrgbToCamera[4] * sourceGreen
+                    + linearSrgbToCamera[5] * sourceBlue,
+                linearSrgbToCamera[6] * sourceRed
+                    + linearSrgbToCamera[7] * sourceGreen
+                    + linearSrgbToCamera[8] * sourceBlue,
+            };
+
+            for (int channel = 0; channel < 3; ++channel) {
+                camera[channel] *= multiplierRatios[channel];
+            }
+
+            if (shadowTintAmount != 0.0) {
+                const double baselineRed = cameraToLinearSrgb[0] * camera[0]
+                    + cameraToLinearSrgb[1] * camera[1]
+                    + cameraToLinearSrgb[2] * camera[2];
+                const double baselineGreen = cameraToLinearSrgb[3] * camera[0]
+                    + cameraToLinearSrgb[4] * camera[1]
+                    + cameraToLinearSrgb[5] * camera[2];
+                const double baselineBlue = cameraToLinearSrgb[6] * camera[0]
+                    + cameraToLinearSrgb[7] * camera[1]
+                    + cameraToLinearSrgb[8] * camera[2];
+                const double baselineLuminance = std::max(
+                    0.0,
+                    (baselineRed * kLinearSrgbRedLuminance
+                     + baselineGreen * kLinearSrgbGreenLuminance
+                     + baselineBlue * kLinearSrgbBlueLuminance)
+                        / static_cast<double>(kLinearMaximum));
+                const double weight = shadowTintWeight(baselineLuminance);
+
+                if (weight > 0.0) {
+                    const double shift = shadowTintAmount
+                        * kShadowTintMaximumLogShift
+                        * weight;
+                    const double redBlueGain = std::exp(0.5 * shift);
+                    const double greenGain = std::exp(-shift);
+                    camera[0] *= redBlueGain;
+                    camera[1] *= greenGain;
+                    camera[2] *= redBlueGain;
+                }
+            }
+
+            const double transformedRed = targetCameraToLinearSrgb[0] * camera[0]
+                + targetCameraToLinearSrgb[1] * camera[1]
+                + targetCameraToLinearSrgb[2] * camera[2];
+            const double transformedGreen = targetCameraToLinearSrgb[3] * camera[0]
+                + targetCameraToLinearSrgb[4] * camera[1]
+                + targetCameraToLinearSrgb[5] * camera[2];
+            const double transformedBlue = targetCameraToLinearSrgb[6] * camera[0]
+                + targetCameraToLinearSrgb[7] * camera[1]
+                + targetCameraToLinearSrgb[8] * camera[2];
 
             destination[offset] = static_cast<std::uint16_t>(std::lround(
                 std::clamp(transformedRed,
@@ -534,16 +672,10 @@ struct ArwPreviewSession::Impl
         return temperaturePreviewImage;
     }
 
-    bool canUseFastTemperaturePreview(int temperatureKelvin,
-                                      int tint,
-                                      const RawCalibration &calibration) const
+    bool cachedPreviewMatches(int temperatureKelvin,
+                              int tint,
+                              const RawCalibration &calibration) const
     {
-        if (cachedImage == nullptr
-            || !calibration.isNeutral()
-            || !cachedCalibration.isNeutral()) {
-            return false;
-        }
-
         const int requestedTemperatureKelvin = temperatureKelvin > 0
             ? std::clamp(temperatureKelvin,
                          kSonyTemperatureMinimumKelvin,
@@ -551,8 +683,10 @@ struct ArwPreviewSession::Impl
             : 0;
         const int requestedTint = std::clamp(tint, kTintMinimum, kTintMaximum);
 
-        return cachedTint == requestedTint
-            && cachedTemperatureKelvin != requestedTemperatureKelvin;
+        return cachedImage != nullptr
+            && cachedTemperatureKelvin == requestedTemperatureKelvin
+            && cachedTint == requestedTint
+            && cachedCalibration == calibration;
     }
 
     QString filePath;
@@ -579,14 +713,19 @@ bool ArwPreviewSession::prepare(const QString &filePath,
                                 const RawCalibration &calibration,
                                 QString *error)
 {
+    Q_UNUSED(calibration);
+
     if (error != nullptr) {
         error->clear();
     }
 
+    // Keep a neutral linear preview cached. Calibration can then be applied to
+    // that 1280px buffer interactively instead of rerunning LibRaw for every
+    // slider position. Full-resolution commits still use CalibratedLibRaw.
     return m_impl->ensureRaw(filePath, error)
         && m_impl->refreshWhiteBalance(whiteBalanceTemperatureKelvin,
                                        tint,
-                                       calibration,
+                                       RawCalibration{},
                                        error);
 }
 
@@ -615,15 +754,32 @@ QImage ArwPreviewSession::render(const QString &filePath,
         return {};
     }
 
+    // Calibration previews are generated from a neutral, linear, half-size
+    // cache. This keeps dragging responsive while the full render path remains
+    // unchanged and authoritative on commit.
+    if (m_impl->cachedImage == nullptr || !m_impl->cachedCalibration.isNeutral()) {
+        if (!m_impl->refreshWhiteBalance(whiteBalanceTemperatureKelvin,
+                                         tint,
+                                         RawCalibration{},
+                                         error)) {
+            return {};
+        }
+    }
+
     libraw_processed_image_t *linearPreview = nullptr;
-    if (m_impl->canUseFastTemperaturePreview(whiteBalanceTemperatureKelvin,
-                                             tint,
-                                             calibration)) {
-        linearPreview = m_impl->buildTemperaturePreview(whiteBalanceTemperatureKelvin,
+    if (m_impl->cachedPreviewMatches(whiteBalanceTemperatureKelvin,
+                                     tint,
+                                     calibration)) {
+        linearPreview = m_impl->cachedImage;
+    } else {
+        linearPreview = m_impl->buildInteractivePreview(whiteBalanceTemperatureKelvin,
                                                         tint,
+                                                        calibration,
                                                         error);
     }
 
+    // Preserve the existing slow path as a correctness fallback for unusual
+    // RAW color models or matrices that cannot be inverted safely.
     if (linearPreview == nullptr) {
         if (error != nullptr) {
             error->clear();
