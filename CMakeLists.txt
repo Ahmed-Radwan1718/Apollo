@@ -93,6 +93,7 @@ qt_add_resources(Nexus "apollo_icons"
     FILES
         resources/icons/mask.svg
         resources/icons/eraser.svg
+        resources/icons/red-eye.svg
 )
 
 target_include_directories(Nexus PRIVATE src)

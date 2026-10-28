@@ -111,6 +111,13 @@ void installDevelopToolPlaceholderButtons(QWidget *root)
         toolStrip);
     eraserButton->setObjectName(QStringLiteral("eraserToolSelector"));
 
+    auto *redEyeButton = new SvgPlaceholderButton(
+        QStringLiteral(":/resources/icons/red-eye.svg"),
+        QObject::tr("Red Eye"),
+        toolStrip);
+    redEyeButton->setObjectName(QStringLiteral("redEyeToolSelector"));
+
     layout->insertWidget(cropIndex + 1, maskButton);
     layout->insertWidget(cropIndex + 2, eraserButton);
+    layout->insertWidget(cropIndex + 3, redEyeButton);
 }
