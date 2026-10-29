@@ -13,6 +13,7 @@
 #include <QList>
 #include <QPainter>
 #include <QSize>
+#include <QToolButton>
 #include <QTransform>
 
 #include <algorithm>
