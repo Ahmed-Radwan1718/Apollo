@@ -21,6 +21,7 @@ class NavigatorPanel;
 class PhotoCanvas;
 class PhotoMetadataWidget;
 class QSlider;
+class TransformController;
 class WhiteBalancePickerController;
 
 namespace imaging {
@@ -65,6 +66,7 @@ private slots:
 
 private:
     friend class CropToolController;
+    friend class TransformController;
 
     void createActions();
     void previewTemperature(int kelvin);

@@ -21,6 +21,11 @@ class CropToolController final : public QObject
 public:
     explicit CropToolController(MainWindow *window, QObject *parent = nullptr);
 
+    // Shared by Transform so all geometry is previewed through the same canvas
+    // owner instead of competing QGraphicsItem transforms.
+    void previewGeometryState(const DevelopState &state, bool forceFit = false);
+    void refreshGeometryFromWindowState(bool forceFit = false);
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 

@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int kStateSchemaVersion = 6;
+constexpr int kStateSchemaVersion = 7;
 constexpr auto kStateFileName = "apollo-state.json";
 
 QString stateFilePath()
@@ -141,6 +141,15 @@ QJsonObject developStateToJson(const DevelopState &state)
     object.insert(QStringLiteral("cropStraightenHundredths"),
                   state.cropStraightenHundredths);
     object.insert(QStringLiteral("cropAspectMode"), state.cropAspectMode);
+    object.insert(QStringLiteral("transformVertical"), state.transformVertical);
+    object.insert(QStringLiteral("transformHorizontal"), state.transformHorizontal);
+    object.insert(QStringLiteral("transformRotateHundredths"),
+                  state.transformRotateHundredths);
+    object.insert(QStringLiteral("transformAspect"), state.transformAspect);
+    object.insert(QStringLiteral("transformScale"), state.transformScale);
+    object.insert(QStringLiteral("transformXOffset"), state.transformXOffset);
+    object.insert(QStringLiteral("transformYOffset"), state.transformYOffset);
+    object.insert(QStringLiteral("transformConstrainCrop"), state.transformConstrainCrop);
     return object;
 }
 
@@ -175,6 +184,31 @@ DevelopState developStateFromJson(const QJsonObject &object)
             .toInt(state.cropStraightenHundredths);
     state.cropAspectMode = object.value(QStringLiteral("cropAspectMode"))
                                .toInt(state.cropAspectMode);
+    state.transformVertical = std::clamp(
+        object.value(QStringLiteral("transformVertical")).toInt(state.transformVertical),
+        -100, 100);
+    state.transformHorizontal = std::clamp(
+        object.value(QStringLiteral("transformHorizontal")).toInt(state.transformHorizontal),
+        -100, 100);
+    state.transformRotateHundredths = std::clamp(
+        object.value(QStringLiteral("transformRotateHundredths"))
+            .toInt(state.transformRotateHundredths),
+        -1000, 1000);
+    state.transformAspect = std::clamp(
+        object.value(QStringLiteral("transformAspect")).toInt(state.transformAspect),
+        -100, 100);
+    state.transformScale = std::clamp(
+        object.value(QStringLiteral("transformScale")).toInt(state.transformScale),
+        50, 150);
+    state.transformXOffset = std::clamp(
+        object.value(QStringLiteral("transformXOffset")).toInt(state.transformXOffset),
+        -100, 100);
+    state.transformYOffset = std::clamp(
+        object.value(QStringLiteral("transformYOffset")).toInt(state.transformYOffset),
+        -100, 100);
+    state.transformConstrainCrop =
+        object.value(QStringLiteral("transformConstrainCrop"))
+            .toBool(state.transformConstrainCrop);
     return state;
 }
 

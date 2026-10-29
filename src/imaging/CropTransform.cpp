@@ -1,5 +1,8 @@
 #include "imaging/CropTransform.h"
 
+#include "imaging/GeometryTransform.h"
+
+#include <QPainter>
 #include <QTransform>
 
 #include <algorithm>
@@ -24,6 +27,27 @@ QRectF clampedNormalizedRect(QRectF rect)
     const qreal x = std::clamp(rect.x(), 0.0, 1.0 - width);
     const qreal y = std::clamp(rect.y(), 0.0, 1.0 - height);
     return QRectF(x, y, width, height);
+}
+
+QImage cropNormalizedRect(const QImage &image, const QRectF &normalized)
+{
+    if (image.isNull()) {
+        return image;
+    }
+
+    QRect pixelRect(
+        static_cast<int>(std::floor(normalized.left() * image.width())),
+        static_cast<int>(std::floor(normalized.top() * image.height())),
+        std::max(1, static_cast<int>(std::ceil(normalized.width() * image.width()))),
+        std::max(1, static_cast<int>(std::ceil(normalized.height() * image.height()))));
+    pixelRect = pixelRect.intersected(image.rect());
+    if (pixelRect.isEmpty()) {
+        return image;
+    }
+
+    QImage cropped = image.copy(pixelRect);
+    cropped.setDevicePixelRatio(1.0);
+    return cropped;
 }
 
 } // namespace
@@ -75,7 +99,9 @@ bool hasCropGeometry(const DevelopState &state) noexcept
         || state.cropWidth != kCropCoordinateScale
         || state.cropHeight != kCropCoordinateScale
         || normalizedQuarterTurns(state.cropQuarterTurns) != 0
-        || state.cropStraightenHundredths != 0;
+        || state.cropStraightenHundredths != 0
+        || hasManualTransform(state)
+        || state.transformConstrainCrop;
 }
 
 QRectF safeCropRectForStraighten(const QSizeF &sourceSize,
@@ -141,40 +167,79 @@ QRectF safeCropRectForStraighten(const QSizeF &sourceSize,
                   normalizedHeight);
 }
 
+QRectF safeCropRectForGeometry(const QSizeF &sourceSize,
+                               const DevelopState &state)
+{
+    if (hasManualTransform(state)) {
+        const GeometryMapping mapping = geometryMappingForState(sourceSize, state, true);
+        if (mapping.valid && mapping.safeNormalizedRect.isValid()
+            && !mapping.safeNormalizedRect.isEmpty()) {
+            return clampedNormalizedRect(mapping.safeNormalizedRect);
+        }
+    }
+    return safeCropRectForStraighten(sourceSize, state);
+}
+
+QRectF effectiveCropRectFromState(const QSizeF &sourceSize,
+                                  const DevelopState &state)
+{
+    QRectF crop = cropRectFromState(state);
+    if (!state.transformConstrainCrop) {
+        return crop;
+    }
+
+    const QRectF safe = safeCropRectForGeometry(sourceSize, state);
+    const QRectF constrained = crop.intersected(safe);
+    return constrained.isValid() && !constrained.isEmpty()
+        ? clampedNormalizedRect(constrained)
+        : clampedNormalizedRect(safe);
+}
+
 QImage applyCropTransform(const QImage &image, const DevelopState &state)
 {
     if (image.isNull() || !hasCropGeometry(state)) {
         return image;
     }
 
-    QImage transformed = image;
-    const qreal rotation = cropRotationDegrees(state);
-    if (std::abs(rotation) > kEpsilon) {
-        QTransform transform;
-        transform.rotate(rotation);
-        transformed = image.transformed(transform, Qt::SmoothTransformation);
-        transformed.setDevicePixelRatio(1.0);
+    if (!hasManualTransform(state)) {
+        QImage transformed = image;
+        const qreal rotation = cropRotationDegrees(state);
+        if (std::abs(rotation) > kEpsilon) {
+            QTransform transform;
+            transform.rotate(rotation);
+            transformed = image.transformed(transform, Qt::SmoothTransformation);
+            transformed.setDevicePixelRatio(1.0);
+        }
+
+        if (transformed.isNull()) {
+            return transformed;
+        }
+        return cropNormalizedRect(
+            transformed,
+            effectiveCropRectFromState(QSizeF(image.size()), state));
     }
 
-    if (transformed.isNull()) {
-        return transformed;
+    const GeometryMapping mapping = geometryMappingForState(QSizeF(image.size()), state);
+    if (!mapping.valid || mapping.canvasRect.isEmpty()) {
+        return image;
     }
 
-    const QRectF normalized = cropRectFromState(state);
-    QRect pixelRect(
-        static_cast<int>(std::floor(normalized.left() * transformed.width())),
-        static_cast<int>(std::floor(normalized.top() * transformed.height())),
-        std::max(1, static_cast<int>(std::ceil(normalized.width() * transformed.width()))),
-        std::max(1, static_cast<int>(std::ceil(normalized.height() * transformed.height()))));
-    pixelRect = pixelRect.intersected(transformed.rect());
+    const QSize outputSize(
+        std::max(1, static_cast<int>(std::ceil(mapping.canvasRect.width()))),
+        std::max(1, static_cast<int>(std::ceil(mapping.canvasRect.height()))));
+    QImage transformed(outputSize, QImage::Format_ARGB32_Premultiplied);
+    transformed.fill(Qt::transparent);
 
-    if (pixelRect.isEmpty()) {
-        return transformed;
-    }
+    QPainter painter(&transformed);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.setTransform(mapping.transform);
+    painter.drawImage(QPointF(0.0, 0.0), image);
+    painter.end();
+    transformed.setDevicePixelRatio(1.0);
 
-    QImage cropped = transformed.copy(pixelRect);
-    cropped.setDevicePixelRatio(1.0);
-    return cropped;
+    return cropNormalizedRect(
+        transformed,
+        effectiveCropRectFromState(QSizeF(image.size()), state));
 }
 
 } // namespace imaging

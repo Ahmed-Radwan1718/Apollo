@@ -32,7 +32,18 @@ void setCropRectOnState(DevelopState &state, const QRectF &normalizedRect);
 [[nodiscard]] QRectF safeCropRectForStraighten(const QSizeF &sourceSize,
                                                const DevelopState &state);
 
+// Returns the valid no-empty-pixel crop region for the complete geometry stack,
+// including perspective, aspect, scale, offsets and manual Transform rotation.
+[[nodiscard]] QRectF safeCropRectForGeometry(const QSizeF &sourceSize,
+                                             const DevelopState &state);
+
+// Applies Constrain Crop non-destructively without rewriting the saved crop.
+[[nodiscard]] QRectF effectiveCropRectFromState(const QSizeF &sourceSize,
+                                                const DevelopState &state);
+
 // Geometry is applied after develop rendering. The input image is never changed.
+// This function intentionally retains its existing name for callers, but now
+// applies the full geometry stack before taking the normalized crop.
 [[nodiscard]] QImage applyCropTransform(const QImage &image,
                                         const DevelopState &state);
 

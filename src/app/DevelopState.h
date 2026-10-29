@@ -19,7 +19,7 @@ struct DevelopState {
     imaging::RawCalibration calibration;
 
     // Geometry is stored non-destructively. Crop coordinates use a normalized
-    // 0..100000 space relative to the rotated image bounding box.
+    // 0..100000 space relative to the final geometry canvas.
     int cropX = 0;
     int cropY = 0;
     int cropWidth = 100000;
@@ -27,6 +27,17 @@ struct DevelopState {
     int cropQuarterTurns = 0;
     int cropStraightenHundredths = 0;
     int cropAspectMode = 0;
+
+    // Manual Transform controls are also geometry-only and are applied after
+    // Crop/Rotate orientation and fine straighten, before the crop rectangle.
+    int transformVertical = 0;
+    int transformHorizontal = 0;
+    int transformRotateHundredths = 0;
+    int transformAspect = 0;
+    int transformScale = 100;
+    int transformXOffset = 0;
+    int transformYOffset = 0;
+    bool transformConstrainCrop = false;
 
     // Render-service comparisons intentionally ignore geometry: RAW develop
     // rendering produces the uncropped image and geometry is applied afterwards.
@@ -50,14 +61,7 @@ struct DevelopState {
 
     [[nodiscard]] bool fullyEquals(const DevelopState &other) const noexcept
     {
-        return *this == other
-            && cropX == other.cropX
-            && cropY == other.cropY
-            && cropWidth == other.cropWidth
-            && cropHeight == other.cropHeight
-            && cropQuarterTurns == other.cropQuarterTurns
-            && cropStraightenHundredths == other.cropStraightenHundredths
-            && cropAspectMode == other.cropAspectMode;
+        return *this == other && geometryEquals(other);
     }
 
     [[nodiscard]] bool geometryEquals(const DevelopState &other) const noexcept
@@ -68,6 +72,14 @@ struct DevelopState {
             && cropHeight == other.cropHeight
             && cropQuarterTurns == other.cropQuarterTurns
             && cropStraightenHundredths == other.cropStraightenHundredths
-            && cropAspectMode == other.cropAspectMode;
+            && cropAspectMode == other.cropAspectMode
+            && transformVertical == other.transformVertical
+            && transformHorizontal == other.transformHorizontal
+            && transformRotateHundredths == other.transformRotateHundredths
+            && transformAspect == other.transformAspect
+            && transformScale == other.transformScale
+            && transformXOffset == other.transformXOffset
+            && transformYOffset == other.transformYOffset
+            && transformConstrainCrop == other.transformConstrainCrop;
     }
 };

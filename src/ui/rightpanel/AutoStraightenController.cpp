@@ -13,6 +13,7 @@
 #include <QSize>
 #include <QSlider>
 #include <QStyleOptionGraphicsItem>
+#include <QVariant>
 #include <QWidget>
 
 #include <algorithm>
@@ -86,8 +87,15 @@ void AutoStraightenController::applyAutoStraighten()
 
     const qreal currentStraighten =
         static_cast<qreal>(m_straightenSlider->value()) / 100.0;
-    const int quarterTurns = static_cast<int>(std::llround(
-        (item->rotation() - currentStraighten) / 90.0));
+
+    int quarterTurns = 0;
+    const QVariant storedQuarterTurns = m_canvas->property("apolloCropQuarterTurns");
+    if (storedQuarterTurns.isValid()) {
+        quarterTurns = storedQuarterTurns.toInt();
+    } else {
+        quarterTurns = static_cast<int>(std::llround(
+            (item->rotation() - currentStraighten) / 90.0));
+    }
 
     const imaging::AutoStraightenResult estimate =
         imaging::estimateAutoStraighten(image, quarterTurns);

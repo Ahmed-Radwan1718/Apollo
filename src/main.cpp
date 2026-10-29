@@ -6,6 +6,7 @@
 #include "ui/rightpanel/BasicSliderInteractionController.h"
 #include "ui/rightpanel/CropToolController.h"
 #include "ui/rightpanel/DevelopToolPlaceholderButtons.h"
+#include "ui/rightpanel/TransformController.h"
 #include "ui/workspace/WorkspaceModeBar.h"
 
 #include <QAction>
@@ -46,7 +47,8 @@ int main(int argc, char *argv[])
         new BasicSliderInteractionController(basicPanel, &window);
     }
 
-    new CropToolController(&window, &window);
+    auto *cropToolController = new CropToolController(&window, &window);
+    new TransformController(&window, cropToolController, &window);
     new AutoStraightenController(&window, &window);
     installDevelopToolPlaceholderButtons(&window);
     new PhotoExportController(&window, &window);

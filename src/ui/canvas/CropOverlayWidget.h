@@ -37,6 +37,12 @@ public:
         m_changeCallback = std::move(callback);
     }
 
+    void setReferenceSceneRect(const QRectF &rect)
+    {
+        m_referenceSceneRect = rect.isValid() && !rect.isEmpty() ? rect : QRectF();
+        update();
+    }
+
     void setNormalizedRect(const QRectF &rect)
     {
         if (m_dragging) {
@@ -69,22 +75,22 @@ public:
 
     [[nodiscard]] QRectF imageViewportRect() const
     {
-        QGraphicsItem *item = imageItem();
-        if (!item || !m_view) {
+        if (!m_view) {
             return {};
         }
-
-        return QRectF(m_view->mapFromScene(item->sceneBoundingRect()).boundingRect());
+        const QRectF sceneRect = referenceSceneRect();
+        return sceneRect.isEmpty()
+            ? QRectF()
+            : QRectF(m_view->mapFromScene(sceneRect).boundingRect());
     }
 
     [[nodiscard]] QRectF cropViewportRect() const
     {
-        QGraphicsItem *item = imageItem();
-        if (!item || !m_view) {
+        if (!m_view) {
             return {};
         }
 
-        const QRectF bounds = item->sceneBoundingRect();
+        const QRectF bounds = referenceSceneRect();
         if (bounds.isEmpty()) {
             return {};
         }
@@ -188,8 +194,10 @@ protected:
         const QPointF delta = event->position() - m_dragStartPosition;
         const QPointF normalizedDelta(delta.x() / imageRect.width(),
                                       delta.y() / imageRect.height());
-        const qreal minWidth = std::min<qreal>(1.0, kCropOverlayMinimumPixels / imageRect.width());
-        const qreal minHeight = std::min<qreal>(1.0, kCropOverlayMinimumPixels / imageRect.height());
+        const qreal minWidth = std::min<qreal>(
+            1.0, kCropOverlayMinimumPixels / imageRect.width());
+        const qreal minHeight = std::min<qreal>(
+            1.0, kCropOverlayMinimumPixels / imageRect.height());
 
         QRectF next = m_pixelAspectRatio > 0.0
             ? resizedFixedAspect(normalizedDelta, imageRect, minWidth, minHeight)
@@ -257,6 +265,15 @@ private:
             }
         }
         return nullptr;
+    }
+
+    QRectF referenceSceneRect() const
+    {
+        if (m_referenceSceneRect.isValid() && !m_referenceSceneRect.isEmpty()) {
+            return m_referenceSceneRect;
+        }
+        QGraphicsItem *item = imageItem();
+        return item ? item->sceneBoundingRect() : QRectF();
     }
 
     static QList<QPointF> handlePoints(const QRectF &rect)
@@ -368,8 +385,8 @@ private:
         }
 
         const qreal imageAspect = imageRect.width() / imageRect.height();
-        const qreal normalizedRatio = std::max<qreal>(0.001,
-            m_pixelAspectRatio / std::max<qreal>(0.001, imageAspect));
+        const qreal normalizedRatio = std::max<qreal>(
+            0.001, m_pixelAspectRatio / std::max<qreal>(0.001, imageAspect));
         const QRectF start = m_dragStartRect;
 
         const bool left = m_handle == Handle::Left
@@ -399,7 +416,6 @@ private:
             } else {
                 width = height * normalizedRatio;
             }
-
             if (width > maxWidth) {
                 width = maxWidth;
                 height = width / normalizedRatio;
@@ -417,9 +433,10 @@ private:
                 height = width / normalizedRatio;
             }
 
-            const qreal x = left ? anchor.x() - width : anchor.x();
-            const qreal y = top ? anchor.y() - height : anchor.y();
-            return QRectF(x, y, width, height);
+            return QRectF(left ? anchor.x() - width : anchor.x(),
+                          top ? anchor.y() - height : anchor.y(),
+                          width,
+                          height);
         }
 
         if (left || right) {
@@ -461,7 +478,6 @@ private:
                       height);
     }
 
-
     QRectF constrainedToAllowed(QRectF rect, qreal minWidth, qreal minHeight) const
     {
         const QRectF bounds = m_allowedRect.isValid() && !m_allowedRect.isEmpty()
@@ -469,8 +485,10 @@ private:
             : QRectF(0.0, 0.0, 1.0, 1.0);
         rect = rect.normalized();
 
-        const qreal effectiveMinWidth = std::min(std::max<qreal>(0.001, minWidth), bounds.width());
-        const qreal effectiveMinHeight = std::min(std::max<qreal>(0.001, minHeight), bounds.height());
+        const qreal effectiveMinWidth = std::min(
+            std::max<qreal>(0.001, minWidth), bounds.width());
+        const qreal effectiveMinHeight = std::min(
+            std::max<qreal>(0.001, minHeight), bounds.height());
         const qreal width = std::clamp(rect.width(), effectiveMinWidth, bounds.width());
         const qreal height = std::clamp(rect.height(), effectiveMinHeight, bounds.height());
         const qreal x = std::clamp(rect.x(), bounds.left(), bounds.right() - width);
@@ -479,6 +497,7 @@ private:
     }
 
     QGraphicsView *m_view = nullptr;
+    QRectF m_referenceSceneRect;
     QRectF m_normalizedRect{0.0, 0.0, 1.0, 1.0};
     QRectF m_allowedRect{0.0, 0.0, 1.0, 1.0};
     qreal m_pixelAspectRatio = 0.0;

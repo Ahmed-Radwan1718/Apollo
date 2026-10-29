@@ -42,6 +42,8 @@ qt_add_executable(Nexus WIN32
     src/imaging/AutoStraighten.h
     src/imaging/CropTransform.cpp
     src/imaging/CropTransform.h
+    src/imaging/GeometryTransform.cpp
+    src/imaging/GeometryTransform.h
     src/imaging/Histogram.cpp
     src/imaging/Histogram.h
     src/imaging/ImageLoader.cpp
@@ -86,10 +88,15 @@ qt_add_executable(Nexus WIN32
     src/ui/rightpanel/CalibrationPanel.h
     src/ui/rightpanel/CropToolController.cpp
     src/ui/rightpanel/CropToolController.h
+    src/ui/rightpanel/CropToolControllerTransform.cpp
     src/ui/rightpanel/DevelopToolPlaceholderButtons.cpp
     src/ui/rightpanel/DevelopToolPlaceholderButtons.h
     src/ui/rightpanel/PhotoMetadataWidget.cpp
     src/ui/rightpanel/PhotoMetadataWidget.h
+    src/ui/rightpanel/TransformController.cpp
+    src/ui/rightpanel/TransformController.h
+    src/ui/rightpanel/TransformPanel.cpp
+    src/ui/rightpanel/TransformPanel.h
     src/ui/rightpanel/WhiteBalancePickerController.cpp
     src/ui/rightpanel/WhiteBalancePickerController.h
     src/ui/sidebar/SidebarCollapseHandle.h
