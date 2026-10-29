@@ -316,6 +316,7 @@ public:
         }
 
         m_status = normalizedStatus;
+        update();
     }
 
     void setColorLabel(int colorLabel)
@@ -462,6 +463,30 @@ protected:
                                drawnSize.width(),
                                drawnSize.height());
             painter.drawImage(target, m_thumbnail);
+        }
+
+        if (m_status != 0) {
+            constexpr int statusBackgroundSize = 20;
+            constexpr int statusIconSize = 14;
+            constexpr int statusMargin = 4;
+
+            const QRect statusBackground(
+                imageRect.right() - statusBackgroundSize - statusMargin + 1,
+                imageRect.top() + statusMargin,
+                statusBackgroundSize,
+                statusBackgroundSize);
+
+            painter.setRenderHint(QPainter::Antialiasing, true);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(0, 0, 0, 150));
+            painter.drawRoundedRect(statusBackground, 3.0, 3.0);
+
+            const QPixmap statusPixmap = statusIcon(m_status).pixmap(statusIconSize,
+                                                                     statusIconSize);
+            const QPoint statusPosition(
+                statusBackground.center().x() - statusPixmap.width() / 2,
+                statusBackground.center().y() - statusPixmap.height() / 2);
+            painter.drawPixmap(statusPosition, statusPixmap);
         }
 
         if (m_rating > 0) {
