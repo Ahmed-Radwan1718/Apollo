@@ -17,6 +17,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QListWidget>
 #include <QMenu>
 #include <QMetaObject>
 #include <QMouseEvent>
@@ -209,6 +210,31 @@ DevelopState currentDevelopStateForPhoto(const QString &filePath)
     return state;
 }
 
+bool photoHasEdits(const QString &filePath)
+{
+    if (filePath.isEmpty()) {
+        return false;
+    }
+
+    const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
+    const QVector<HistoryModel::Snapshot> histories =
+        ApplicationStateStore::loadHistories();
+
+    for (const HistoryModel::Snapshot &snapshot : histories) {
+        if (QFileInfo(snapshot.filePath).absoluteFilePath() != absoluteFilePath
+            || snapshot.entries.isEmpty()
+            || snapshot.currentIndex < 0
+            || snapshot.currentIndex >= snapshot.entries.size()) {
+            continue;
+        }
+
+        return !snapshot.entries.at(snapshot.currentIndex).state.fullyEquals(
+            snapshot.entries.first().state);
+    }
+
+    return false;
+}
+
 void copyDevelopSettingsToClipboard(const QString &filePath)
 {
     QClipboard *clipboard = QGuiApplication::clipboard();
@@ -337,6 +363,7 @@ public:
                                 int rating,
                                 int status,
                                 int colorLabel,
+                                bool edited,
                                 std::function<void()> activated,
                                 std::function<void(int)> ratingChanged,
                                 std::function<void(int)> statusChanged,
@@ -358,6 +385,7 @@ public:
         , m_rating(std::clamp(rating, 0, 5))
         , m_status(status == 1 || status == -1 ? status : 0)
         , m_colorLabel(std::clamp(colorLabel, 0, 5))
+        , m_edited(edited)
     {
         setFixedSize(kThumbnailWidth, kThumbnailHeight);
         setCursor(Qt::PointingHandCursor);
@@ -403,6 +431,16 @@ public:
         }
 
         m_colorLabel = clampedColorLabel;
+        update();
+    }
+
+    void setEdited(bool edited)
+    {
+        if (m_edited == edited) {
+            return;
+        }
+
+        m_edited = edited;
         update();
     }
 
@@ -541,6 +579,13 @@ protected:
             painter.drawImage(target, m_thumbnail);
         }
 
+        if (m_edited) {
+            painter.setRenderHint(QPainter::Antialiasing, true);
+            painter.setPen(QPen(QColor(0, 0, 0, 190), 1.0));
+            painter.setBrush(QColor(220, 220, 220));
+            painter.drawEllipse(QPointF(9.0, 9.0), 3.25, 3.25);
+        }
+
         if (m_status != 0) {
             constexpr int statusBackgroundSize = 20;
             constexpr int statusIconSize = 14;
@@ -626,6 +671,7 @@ private:
     int m_rating = 0;
     int m_status = 0;
     int m_colorLabel = 0;
+    bool m_edited = false;
     bool m_selected = false;
 };
 
@@ -721,6 +767,42 @@ FilmstripWidget::FilmstripWidget(QWidget *parent)
                     alignToDefaultPhotoBounds();
                 });
     }
+
+    QMetaObject::invokeMethod(
+        this,
+        [this]() {
+            QWidget *root = window();
+            auto *historyList = root
+                ? root->findChild<QListWidget *>(QStringLiteral("historyList"))
+                : nullptr;
+            if (!historyList) {
+                return;
+            }
+
+            connect(historyList, &QListWidget::currentRowChanged, this,
+                    [this](int) {
+                        QWidget *current = m_thumbnails.value(m_currentFilePath, nullptr);
+                        if (!current && !m_currentFilePath.isEmpty()) {
+                            const QString absoluteCurrentPath =
+                                QFileInfo(m_currentFilePath).absoluteFilePath();
+                            for (auto iterator = m_thumbnails.constBegin();
+                                 iterator != m_thumbnails.constEnd();
+                                 ++iterator) {
+                                if (QFileInfo(iterator.key()).absoluteFilePath()
+                                    == absoluteCurrentPath) {
+                                    current = iterator.value();
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (current) {
+                            static_cast<FilmstripThumbnail *>(current)->setEdited(
+                                photoHasEdits(m_currentFilePath));
+                        }
+                    });
+        },
+        Qt::QueuedConnection);
 }
 
 void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
@@ -743,6 +825,7 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
         m_photoRatings.value(absoluteFilePath, 0),
         m_photoStatuses.value(absoluteFilePath, 0),
         m_photoColorLabels.value(absoluteFilePath, 0),
+        photoHasEdits(absoluteFilePath),
         [this, filePath]() {
             activatePhoto(filePath);
         },
@@ -884,6 +967,10 @@ void FilmstripWidget::removePhoto(const QString &filePath)
 void FilmstripWidget::setCurrentPhoto(const QString &filePath)
 {
     if (filePath == m_currentFilePath) {
+        if (QWidget *current = m_thumbnails.value(m_currentFilePath, nullptr)) {
+            static_cast<FilmstripThumbnail *>(current)->setEdited(
+                photoHasEdits(m_currentFilePath));
+        }
         return;
     }
 
@@ -894,7 +981,9 @@ void FilmstripWidget::setCurrentPhoto(const QString &filePath)
     m_currentFilePath = filePath;
 
     if (QWidget *current = m_thumbnails.value(m_currentFilePath, nullptr)) {
-        static_cast<FilmstripThumbnail *>(current)->setSelected(true);
+        auto *thumbnail = static_cast<FilmstripThumbnail *>(current);
+        thumbnail->setEdited(photoHasEdits(m_currentFilePath));
+        thumbnail->setSelected(true);
     }
 
     updatePhotoCounter(m_scrollArea,
