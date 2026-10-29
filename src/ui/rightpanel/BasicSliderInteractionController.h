@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui/rightpanel/AutoExposureController.h"
+
 #include <QEvent>
 #include <QMouseEvent>
 #include <QObject>
@@ -26,6 +28,8 @@ public:
                 slider->installEventFilter(this);
             }
         }
+
+        new AutoExposureController(m_basicPanel.data(), this);
     }
 
 protected:
