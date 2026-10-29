@@ -718,7 +718,7 @@ FilmstripWidget::FilmstripWidget(QWidget *parent)
     photoCounter->setStyleSheet(QStringLiteral(
         "QLabel {"
         "  color: #c8c8c8;"
-        "  background: rgba(17, 17, 17, 210);"
+        "  background: #181818;"
         "  border: 1px solid #343434;"
         "  border-radius: 4px;"
         "  padding: 2px 6px;"
