@@ -38,6 +38,7 @@ qt_add_executable(Nexus WIN32
     src/imaging/ArwPreviewSessionImpl.inc
     src/imaging/AutoExposure.h
     src/imaging/AutoHighlights.h
+    src/imaging/SrgbTransfer.h
     src/imaging/AutoStraighten.cpp
     src/imaging/AutoStraighten.h
     src/imaging/CropTransform.cpp

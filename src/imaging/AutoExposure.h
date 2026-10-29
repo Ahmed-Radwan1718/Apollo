@@ -1,5 +1,7 @@
 #pragma once
 
+#include "imaging/SrgbTransfer.h"
+
 #include <QImage>
 #include <QtGlobal>
 
@@ -28,15 +30,6 @@ constexpr qreal kAutoExposureHighlightAllowanceStops = 0.10;
 constexpr qreal kAutoExposureShadowFloor = 0.004;
 constexpr qreal kAutoExposureShadowAllowanceStops = 0.10;
 constexpr qreal kAutoExposureEpsilon = 1.0e-5;
-
-inline qreal srgbToLinear(int channel)
-{
-    const qreal value = static_cast<qreal>(channel) / 255.0;
-    if (value <= 0.04045) {
-        return value / 12.92;
-    }
-    return std::pow((value + 0.055) / 1.055, 2.4);
-}
 
 template <typename Histogram>
 inline qreal percentile(const Histogram &histogram, qreal totalWeight, qreal fraction)
