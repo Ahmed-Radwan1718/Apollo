@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ui/rightpanel/AutoExposureController.h"
+#include "ui/rightpanel/AutoHighlightsController.h"
 
 #include <QEvent>
 #include <QMouseEvent>
@@ -30,6 +31,7 @@ public:
         }
 
         new AutoExposureController(m_basicPanel.data(), this);
+        new AutoHighlightsController(m_basicPanel.data(), this);
     }
 
 protected:
