@@ -422,7 +422,7 @@ DetailPanel::DetailPanel(MainWindow *window, QWidget *parent)
         "QSlider#detailSlider { min-height: 14px; max-height: 14px; }"
         "QSlider#detailSlider::groove:horizontal { height: 2px; border-radius: 1px; background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #303030, stop:0.5 #626262, stop:1 #9b9b9b); }"
         "QSlider#detailSlider[historyName=\"Sharpening Amount\"]::groove:horizontal { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #303030, stop:0.5 #7f3b3b, stop:1 #d95a5a); }"
-        "QSlider#detailSlider[historyName=\"Sharpening Masking\"]::groove:horizontal { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #f0f0f0, stop:0.5 #777777, stop:1 #111111); }"
+        "QSlider#detailSlider[historyName=\"Sharpening Masking\"]::groove:horizontal { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #9b9b9b, stop:0.5 #626262, stop:1 #303030); }"
         "QSlider#detailSlider::sub-page:horizontal, QSlider#detailSlider::add-page:horizontal { background: transparent; }"
         "QSlider#detailSlider::handle:horizontal { width: 10px; height: 10px; margin: -4px 0; border-radius: 5px; background: #d9d9d9; border: 0; }"
         "QSlider#detailSlider::handle:horizontal:hover { background: #ffffff; }"));
