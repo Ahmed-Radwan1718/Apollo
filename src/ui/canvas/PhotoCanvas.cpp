@@ -596,7 +596,10 @@ void PhotoCanvas::dragEnterEvent(QDragEnterEvent *event)
 {
     if (event->mimeData()->hasUrls()) {
         const QList<QUrl> urls = event->mimeData()->urls();
-        if (!urls.isEmpty() && urls.first().isLocalFile()) {
+        const bool hasLocalFile = std::any_of(
+            urls.cbegin(), urls.cend(),
+            [](const QUrl &url) { return url.isLocalFile(); });
+        if (hasLocalFile) {
             event->acceptProposedAction();
             return;
         }
@@ -608,12 +611,22 @@ void PhotoCanvas::dragEnterEvent(QDragEnterEvent *event)
 void PhotoCanvas::dropEvent(QDropEvent *event)
 {
     const QList<QUrl> urls = event->mimeData()->urls();
-    if (urls.isEmpty() || !urls.first().isLocalFile()) {
+    bool openedLocalFile = false;
+
+    for (const QUrl &url : urls) {
+        if (!url.isLocalFile()) {
+            continue;
+        }
+
+        emit fileDropped(QFileInfo(url.toLocalFile()).absoluteFilePath());
+        openedLocalFile = true;
+    }
+
+    if (!openedLocalFile) {
         event->ignore();
         return;
     }
 
-    emit fileDropped(QFileInfo(urls.first().toLocalFile()).absoluteFilePath());
     event->acceptProposedAction();
 }
 
