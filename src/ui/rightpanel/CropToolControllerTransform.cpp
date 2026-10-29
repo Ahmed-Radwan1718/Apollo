@@ -121,6 +121,12 @@ void CropToolController::previewGeometryState(const DevelopState &state, bool fo
         }
     }
 
+    if (QToolButton *beforeAfterToggle =
+            m_window->m_canvas->viewport()->findChild<QToolButton *>(
+                QStringLiteral("beforeAfterToggle"), Qt::FindDirectChildrenOnly)) {
+        beforeAfterToggle->raise();
+    }
+
     if (!m_editing && m_window->m_navigator) {
         QSize targetSize = displayRect.size().toSize();
         if (targetSize.isValid() && !targetSize.isEmpty()) {
