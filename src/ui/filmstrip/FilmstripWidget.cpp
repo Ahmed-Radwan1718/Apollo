@@ -16,6 +16,7 @@
 #include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLabel>
 #include <QMenu>
 #include <QMetaObject>
 #include <QMouseEvent>
@@ -43,6 +44,81 @@ constexpr int kFilmstripVerticalMargin = 10;
 constexpr int kContextMenuWidth = 220;
 constexpr int kContextSubmenuWidth = 210;
 constexpr int kColorLabelSubmenuWidth = 176;
+constexpr int kPhotoCounterMargin = 8;
+
+QLabel *photoCounterLabel(QScrollArea *scrollArea)
+{
+    if (!scrollArea || !scrollArea->viewport()) {
+        return nullptr;
+    }
+
+    return scrollArea->viewport()->findChild<QLabel *>(
+        QStringLiteral("filmstripPhotoCounter"), Qt::FindDirectChildrenOnly);
+}
+
+void positionPhotoCounter(QScrollArea *scrollArea)
+{
+    QLabel *counter = photoCounterLabel(scrollArea);
+    if (!counter || !counter->isVisible()) {
+        return;
+    }
+
+    counter->adjustSize();
+    counter->move(qMax(0, scrollArea->viewport()->width()
+                           - counter->width() - kPhotoCounterMargin),
+                  kPhotoCounterMargin);
+    counter->raise();
+}
+
+void updatePhotoCounter(QScrollArea *scrollArea,
+                        QHBoxLayout *contentLayout,
+                        const QHash<QString, QWidget *> &thumbnails,
+                        const QString &currentFilePath)
+{
+    QLabel *counter = photoCounterLabel(scrollArea);
+    if (!counter) {
+        return;
+    }
+
+    QWidget *currentThumbnail = thumbnails.value(currentFilePath, nullptr);
+    if (!currentThumbnail && !currentFilePath.isEmpty()) {
+        const QString absoluteCurrentPath = QFileInfo(currentFilePath).absoluteFilePath();
+        for (auto iterator = thumbnails.constBegin(); iterator != thumbnails.constEnd(); ++iterator) {
+            if (QFileInfo(iterator.key()).absoluteFilePath() == absoluteCurrentPath) {
+                currentThumbnail = iterator.value();
+                break;
+            }
+        }
+    }
+
+    int currentIndex = 0;
+    if (currentThumbnail && contentLayout) {
+        int ordinal = 0;
+        for (int index = 0; index < contentLayout->count(); ++index) {
+            QLayoutItem *item = contentLayout->itemAt(index);
+            QWidget *widget = item ? item->widget() : nullptr;
+            if (!widget || thumbnails.key(widget).isEmpty()) {
+                continue;
+            }
+
+            ++ordinal;
+            if (widget == currentThumbnail) {
+                currentIndex = ordinal;
+                break;
+            }
+        }
+    }
+
+    const int total = thumbnails.size();
+    if (currentIndex <= 0 || total <= 0) {
+        counter->hide();
+        return;
+    }
+
+    counter->setText(QStringLiteral("%1 / %2").arg(currentIndex).arg(total));
+    counter->show();
+    positionPhotoCounter(scrollArea);
+}
 
 void configureContextMenu(QMenu *menu, int minimumWidth)
 {
@@ -588,6 +664,23 @@ FilmstripWidget::FilmstripWidget(QWidget *parent)
     m_contentLayout->addStretch(1);
 
     m_scrollArea->setWidget(m_content);
+
+    auto *photoCounter = new QLabel(m_scrollArea->viewport());
+    photoCounter->setObjectName(QStringLiteral("filmstripPhotoCounter"));
+    photoCounter->setAlignment(Qt::AlignCenter);
+    photoCounter->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    photoCounter->setStyleSheet(QStringLiteral(
+        "QLabel {"
+        "  color: #c8c8c8;"
+        "  background: rgba(17, 17, 17, 210);"
+        "  border: 1px solid #343434;"
+        "  border-radius: 4px;"
+        "  padding: 2px 6px;"
+        "  font-size: 10px;"
+        "}"));
+    photoCounter->hide();
+    m_scrollArea->viewport()->installEventFilter(this);
+
     layout->addWidget(m_scrollArea);
 
     setStyleSheet(QStringLiteral(
@@ -688,6 +781,12 @@ void FilmstripWidget::setPhotoRemovedCallback(PhotoRemovedCallback callback)
 
 bool FilmstripWidget::eventFilter(QObject *watched, QEvent *event)
 {
+    if (m_scrollArea
+        && watched == m_scrollArea->viewport()
+        && event->type() == QEvent::Resize) {
+        positionPhotoCounter(m_scrollArea);
+    }
+
     if (watched == m_canvas && event->type() == QEvent::Resize) {
         QMetaObject::invokeMethod(this,
                                   [this]() {
@@ -775,6 +874,10 @@ void FilmstripWidget::removePhoto(const QString &filePath)
         setCurrentPhoto(nextPath);
     }
 
+    updatePhotoCounter(m_scrollArea,
+                       m_contentLayout,
+                       m_thumbnails,
+                       m_currentFilePath);
     alignToDefaultPhotoBounds(true);
 }
 
@@ -793,6 +896,11 @@ void FilmstripWidget::setCurrentPhoto(const QString &filePath)
     if (QWidget *current = m_thumbnails.value(m_currentFilePath, nullptr)) {
         static_cast<FilmstripThumbnail *>(current)->setSelected(true);
     }
+
+    updatePhotoCounter(m_scrollArea,
+                       m_contentLayout,
+                       m_thumbnails,
+                       m_currentFilePath);
 }
 
 void FilmstripWidget::setPhotoRating(const QString &filePath, int rating)
