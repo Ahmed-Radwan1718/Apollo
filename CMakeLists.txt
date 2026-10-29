@@ -41,6 +41,8 @@ qt_add_executable(Nexus WIN32
     src/imaging/SrgbTransfer.h
     src/imaging/AutoStraighten.cpp
     src/imaging/AutoStraighten.h
+    src/imaging/UprightAnalysis.cpp
+    src/imaging/UprightAnalysis.h
     src/imaging/CropTransform.cpp
     src/imaging/CropTransform.h
     src/imaging/DetailProcessor.cpp
@@ -64,6 +66,7 @@ qt_add_executable(Nexus WIN32
     src/imaging/WhiteBalancePickerService.cpp
     src/imaging/WhiteBalancePickerService.h
     src/ui/canvas/CropOverlayWidget.h
+    src/ui/canvas/UprightGuideOverlay.h
     src/ui/canvas/PhotoCanvas.cpp
     src/ui/canvas/PhotoCanvas.h
     src/ui/filmstrip/FilmstripWidget.cpp

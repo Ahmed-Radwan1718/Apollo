@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int kStateSchemaVersion = 8;
+constexpr int kStateSchemaVersion = 9;
 constexpr auto kStateFileName = "apollo-state.json";
 
 QString stateFilePath()
@@ -190,6 +190,7 @@ QJsonObject developStateToJson(const DevelopState &state)
     object.insert(QStringLiteral("cropStraightenHundredths"),
                   state.cropStraightenHundredths);
     object.insert(QStringLiteral("cropAspectMode"), state.cropAspectMode);
+    object.insert(QStringLiteral("transformUprightMode"), state.transformUprightMode);
     object.insert(QStringLiteral("transformVertical"), state.transformVertical);
     object.insert(QStringLiteral("transformHorizontal"), state.transformHorizontal);
     object.insert(QStringLiteral("transformRotateHundredths"),
@@ -234,6 +235,9 @@ DevelopState developStateFromJson(const QJsonObject &object)
             .toInt(state.cropStraightenHundredths);
     state.cropAspectMode = object.value(QStringLiteral("cropAspectMode"))
                                .toInt(state.cropAspectMode);
+    state.transformUprightMode = std::clamp(
+        object.value(QStringLiteral("transformUprightMode")).toInt(state.transformUprightMode),
+        0, 5);
     state.transformVertical = std::clamp(
         object.value(QStringLiteral("transformVertical")).toInt(state.transformVertical),
         -100, 100);

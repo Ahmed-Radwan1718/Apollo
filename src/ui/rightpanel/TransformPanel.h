@@ -5,6 +5,7 @@
 #include <QString>
 #include <QWidget>
 
+class QButtonGroup;
 class QCheckBox;
 class QFrame;
 class QSlider;
@@ -31,6 +32,7 @@ public:
 signals:
     void previewRequested();
     void commitRequested(const QString &historyLabel);
+    void uprightModeRequested(int mode);
 
 private:
     QSlider *addSlider(QFrame *content,
@@ -45,6 +47,7 @@ private:
 
     QFrame *m_content = nullptr;
     QToolButton *m_chevronButton = nullptr;
+    QButtonGroup *m_uprightButtons = nullptr;
     QSlider *m_verticalSlider = nullptr;
     QSlider *m_horizontalSlider = nullptr;
     QSlider *m_rotateSlider = nullptr;
@@ -53,5 +56,6 @@ private:
     QSlider *m_xOffsetSlider = nullptr;
     QSlider *m_yOffsetSlider = nullptr;
     QCheckBox *m_constrainCrop = nullptr;
+    int m_uprightMode = 0;
     bool m_settingControls = false;
 };

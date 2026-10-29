@@ -1,11 +1,15 @@
 #include "ui/rightpanel/TransformPanel.h"
 
+#include "imaging/UprightAnalysis.h"
 #include "ui/rightpanel/WheelIgnoringSlider.h"
 
+#include <QAbstractButton>
+#include <QButtonGroup>
 #include <QCheckBox>
 #include <QChronoTimer>
 #include <QElapsedTimer>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
@@ -375,6 +379,49 @@ TransformPanel::TransformPanel(QWidget *parent)
     layout->setContentsMargins(12, 10, 12, 16);
     layout->setSpacing(6);
 
+    auto *uprightLabel = new QLabel(tr("Upright"), m_content);
+    uprightLabel->setObjectName(QStringLiteral("transformSectionLabel"));
+    layout->addWidget(uprightLabel);
+
+    auto *uprightGrid = new QFrame(m_content);
+    uprightGrid->setObjectName(QStringLiteral("uprightGrid"));
+    auto *uprightLayout = new QGridLayout(uprightGrid);
+    uprightLayout->setContentsMargins(0, 0, 0, 0);
+    uprightLayout->setHorizontalSpacing(0);
+    uprightLayout->setVerticalSpacing(0);
+
+    m_uprightButtons = new QButtonGroup(this);
+    m_uprightButtons->setExclusive(true);
+    const auto addUprightButton = [this, uprightGrid, uprightLayout](
+                                      const QString &text,
+                                      imaging::UprightMode mode,
+                                      int row,
+                                      int column) {
+        auto *button = new QToolButton(uprightGrid);
+        button->setObjectName(QStringLiteral("uprightCell"));
+        button->setText(text);
+        button->setCheckable(true);
+        button->setAutoExclusive(true);
+        button->setFixedHeight(26);
+        button->setCursor(Qt::PointingHandCursor);
+        button->setFocusPolicy(Qt::NoFocus);
+        button->setProperty("rightDivider", column < 2);
+        button->setProperty("bottomDivider", row == 0);
+        const int id = static_cast<int>(mode);
+        m_uprightButtons->addButton(button, id);
+        uprightLayout->addWidget(button, row, column);
+        return button;
+    };
+
+    addUprightButton(tr("Off"), imaging::UprightMode::Off, 0, 0)->setChecked(true);
+    addUprightButton(tr("Auto"), imaging::UprightMode::Auto, 0, 1);
+    addUprightButton(tr("Guided"), imaging::UprightMode::Guided, 0, 2);
+    addUprightButton(tr("Level"), imaging::UprightMode::Level, 1, 0);
+    addUprightButton(tr("Vertical"), imaging::UprightMode::Vertical, 1, 1);
+    addUprightButton(tr("Full"), imaging::UprightMode::Full, 1, 2);
+    layout->addWidget(uprightGrid);
+    layout->addSpacing(4);
+
     m_verticalSlider = addSlider(m_content, layout, tr("Vertical"), -100, 100, 0,
                                  ValueFormat::Integer, tr("Transform Vertical"));
     m_horizontalSlider = addSlider(m_content, layout, tr("Horizontal"), -100, 100, 0,
@@ -409,6 +456,12 @@ TransformPanel::TransformPanel(QWidget *parent)
     });
     connect(chevron, &QToolButton::clicked, title, [title]() { title->toggle(); });
     connect(reset, &QToolButton::clicked, this, &TransformPanel::resetAll);
+    connect(m_uprightButtons, &QButtonGroup::idClicked,
+            this, [this](int mode) {
+                if (m_settingControls) return;
+                m_uprightMode = std::clamp(mode, 0, 5);
+                emit uprightModeRequested(m_uprightMode);
+            });
     connect(m_constrainCrop, &QCheckBox::toggled, this, [this](bool) {
         if (m_settingControls) return;
         emit previewRequested();
@@ -424,6 +477,13 @@ TransformPanel::TransformPanel(QWidget *parent)
         "QToolButton#transformReset:hover { color:#dedede; background:#252525; border-radius:4px; }"
         "QToolButton#transformChevron { color:#bebebe; background:transparent; border:0; }"
         "QFrame#transformContent, QWidget#transformControl { background:#181818; border:0; }"
+        "QLabel#transformSectionLabel { color:#b3b3b3; font-size:11px; font-weight:600; padding:1px 0; }"
+        "QFrame#uprightGrid { background:transparent; border:1px solid #2b2b2b; border-radius:2px; }"
+        "QToolButton#uprightCell { color:#b9b9b9; background:transparent; border:0; font-size:11px; padding:0 3px; }"
+        "QToolButton#uprightCell[rightDivider=\"true\"] { border-right:1px solid #2b2b2b; }"
+        "QToolButton#uprightCell[bottomDivider=\"true\"] { border-bottom:1px solid #2b2b2b; }"
+        "QToolButton#uprightCell:hover { color:#f0f0f0; background:#202020; }"
+        "QToolButton#uprightCell:checked { color:#ffffff; background:#292929; }"
         "QLabel#transformControlLabel { color:#d0d0d0; font-size:12px; }"
         "QLabel#transformValueLabel { color:#9f9f9f; font-size:11px; }"
         "QSlider#transformSlider { min-height:14px; max-height:14px; }"
@@ -498,6 +558,12 @@ QSlider *TransformPanel::addSlider(QFrame *content,
 void TransformPanel::setFromState(const DevelopState &state)
 {
     m_settingControls = true;
+    m_uprightMode = std::clamp(state.transformUprightMode, 0, 5);
+    if (m_uprightButtons) {
+        if (QAbstractButton *button = m_uprightButtons->button(m_uprightMode)) {
+            button->setChecked(true);
+        }
+    }
     m_verticalSlider->setValue(std::clamp(state.transformVertical, -100, 100));
     m_horizontalSlider->setValue(std::clamp(state.transformHorizontal, -100, 100));
     m_rotateSlider->setValue(std::clamp(state.transformRotateHundredths, -1000, 1000));
@@ -511,6 +577,7 @@ void TransformPanel::setFromState(const DevelopState &state)
 
 void TransformPanel::applyToState(DevelopState &state) const
 {
+    state.transformUprightMode = m_uprightMode;
     state.transformVertical = m_verticalSlider->value();
     state.transformHorizontal = m_horizontalSlider->value();
     state.transformRotateHundredths = m_rotateSlider->value();
@@ -535,6 +602,12 @@ bool TransformPanel::isEditing() const
 void TransformPanel::resetAll()
 {
     m_settingControls = true;
+    m_uprightMode = static_cast<int>(imaging::UprightMode::Off);
+    if (m_uprightButtons) {
+        if (QAbstractButton *button = m_uprightButtons->button(m_uprightMode)) {
+            button->setChecked(true);
+        }
+    }
     m_verticalSlider->setValue(0);
     m_horizontalSlider->setValue(0);
     m_rotateSlider->setValue(0);
