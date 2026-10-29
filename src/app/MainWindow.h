@@ -14,6 +14,7 @@ class QAction;
 class BasicPanel;
 class CalibrationPanel;
 class CropToolController;
+class DetailPanel;
 class FilmstripWidget;
 class HistogramWidget;
 class HistoryPanel;
@@ -66,6 +67,7 @@ private slots:
 
 private:
     friend class CropToolController;
+    friend class DetailPanel;
     friend class TransformController;
 
     void createActions();

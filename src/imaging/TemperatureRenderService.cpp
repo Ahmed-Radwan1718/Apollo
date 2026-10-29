@@ -2,6 +2,7 @@
 
 #include "imaging/ArwDecoder.h"
 #include "imaging/ArwPreviewSession.h"
+#include "imaging/DetailProcessor.h"
 
 #include <QMetaObject>
 
@@ -29,6 +30,29 @@ TemperatureRenderService::~TemperatureRenderService()
     if (m_fullThread.joinable()) {
         m_fullThread.join();
     }
+}
+
+void TemperatureRenderService::setDetailSettings(const QString &filePath,
+                                                  const DetailSettings &settings)
+{
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    std::lock_guard lock(m_detailMutex);
+    m_detailSettings.insert(filePath, settings);
+}
+
+DetailSettings TemperatureRenderService::detailSettingsForFile(
+    const QString &filePath) const
+{
+    std::lock_guard lock(m_detailMutex);
+    return m_detailSettings.value(filePath, DetailSettings{});
+}
+
+bool TemperatureRenderService::detailRequestIsCurrent(const Request &request) const
+{
+    return request.detail == detailSettingsForFile(request.filePath);
 }
 
 void TemperatureRenderService::preparePreview(const QString &filePath,
@@ -61,9 +85,23 @@ void TemperatureRenderService::requestPreview(const QString &filePath,
                                               int saturation,
                                               int vibrance)
 {
-    request({filePath, kelvin, tint, calibration, exposureHundredths, highlights, shadows,
-             whites, blacks, contrast, texture, clarity, dehaze, saturation, vibrance},
-            true);
+    Request renderRequest;
+    renderRequest.filePath = filePath;
+    renderRequest.kelvin = kelvin;
+    renderRequest.tint = tint;
+    renderRequest.calibration = calibration;
+    renderRequest.exposureHundredths = exposureHundredths;
+    renderRequest.highlights = highlights;
+    renderRequest.shadows = shadows;
+    renderRequest.whites = whites;
+    renderRequest.blacks = blacks;
+    renderRequest.contrast = contrast;
+    renderRequest.texture = texture;
+    renderRequest.clarity = clarity;
+    renderRequest.dehaze = dehaze;
+    renderRequest.saturation = saturation;
+    renderRequest.vibrance = vibrance;
+    request(std::move(renderRequest), true);
 }
 
 void TemperatureRenderService::requestFullRender(const QString &filePath,
@@ -87,9 +125,23 @@ void TemperatureRenderService::requestFullRender(const QString &filePath,
         m_pendingPreview.reset();
     }
 
-    request({filePath, kelvin, tint, calibration, exposureHundredths, highlights, shadows,
-             whites, blacks, contrast, texture, clarity, dehaze, saturation, vibrance},
-            false);
+    Request renderRequest;
+    renderRequest.filePath = filePath;
+    renderRequest.kelvin = kelvin;
+    renderRequest.tint = tint;
+    renderRequest.calibration = calibration;
+    renderRequest.exposureHundredths = exposureHundredths;
+    renderRequest.highlights = highlights;
+    renderRequest.shadows = shadows;
+    renderRequest.whites = whites;
+    renderRequest.blacks = blacks;
+    renderRequest.contrast = contrast;
+    renderRequest.texture = texture;
+    renderRequest.clarity = clarity;
+    renderRequest.dehaze = dehaze;
+    renderRequest.saturation = saturation;
+    renderRequest.vibrance = vibrance;
+    request(std::move(renderRequest), false);
 }
 
 void TemperatureRenderService::request(Request request, bool preview)
@@ -97,6 +149,8 @@ void TemperatureRenderService::request(Request request, bool preview)
     if (m_stopping.load(std::memory_order_acquire)) {
         return;
     }
+
+    request.detail = detailSettingsForFile(request.filePath);
 
     std::mutex &mutex = preview ? m_previewMutex : m_fullMutex;
     std::condition_variable &condition = preview ? m_previewCondition : m_fullCondition;
@@ -187,6 +241,19 @@ void TemperatureRenderService::workerLoop(bool preview)
                                        request.vibrance,
                                        request.calibration,
                                        false);
+        }
+
+        if (!image.isNull()) {
+            image = DetailProcessor::apply(image,
+                                           request.detail,
+                                           preview ? 0.5 : 1.0);
+        }
+
+        // Detail is intentionally carried outside the legacy renderReady signal.
+        // If a newer Detail state arrived while this render was running, discard
+        // this result rather than letting an obsolete preview/full render flash.
+        if (!detailRequestIsCurrent(request)) {
+            continue;
         }
 
         QMetaObject::invokeMethod(

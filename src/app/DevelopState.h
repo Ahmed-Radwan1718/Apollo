@@ -1,5 +1,6 @@
 #pragma once
 
+#include "imaging/DetailSettings.h"
 #include "imaging/RawCalibration.h"
 
 struct DevelopState {
@@ -17,6 +18,7 @@ struct DevelopState {
     int saturation = 0;
     int vibrance = 0;
     imaging::RawCalibration calibration;
+    imaging::DetailSettings detail;
 
     // Geometry is stored non-destructively. Crop coordinates use a normalized
     // 0..100000 space relative to the final geometry canvas.
@@ -39,8 +41,9 @@ struct DevelopState {
     int transformYOffset = 0;
     bool transformConstrainCrop = false;
 
-    // Render-service comparisons intentionally ignore geometry: RAW develop
-    // rendering produces the uncropped image and geometry is applied afterwards.
+    // Main develop-render comparisons intentionally cover the RAW-stage controls.
+    // Detail is applied afterwards by TemperatureRenderService, and geometry is
+    // applied afterwards by the geometry pipeline. fullyEquals() includes both.
     bool operator==(const DevelopState &other) const noexcept
     {
         return temperatureKelvin == other.temperatureKelvin
@@ -61,7 +64,9 @@ struct DevelopState {
 
     [[nodiscard]] bool fullyEquals(const DevelopState &other) const noexcept
     {
-        return *this == other && geometryEquals(other);
+        return *this == other
+            && detail == other.detail
+            && geometryEquals(other);
     }
 
     [[nodiscard]] bool geometryEquals(const DevelopState &other) const noexcept

@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int kStateSchemaVersion = 7;
+constexpr int kStateSchemaVersion = 8;
 constexpr auto kStateFileName = "apollo-state.json";
 
 QString stateFilePath()
@@ -116,6 +116,54 @@ imaging::RawCalibration calibrationFromJson(const QJsonObject &object)
     return calibration;
 }
 
+QJsonObject detailToJson(const imaging::DetailSettings &detail)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("sharpeningAmount"), detail.sharpeningAmount);
+    object.insert(QStringLiteral("sharpeningRadiusHundredths"),
+                  detail.sharpeningRadiusHundredths);
+    object.insert(QStringLiteral("sharpeningDetail"), detail.sharpeningDetail);
+    object.insert(QStringLiteral("sharpeningMasking"), detail.sharpeningMasking);
+    object.insert(QStringLiteral("luminanceNoiseReduction"),
+                  detail.luminanceNoiseReduction);
+    object.insert(QStringLiteral("colorNoiseReduction"),
+                  detail.colorNoiseReduction);
+    return object;
+}
+
+imaging::DetailSettings detailFromJson(const QJsonObject &object)
+{
+    imaging::DetailSettings detail;
+    detail.sharpeningAmount = std::clamp(
+        object.value(QStringLiteral("sharpeningAmount")).toInt(detail.sharpeningAmount),
+        0,
+        150);
+    detail.sharpeningRadiusHundredths = std::clamp(
+        object.value(QStringLiteral("sharpeningRadiusHundredths"))
+            .toInt(detail.sharpeningRadiusHundredths),
+        50,
+        300);
+    detail.sharpeningDetail = std::clamp(
+        object.value(QStringLiteral("sharpeningDetail")).toInt(detail.sharpeningDetail),
+        0,
+        100);
+    detail.sharpeningMasking = std::clamp(
+        object.value(QStringLiteral("sharpeningMasking")).toInt(detail.sharpeningMasking),
+        0,
+        100);
+    detail.luminanceNoiseReduction = std::clamp(
+        object.value(QStringLiteral("luminanceNoiseReduction"))
+            .toInt(detail.luminanceNoiseReduction),
+        0,
+        100);
+    detail.colorNoiseReduction = std::clamp(
+        object.value(QStringLiteral("colorNoiseReduction"))
+            .toInt(detail.colorNoiseReduction),
+        0,
+        100);
+    return detail;
+}
+
 QJsonObject developStateToJson(const DevelopState &state)
 {
     QJsonObject object;
@@ -133,6 +181,7 @@ QJsonObject developStateToJson(const DevelopState &state)
     object.insert(QStringLiteral("saturation"), state.saturation);
     object.insert(QStringLiteral("vibrance"), state.vibrance);
     object.insert(QStringLiteral("calibration"), calibrationToJson(state.calibration));
+    object.insert(QStringLiteral("detail"), detailToJson(state.detail));
     object.insert(QStringLiteral("cropX"), state.cropX);
     object.insert(QStringLiteral("cropY"), state.cropY);
     object.insert(QStringLiteral("cropWidth"), state.cropWidth);
@@ -173,6 +222,7 @@ DevelopState developStateFromJson(const QJsonObject &object)
     state.vibrance = object.value(QStringLiteral("vibrance")).toInt(state.vibrance);
     state.calibration = calibrationFromJson(
         object.value(QStringLiteral("calibration")).toObject());
+    state.detail = detailFromJson(object.value(QStringLiteral("detail")).toObject());
     state.cropX = object.value(QStringLiteral("cropX")).toInt(state.cropX);
     state.cropY = object.value(QStringLiteral("cropY")).toInt(state.cropY);
     state.cropWidth = object.value(QStringLiteral("cropWidth")).toInt(state.cropWidth);

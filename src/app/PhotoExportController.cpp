@@ -4,6 +4,7 @@
 #include "app/HistoryModel.h"
 #include "imaging/ArwDecoder.h"
 #include "imaging/CropTransform.h"
+#include "imaging/DetailProcessor.h"
 #include "imaging/ImageLoader.h"
 #include "imaging/PhotoMetadata.h"
 #include "ui/filmstrip/FilmstripWidget.h"
@@ -100,6 +101,8 @@ ExportRenderResult renderForExport(const QString &filePath)
         result.metadata = loaded.metadata;
         result.error = loaded.error;
         if (savedState && !result.image.isNull()) {
+            result.image = imaging::DetailProcessor::apply(result.image,
+                                                           savedState->detail);
             result.image = imaging::applyCropTransform(result.image, *savedState);
         }
         return result;
@@ -132,6 +135,7 @@ ExportRenderResult renderForExport(const QString &filePath)
                                                state.calibration,
                                                false);
     if (!result.image.isNull()) {
+        result.image = imaging::DetailProcessor::apply(result.image, state.detail);
         result.image = imaging::applyCropTransform(result.image, state);
     }
     return result;

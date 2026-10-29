@@ -1,7 +1,9 @@
 #pragma once
 
+#include "imaging/DetailSettings.h"
 #include "imaging/RawCalibration.h"
 
+#include <QHash>
 #include <QImage>
 #include <QObject>
 #include <QString>
@@ -22,6 +24,8 @@ public:
     explicit TemperatureRenderService(QObject *parent = nullptr);
     ~TemperatureRenderService() override;
 
+    void setDetailSettings(const QString &filePath,
+                           const DetailSettings &settings);
     void preparePreview(const QString &filePath,
                         int kelvin,
                         int tint,
@@ -94,13 +98,19 @@ private:
         int dehaze = 0;
         int saturation = 0;
         int vibrance = 0;
+        DetailSettings detail;
         bool prepareOnly = false;
     };
 
+    [[nodiscard]] DetailSettings detailSettingsForFile(const QString &filePath) const;
+    [[nodiscard]] bool detailRequestIsCurrent(const Request &request) const;
     void request(Request request, bool preview);
     void workerLoop(bool preview);
 
     std::atomic_bool m_stopping = false;
+
+    mutable std::mutex m_detailMutex;
+    QHash<QString, DetailSettings> m_detailSettings;
 
     std::mutex m_previewMutex;
     std::condition_variable m_previewCondition;
