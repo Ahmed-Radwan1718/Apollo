@@ -7,9 +7,11 @@
 #include "imaging/DetailProcessor.h"
 #include "imaging/ImageLoader.h"
 #include "imaging/PhotoMetadata.h"
+#include "imaging/PhotoMetadataLoader.h"
 #include "ui/filmstrip/FilmstripWidget.h"
 
 #include <QAction>
+#include <QDateTime>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -185,29 +187,85 @@ QString shutterMetadataValue(double seconds)
     return QStringLiteral("%1 s").arg(QString::number(seconds, 'g', 6));
 }
 
-void addAvailableMetadata(QImageWriter &writer, const imaging::PhotoMetadata &metadata)
+void addTextIfAvailable(QImageWriter &writer, const QString &key, const QString &value)
 {
-    if (metadata.shutterSeconds > 0.0) {
-        writer.setText(QStringLiteral("Exposure Time"),
-                       shutterMetadataValue(metadata.shutterSeconds));
+    if (!value.trimmed().isEmpty()) {
+        writer.setText(key, value.trimmed());
     }
-    if (metadata.aperture > 0.0) {
-        writer.setText(QStringLiteral("Aperture"),
-                       QStringLiteral("f/%1").arg(QString::number(metadata.aperture, 'g', 4)));
+}
+
+void addAvailableMetadata(QImageWriter &writer,
+                          const imaging::PhotoMetadata &metadata,
+                          const ExportDialog::Settings &settings)
+{
+    if (settings.includeCameraLensInfo) {
+        addTextIfAvailable(writer, QStringLiteral("Camera Make"), metadata.cameraMake);
+        addTextIfAvailable(writer, QStringLiteral("Camera Model"), metadata.cameraModel);
+        addTextIfAvailable(writer, QStringLiteral("Lens Make"), metadata.lensMake);
+        addTextIfAvailable(writer, QStringLiteral("Lens Model"), metadata.lensModel);
+        if (metadata.focalLengthMm > 0.0) {
+            writer.setText(QStringLiteral("Focal Length"),
+                           QStringLiteral("%1 mm")
+                               .arg(QString::number(metadata.focalLengthMm, 'g', 5)));
+        }
     }
-    if (metadata.iso > 0.0) {
-        writer.setText(QStringLiteral("ISO"),
-                       QString::number(static_cast<int>(std::lround(metadata.iso))));
+
+    if (settings.includeCaptureSettings) {
+        if (metadata.shutterSeconds > 0.0) {
+            writer.setText(QStringLiteral("Exposure Time"),
+                           shutterMetadataValue(metadata.shutterSeconds));
+        }
+        if (metadata.aperture > 0.0) {
+            writer.setText(QStringLiteral("Aperture"),
+                           QStringLiteral("f/%1")
+                               .arg(QString::number(metadata.aperture, 'g', 4)));
+        }
+        if (metadata.iso > 0.0) {
+            writer.setText(QStringLiteral("ISO"),
+                           QString::number(static_cast<int>(std::lround(metadata.iso))));
+        }
+        if (metadata.whiteBalanceTemperatureKelvin > 0) {
+            writer.setText(QStringLiteral("White Balance Temperature"),
+                           QStringLiteral("%1 K")
+                               .arg(metadata.whiteBalanceTemperatureKelvin));
+        }
     }
-    if (metadata.focalLengthMm > 0.0) {
-        writer.setText(QStringLiteral("Focal Length"),
-                       QStringLiteral("%1 mm")
-                           .arg(QString::number(metadata.focalLengthMm, 'g', 5)));
+
+    if (settings.includeCaptureDateTime && metadata.captureTimestamp > 0) {
+        writer.setText(QStringLiteral("Date/Time Captured"),
+                       QDateTime::fromSecsSinceEpoch(metadata.captureTimestamp)
+                           .toString(Qt::ISODate));
     }
-    if (metadata.whiteBalanceTemperatureKelvin > 0) {
-        writer.setText(QStringLiteral("White Balance Temperature"),
-                       QStringLiteral("%1 K")
-                           .arg(metadata.whiteBalanceTemperatureKelvin));
+
+    if (settings.includeLocationInfo && metadata.hasLocation) {
+        writer.setText(QStringLiteral("GPS Latitude"),
+                       QString::number(metadata.latitude, 'f', 6));
+        writer.setText(QStringLiteral("GPS Longitude"),
+                       QString::number(metadata.longitude, 'f', 6));
+        if (metadata.hasAltitude) {
+            writer.setText(QStringLiteral("GPS Altitude"),
+                           QStringLiteral("%1 m")
+                               .arg(QString::number(metadata.altitudeMeters, 'f', 2)));
+        }
+    }
+
+    if (settings.includeCopyrightCreator) {
+        addTextIfAvailable(writer, QStringLiteral("Author"), metadata.creator);
+        addTextIfAvailable(writer, QStringLiteral("Copyright"), metadata.copyrightNotice);
+    }
+
+    if (settings.includeDescriptionKeywords) {
+        addTextIfAvailable(writer, QStringLiteral("Description"), metadata.description);
+        addTextIfAvailable(writer, QStringLiteral("Keywords"), metadata.keywords);
+    }
+
+    if (settings.includeDeviceIdentifiers) {
+        addTextIfAvailable(writer,
+                           QStringLiteral("Camera Serial Number"),
+                           metadata.cameraSerial);
+        addTextIfAvailable(writer,
+                           QStringLiteral("Lens Serial Number"),
+                           metadata.lensSerial);
     }
 }
 
@@ -241,9 +299,7 @@ bool writeExportImage(const QImage &image,
         if (settings.format == ExportDialog::Format::Jpeg) {
             writer.setQuality(std::clamp(settings.quality, 1, 100));
         }
-        if (settings.includeMetadata) {
-            addAvailableMetadata(writer, metadata);
-        }
+        addAvailableMetadata(writer, metadata, settings);
 
         if (!writer.write(image)) {
             if (error) {
@@ -357,12 +413,30 @@ void PhotoExportController::exportCurrentPhoto()
         return;
     }
 
+    imaging::PhotoMetadata exportMetadata = imaging::PhotoMetadataLoader::load(sourcePath);
+    if (exportMetadata.shutterSeconds <= 0.0) {
+        exportMetadata.shutterSeconds = rendered.metadata.shutterSeconds;
+    }
+    if (exportMetadata.aperture <= 0.0) {
+        exportMetadata.aperture = rendered.metadata.aperture;
+    }
+    if (exportMetadata.iso <= 0.0) {
+        exportMetadata.iso = rendered.metadata.iso;
+    }
+    if (exportMetadata.focalLengthMm <= 0.0) {
+        exportMetadata.focalLengthMm = rendered.metadata.focalLengthMm;
+    }
+    if (exportMetadata.whiteBalanceTemperatureKelvin <= 0) {
+        exportMetadata.whiteBalanceTemperatureKelvin =
+            rendered.metadata.whiteBalanceTemperatureKelvin;
+    }
+
     const QImage outputImage = resizeForExport(rendered.image, settings);
     QString error;
     if (!writeExportImage(outputImage,
                           exportPath,
                           settings,
-                          rendered.metadata,
+                          exportMetadata,
                           &error)) {
         QMessageBox::critical(m_window,
                               tr("Export Failed"),

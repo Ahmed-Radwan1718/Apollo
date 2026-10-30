@@ -143,8 +143,24 @@ ExportDialog::Settings loadRememberedExportSettings()
         1,
         settings.value(QStringLiteral("quality"), remembered.quality).toInt(),
         100);
-    remembered.includeMetadata = settings.value(
-        QStringLiteral("includeMetadata"), remembered.includeMetadata).toBool();
+
+    const bool legacyIncludeMetadata = settings.value(
+        QStringLiteral("includeMetadata"), true).toBool();
+    remembered.includeCameraLensInfo = settings.value(
+        QStringLiteral("metadataCameraLens"), legacyIncludeMetadata).toBool();
+    remembered.includeCaptureSettings = settings.value(
+        QStringLiteral("metadataCaptureSettings"), legacyIncludeMetadata).toBool();
+    remembered.includeCaptureDateTime = settings.value(
+        QStringLiteral("metadataCaptureDateTime"), legacyIncludeMetadata).toBool();
+    remembered.includeLocationInfo = settings.value(
+        QStringLiteral("metadataLocation"), false).toBool();
+    remembered.includeCopyrightCreator = settings.value(
+        QStringLiteral("metadataCopyrightCreator"), legacyIncludeMetadata).toBool();
+    remembered.includeDescriptionKeywords = settings.value(
+        QStringLiteral("metadataDescriptionKeywords"), legacyIncludeMetadata).toBool();
+    remembered.includeDeviceIdentifiers = settings.value(
+        QStringLiteral("metadataDeviceIdentifiers"), false).toBool();
+
     remembered.subfolderName = settings.value(
         QStringLiteral("subfolderName"), QStringLiteral("Exports")).toString();
     remembered.customFolder = settings.value(QStringLiteral("customFolder")).toString();
@@ -175,7 +191,20 @@ void saveRememberedExportSettings(const ExportDialog::Settings &remembered)
     settings.setValue(QStringLiteral("locationMode"), locationMode);
 
     settings.setValue(QStringLiteral("quality"), remembered.quality);
-    settings.setValue(QStringLiteral("includeMetadata"), remembered.includeMetadata);
+    settings.setValue(QStringLiteral("metadataCameraLens"),
+                      remembered.includeCameraLensInfo);
+    settings.setValue(QStringLiteral("metadataCaptureSettings"),
+                      remembered.includeCaptureSettings);
+    settings.setValue(QStringLiteral("metadataCaptureDateTime"),
+                      remembered.includeCaptureDateTime);
+    settings.setValue(QStringLiteral("metadataLocation"),
+                      remembered.includeLocationInfo);
+    settings.setValue(QStringLiteral("metadataCopyrightCreator"),
+                      remembered.includeCopyrightCreator);
+    settings.setValue(QStringLiteral("metadataDescriptionKeywords"),
+                      remembered.includeDescriptionKeywords);
+    settings.setValue(QStringLiteral("metadataDeviceIdentifiers"),
+                      remembered.includeDeviceIdentifiers);
     settings.setValue(QStringLiteral("subfolderName"), remembered.subfolderName);
     settings.setValue(QStringLiteral("customFolder"), remembered.customFolder);
     settings.endGroup();
@@ -189,7 +218,7 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
 {
     setWindowTitle(tr("Export"));
     setModal(true);
-    resize(460, 500);
+    resize(460, 620);
     setMinimumWidth(460);
     setObjectName(QStringLiteral("exportDialog"));
 
@@ -272,18 +301,63 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     metadataGroup->setObjectName(QStringLiteral("exportSection"));
     auto *metadataLayout = new QVBoxLayout(metadataGroup);
     metadataLayout->setContentsMargins(12, 18, 12, 10);
+    metadataLayout->setSpacing(6);
 
-    m_includeMetadataCheckBox = new QCheckBox(
-        tr("Include available photo metadata"), metadataGroup);
-    m_includeMetadataCheckBox->setChecked(true);
-    metadataLayout->addWidget(m_includeMetadataCheckBox);
+    m_cameraLensMetadataCheckBox = new QCheckBox(
+        tr("Camera && lens information"), metadataGroup);
+    m_cameraLensMetadataCheckBox->setChecked(true);
+    metadataLayout->addWidget(m_cameraLensMetadataCheckBox);
+
+    m_captureSettingsMetadataCheckBox = new QCheckBox(
+        tr("Capture settings"), metadataGroup);
+    m_captureSettingsMetadataCheckBox->setChecked(true);
+    metadataLayout->addWidget(m_captureSettingsMetadataCheckBox);
+
+    m_captureDateTimeMetadataCheckBox = new QCheckBox(
+        tr("Date && time captured"), metadataGroup);
+    m_captureDateTimeMetadataCheckBox->setChecked(true);
+    metadataLayout->addWidget(m_captureDateTimeMetadataCheckBox);
+
+    m_locationMetadataCheckBox = new QCheckBox(
+        tr("Location information (GPS)"), metadataGroup);
+    m_locationMetadataCheckBox->setChecked(false);
+    metadataLayout->addWidget(m_locationMetadataCheckBox);
+
+    m_copyrightCreatorMetadataCheckBox = new QCheckBox(
+        tr("Copyright && creator"), metadataGroup);
+    m_copyrightCreatorMetadataCheckBox->setChecked(true);
+    metadataLayout->addWidget(m_copyrightCreatorMetadataCheckBox);
+
+    m_descriptionKeywordsMetadataCheckBox = new QCheckBox(
+        tr("Description && keywords"), metadataGroup);
+    m_descriptionKeywordsMetadataCheckBox->setChecked(true);
+    metadataLayout->addWidget(m_descriptionKeywordsMetadataCheckBox);
+
+    m_deviceIdentifiersMetadataCheckBox = new QCheckBox(
+        tr("Device identifiers"), metadataGroup);
+    m_deviceIdentifiersMetadataCheckBox->setChecked(false);
+    metadataLayout->addWidget(m_deviceIdentifiersMetadataCheckBox);
+
     rootLayout->addWidget(metadataGroup);
 
     const Settings rememberedSettings = loadRememberedExportSettings();
     m_formatCombo->setCurrentIndex(
         rememberedSettings.format == Format::Png ? 1 : 0);
     m_qualitySlider->setValue(rememberedSettings.quality);
-    m_includeMetadataCheckBox->setChecked(rememberedSettings.includeMetadata);
+    m_cameraLensMetadataCheckBox->setChecked(
+        rememberedSettings.includeCameraLensInfo);
+    m_captureSettingsMetadataCheckBox->setChecked(
+        rememberedSettings.includeCaptureSettings);
+    m_captureDateTimeMetadataCheckBox->setChecked(
+        rememberedSettings.includeCaptureDateTime);
+    m_locationMetadataCheckBox->setChecked(
+        rememberedSettings.includeLocationInfo);
+    m_copyrightCreatorMetadataCheckBox->setChecked(
+        rememberedSettings.includeCopyrightCreator);
+    m_descriptionKeywordsMetadataCheckBox->setChecked(
+        rememberedSettings.includeDescriptionKeywords);
+    m_deviceIdentifiersMetadataCheckBox->setChecked(
+        rememberedSettings.includeDeviceIdentifiers);
     m_subfolderEdit->setText(rememberedSettings.subfolderName);
     m_customFolder = rememberedSettings.customFolder;
 
@@ -470,7 +544,13 @@ ExportDialog::Settings ExportDialog::settings() const
     }
 
     result.quality = m_qualitySlider->value();
-    result.includeMetadata = m_includeMetadataCheckBox->isChecked();
+    result.includeCameraLensInfo = m_cameraLensMetadataCheckBox->isChecked();
+    result.includeCaptureSettings = m_captureSettingsMetadataCheckBox->isChecked();
+    result.includeCaptureDateTime = m_captureDateTimeMetadataCheckBox->isChecked();
+    result.includeLocationInfo = m_locationMetadataCheckBox->isChecked();
+    result.includeCopyrightCreator = m_copyrightCreatorMetadataCheckBox->isChecked();
+    result.includeDescriptionKeywords = m_descriptionKeywordsMetadataCheckBox->isChecked();
+    result.includeDeviceIdentifiers = m_deviceIdentifiersMetadataCheckBox->isChecked();
     result.subfolderName = m_subfolderEdit->text().trimmed();
     result.customFolder = m_customFolder;
     return result;

@@ -39,7 +39,13 @@ public:
         LocationMode locationMode = LocationMode::SameAsOriginal;
         int longEdgePixels = 2048;
         int quality = 95;
-        bool includeMetadata = true;
+        bool includeCameraLensInfo = true;
+        bool includeCaptureSettings = true;
+        bool includeCaptureDateTime = true;
+        bool includeLocationInfo = false;
+        bool includeCopyrightCreator = true;
+        bool includeDescriptionKeywords = true;
+        bool includeDeviceIdentifiers = false;
         QString subfolderName;
         QString customFolder;
     };
@@ -72,6 +78,12 @@ private:
     QLabel *m_longEdgeLabel = nullptr;
     QSpinBox *m_longEdgeSpinBox = nullptr;
 
-    QCheckBox *m_includeMetadataCheckBox = nullptr;
+    QCheckBox *m_cameraLensMetadataCheckBox = nullptr;
+    QCheckBox *m_captureSettingsMetadataCheckBox = nullptr;
+    QCheckBox *m_captureDateTimeMetadataCheckBox = nullptr;
+    QCheckBox *m_locationMetadataCheckBox = nullptr;
+    QCheckBox *m_copyrightCreatorMetadataCheckBox = nullptr;
+    QCheckBox *m_descriptionKeywordsMetadataCheckBox = nullptr;
+    QCheckBox *m_deviceIdentifiersMetadataCheckBox = nullptr;
     QPushButton *m_exportButton = nullptr;
 };
