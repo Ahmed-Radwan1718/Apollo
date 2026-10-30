@@ -218,7 +218,7 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
 {
     setWindowTitle(tr("Export"));
     setModal(true);
-    resize(460, 620);
+    resize(460, 560);
     setMinimumWidth(460);
     setObjectName(QStringLiteral("exportDialog"));
 
@@ -299,45 +299,89 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
 
     auto *metadataGroup = new QGroupBox(tr("Metadata"), this);
     metadataGroup->setObjectName(QStringLiteral("exportSection"));
-    auto *metadataLayout = new QVBoxLayout(metadataGroup);
-    metadataLayout->setContentsMargins(12, 18, 12, 10);
-    metadataLayout->setSpacing(6);
+    auto *metadataLayout = new QHBoxLayout(metadataGroup);
+    metadataLayout->setContentsMargins(12, 20, 12, 10);
+    metadataLayout->setSpacing(24);
+
+    auto *technicalColumn = new QWidget(metadataGroup);
+    auto *technicalLayout = new QVBoxLayout(technicalColumn);
+    technicalLayout->setContentsMargins(0, 0, 0, 0);
+    technicalLayout->setSpacing(6);
+
+    auto *technicalLabel = new QLabel(tr("Technical"), technicalColumn);
+    technicalLabel->setObjectName(QStringLiteral("metadataSubheading"));
+    technicalLayout->addWidget(technicalLabel);
 
     m_cameraLensMetadataCheckBox = new QCheckBox(
-        tr("Camera && lens information"), metadataGroup);
+        tr("Camera && lens information"), technicalColumn);
     m_cameraLensMetadataCheckBox->setChecked(true);
-    metadataLayout->addWidget(m_cameraLensMetadataCheckBox);
+    technicalLayout->addWidget(m_cameraLensMetadataCheckBox);
 
     m_captureSettingsMetadataCheckBox = new QCheckBox(
-        tr("Capture settings"), metadataGroup);
+        tr("Capture settings"), technicalColumn);
     m_captureSettingsMetadataCheckBox->setChecked(true);
-    metadataLayout->addWidget(m_captureSettingsMetadataCheckBox);
+    technicalLayout->addWidget(m_captureSettingsMetadataCheckBox);
 
     m_captureDateTimeMetadataCheckBox = new QCheckBox(
-        tr("Date && time captured"), metadataGroup);
+        tr("Date && time captured"), technicalColumn);
     m_captureDateTimeMetadataCheckBox->setChecked(true);
-    metadataLayout->addWidget(m_captureDateTimeMetadataCheckBox);
+    technicalLayout->addWidget(m_captureDateTimeMetadataCheckBox);
 
-    m_locationMetadataCheckBox = new QCheckBox(
-        tr("Location information (GPS)"), metadataGroup);
-    m_locationMetadataCheckBox->setChecked(false);
-    metadataLayout->addWidget(m_locationMetadataCheckBox);
-
-    m_copyrightCreatorMetadataCheckBox = new QCheckBox(
-        tr("Copyright && creator"), metadataGroup);
-    m_copyrightCreatorMetadataCheckBox->setChecked(true);
-    metadataLayout->addWidget(m_copyrightCreatorMetadataCheckBox);
-
-    m_descriptionKeywordsMetadataCheckBox = new QCheckBox(
-        tr("Description && keywords"), metadataGroup);
-    m_descriptionKeywordsMetadataCheckBox->setChecked(true);
-    metadataLayout->addWidget(m_descriptionKeywordsMetadataCheckBox);
+    technicalLayout->addSpacing(10);
 
     m_deviceIdentifiersMetadataCheckBox = new QCheckBox(
-        tr("Device identifiers"), metadataGroup);
+        tr("Device identifiers"), technicalColumn);
     m_deviceIdentifiersMetadataCheckBox->setChecked(false);
-    metadataLayout->addWidget(m_deviceIdentifiersMetadataCheckBox);
+    technicalLayout->addWidget(m_deviceIdentifiersMetadataCheckBox);
 
+    auto *deviceIdentifiersHint = new QLabel(
+        tr("May include camera or lens serial numbers"), technicalColumn);
+    deviceIdentifiersHint->setObjectName(QStringLiteral("metadataHint"));
+    deviceIdentifiersHint->setWordWrap(true);
+    deviceIdentifiersHint->setContentsMargins(22, 0, 0, 0);
+    technicalLayout->addWidget(deviceIdentifiersHint);
+    technicalLayout->addStretch(1);
+
+    auto *detailsColumn = new QWidget(metadataGroup);
+    auto *detailsLayout = new QVBoxLayout(detailsColumn);
+    detailsLayout->setContentsMargins(0, 0, 0, 0);
+    detailsLayout->setSpacing(6);
+
+    auto *detailsLabel = new QLabel(tr("Details"), detailsColumn);
+    detailsLabel->setObjectName(QStringLiteral("metadataSubheading"));
+    detailsLayout->addWidget(detailsLabel);
+
+    m_copyrightCreatorMetadataCheckBox = new QCheckBox(
+        tr("Copyright && creator"), detailsColumn);
+    m_copyrightCreatorMetadataCheckBox->setChecked(true);
+    detailsLayout->addWidget(m_copyrightCreatorMetadataCheckBox);
+
+    m_descriptionKeywordsMetadataCheckBox = new QCheckBox(
+        tr("Description && keywords"), detailsColumn);
+    m_descriptionKeywordsMetadataCheckBox->setChecked(true);
+    detailsLayout->addWidget(m_descriptionKeywordsMetadataCheckBox);
+
+    detailsLayout->addSpacing(16);
+
+    auto *privacyLabel = new QLabel(tr("Privacy"), detailsColumn);
+    privacyLabel->setObjectName(QStringLiteral("metadataSubheading"));
+    detailsLayout->addWidget(privacyLabel);
+
+    m_locationMetadataCheckBox = new QCheckBox(
+        tr("Location information (GPS)"), detailsColumn);
+    m_locationMetadataCheckBox->setChecked(false);
+    detailsLayout->addWidget(m_locationMetadataCheckBox);
+
+    auto *locationHint = new QLabel(
+        tr("May reveal where the photo was taken"), detailsColumn);
+    locationHint->setObjectName(QStringLiteral("metadataHint"));
+    locationHint->setWordWrap(true);
+    locationHint->setContentsMargins(22, 0, 0, 0);
+    detailsLayout->addWidget(locationHint);
+    detailsLayout->addStretch(1);
+
+    metadataLayout->addWidget(technicalColumn, 1);
+    metadataLayout->addWidget(detailsColumn, 1);
     rootLayout->addWidget(metadataGroup);
 
     const Settings rememberedSettings = loadRememberedExportSettings();
@@ -452,6 +496,15 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
         "  background: #181818;"
         "}"
         "QLabel { color: #cfcfcf; }"
+        "QLabel#metadataSubheading {"
+        "  color: #dddddd;"
+        "  font-size: 12px;"
+        "  font-weight: 600;"
+        "}"
+        "QLabel#metadataHint {"
+        "  color: #858585;"
+        "  font-size: 10px;"
+        "}"
         "QLabel:disabled { color: #676767; }"
         "QCheckBox { color: #cfcfcf; spacing: 8px; }"
         "QCheckBox::indicator {"
