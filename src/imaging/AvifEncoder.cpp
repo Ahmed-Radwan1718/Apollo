@@ -1,26 +1,18 @@
 #include "imaging/AvifEncoder.h"
 
-#include <avif/avif.h>
-
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
 #include <QImage>
+#include <QImageWriter>
+#include <QProcess>
 #include <QSaveFile>
-#include <QThread>
+#include <QTemporaryDir>
 
 #include <algorithm>
-#include <cstdint>
-#include <memory>
 
 namespace imaging {
 namespace {
-
-struct AvifOutputData {
-    avifRWData data = AVIF_DATA_EMPTY;
-
-    ~AvifOutputData()
-    {
-        avifRWDataFree(&data);
-    }
-};
 
 void setError(QString *error, const QString &message)
 {
@@ -29,11 +21,64 @@ void setError(QString *error, const QString &message)
     }
 }
 
-QString avifError(const char *context, avifResult result)
+QString bundledEncoderPath()
 {
-    return QStringLiteral("%1: %2")
-        .arg(QString::fromLatin1(context),
-             QString::fromLatin1(avifResultToString(result)));
+    return QDir(QCoreApplication::applicationDirPath())
+        .filePath(QStringLiteral("avifenc.exe"));
+}
+
+QString processFailureMessage(QProcess &process)
+{
+    QString details = QString::fromUtf8(process.readAllStandardError()).trimmed();
+    if (details.isEmpty()) {
+        details = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+    }
+    if (details.isEmpty()) {
+        details = process.errorString();
+    }
+    return details;
+}
+
+bool copyFileAtomically(const QString &sourcePath,
+                        const QString &destinationPath,
+                        QString *error)
+{
+    QFile source(sourcePath);
+    if (!source.open(QIODevice::ReadOnly)) {
+        setError(error, source.errorString());
+        return false;
+    }
+
+    QSaveFile destination(destinationPath);
+    if (!destination.open(QIODevice::WriteOnly)) {
+        setError(error, destination.errorString());
+        return false;
+    }
+
+    char buffer[1024 * 1024];
+    while (true) {
+        const qint64 bytesRead = source.read(buffer, sizeof(buffer));
+        if (bytesRead < 0) {
+            setError(error, source.errorString());
+            destination.cancelWriting();
+            return false;
+        }
+        if (bytesRead == 0) {
+            break;
+        }
+        if (destination.write(buffer, bytesRead) != bytesRead) {
+            setError(error, destination.errorString());
+            destination.cancelWriting();
+            return false;
+        }
+    }
+
+    if (!destination.commit()) {
+        setError(error, destination.errorString());
+        return false;
+    }
+
+    return true;
 }
 
 } // namespace
@@ -49,97 +94,84 @@ bool AvifEncoder::write(const QImage &image,
         return false;
     }
 
-    const QImage rgba = image.convertToFormat(QImage::Format_RGBA8888);
-    if (rgba.isNull()) {
-        setError(error, QStringLiteral("Apollo could not prepare the image for AVIF encoding."));
+    const QString encoderPath = bundledEncoderPath();
+    if (!QFile::exists(encoderPath)) {
+        setError(error,
+                 QStringLiteral("Apollo's bundled AVIF encoder is missing: %1")
+                     .arg(QDir::toNativeSeparators(encoderPath)));
         return false;
     }
 
-    using AvifImagePtr = std::unique_ptr<avifImage, decltype(&avifImageDestroy)>;
-    AvifImagePtr avifImage(
-        avifImageCreate(static_cast<uint32_t>(rgba.width()),
-                        static_cast<uint32_t>(rgba.height()),
-                        8,
-                        AVIF_PIXEL_FORMAT_YUV444),
-        &avifImageDestroy);
-    if (!avifImage) {
-        setError(error, QStringLiteral("Apollo could not allocate the AVIF image."));
+    QTemporaryDir temporaryDirectory;
+    if (!temporaryDirectory.isValid()) {
+        setError(error, QStringLiteral("Apollo could not create temporary files for AVIF export."));
         return false;
     }
 
-    avifImage->colorPrimaries = AVIF_COLOR_PRIMARIES_BT709;
-    avifImage->transferCharacteristics = AVIF_TRANSFER_CHARACTERISTICS_SRGB;
-    avifImage->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_BT709;
-    avifImage->yuvRange = AVIF_RANGE_FULL;
-
-    avifRGBImage rgb;
-    avifRGBImageSetDefaults(&rgb, avifImage.get());
-    rgb.depth = 8;
-    rgb.format = AVIF_RGB_FORMAT_RGBA;
-    rgb.pixels = const_cast<uint8_t *>(rgba.constBits());
-    rgb.rowBytes = static_cast<uint32_t>(rgba.bytesPerLine());
-
-    const avifResult conversionResult = avifImageRGBToYUV(avifImage.get(), &rgb);
-    if (conversionResult != AVIF_RESULT_OK) {
-        setError(error, avifError("AVIF color conversion failed", conversionResult));
+    const QString inputPath = QDir(temporaryDirectory.path())
+                                  .filePath(QStringLiteral("input.png"));
+    QImageWriter pngWriter(inputPath, QByteArrayLiteral("png"));
+    if (!pngWriter.write(image)) {
+        setError(error,
+                 QStringLiteral("Apollo could not prepare the AVIF input image: %1")
+                     .arg(pngWriter.errorString()));
         return false;
     }
+
+    QStringList arguments;
+    arguments << QStringLiteral("--qcolor")
+              << QString::number(std::clamp(quality, 1, 100))
+              << QStringLiteral("--qalpha")
+              << QStringLiteral("100")
+              << QStringLiteral("--speed")
+              << QStringLiteral("6");
 
     if (!xmpMetadata.isEmpty()) {
-        const avifResult metadataResult = avifImageSetMetadataXMP(
-            avifImage.get(),
-            reinterpret_cast<const uint8_t *>(xmpMetadata.constData()),
-            static_cast<size_t>(xmpMetadata.size()));
-        if (metadataResult != AVIF_RESULT_OK) {
-            setError(error, avifError("AVIF metadata could not be attached", metadataResult));
+        const QString xmpPath = QDir(temporaryDirectory.path())
+                                    .filePath(QStringLiteral("metadata.xmp"));
+        QFile xmpFile(xmpPath);
+        if (!xmpFile.open(QIODevice::WriteOnly)
+            || xmpFile.write(xmpMetadata) != xmpMetadata.size()) {
+            setError(error,
+                     QStringLiteral("Apollo could not prepare metadata for AVIF export: %1")
+                         .arg(xmpFile.errorString()));
             return false;
         }
+        xmpFile.close();
+        arguments << QStringLiteral("--xmp") << xmpPath;
     }
 
-    using AvifEncoderPtr = std::unique_ptr<avifEncoder, decltype(&avifEncoderDestroy)>;
-    AvifEncoderPtr encoder(avifEncoderCreate(), &avifEncoderDestroy);
-    if (!encoder) {
-        setError(error, QStringLiteral("Apollo could not allocate the AVIF encoder."));
+    const QString encodedPath = QDir(temporaryDirectory.path())
+                                    .filePath(QStringLiteral("output.avif"));
+    arguments << inputPath << encodedPath;
+
+    QProcess encoderProcess;
+    encoderProcess.setProgram(encoderPath);
+    encoderProcess.setArguments(arguments);
+    encoderProcess.start();
+
+    if (!encoderProcess.waitForStarted()) {
+        setError(error,
+                 QStringLiteral("Apollo could not start its bundled AVIF encoder: %1")
+                     .arg(encoderProcess.errorString()));
         return false;
     }
 
-    encoder->maxThreads = std::clamp(QThread::idealThreadCount(), 1, 64);
-    encoder->quality = std::clamp(quality, 1, 100);
-    encoder->qualityAlpha = AVIF_QUALITY_LOSSLESS;
-    encoder->speed = 6;
-
-    AvifOutputData output;
-    const avifResult encodeResult = avifEncoderWrite(
-        encoder.get(), avifImage.get(), &output.data);
-    if (encodeResult != AVIF_RESULT_OK) {
-        QString message = avifError("AVIF encoding failed", encodeResult);
-        if (encoder->diag.error[0] != '\0') {
-            message += QStringLiteral(" (%1)")
-                .arg(QString::fromUtf8(encoder->diag.error));
-        }
-        setError(error, message);
+    encoderProcess.waitForFinished(-1);
+    if (encoderProcess.exitStatus() != QProcess::NormalExit
+        || encoderProcess.exitCode() != 0) {
+        setError(error,
+                 QStringLiteral("AVIF encoding failed: %1")
+                     .arg(processFailureMessage(encoderProcess)));
         return false;
     }
 
-    QSaveFile file(filePath);
-    if (!file.open(QIODevice::WriteOnly)) {
-        setError(error, file.errorString());
+    if (!QFile::exists(encodedPath)) {
+        setError(error, QStringLiteral("AVIF encoding finished without producing an output file."));
         return false;
     }
 
-    const qint64 byteCount = static_cast<qint64>(output.data.size);
-    if (file.write(reinterpret_cast<const char *>(output.data.data), byteCount) != byteCount) {
-        setError(error, file.errorString());
-        file.cancelWriting();
-        return false;
-    }
-
-    if (!file.commit()) {
-        setError(error, file.errorString());
-        return false;
-    }
-
-    return true;
+    return copyFileAtomically(encodedPath, filePath, error);
 }
 
 } // namespace imaging
