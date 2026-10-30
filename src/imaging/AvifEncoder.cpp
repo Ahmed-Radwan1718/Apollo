@@ -39,6 +39,22 @@ QString processFailureMessage(QProcess &process)
     return details;
 }
 
+bool writeTemporaryPayload(const QString &filePath,
+                           const QByteArray &payload,
+                           const QString &description,
+                           QString *error)
+{
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly)
+        || file.write(payload) != payload.size()) {
+        setError(error,
+                 QStringLiteral("Apollo could not prepare %1 for AVIF export: %2")
+                     .arg(description, file.errorString()));
+        return false;
+    }
+    return true;
+}
+
 bool copyFileAtomically(const QString &sourcePath,
                         const QString &destinationPath,
                         QString *error)
@@ -87,6 +103,7 @@ bool AvifEncoder::write(const QImage &image,
                         const QString &filePath,
                         int quality,
                         const QByteArray &xmpMetadata,
+                        const QByteArray &iccProfile,
                         QString *error)
 {
     if (image.isNull()) {
@@ -129,16 +146,25 @@ bool AvifEncoder::write(const QImage &image,
     if (!xmpMetadata.isEmpty()) {
         const QString xmpPath = QDir(temporaryDirectory.path())
                                     .filePath(QStringLiteral("metadata.xmp"));
-        QFile xmpFile(xmpPath);
-        if (!xmpFile.open(QIODevice::WriteOnly)
-            || xmpFile.write(xmpMetadata) != xmpMetadata.size()) {
-            setError(error,
-                     QStringLiteral("Apollo could not prepare metadata for AVIF export: %1")
-                         .arg(xmpFile.errorString()));
+        if (!writeTemporaryPayload(xmpPath,
+                                   xmpMetadata,
+                                   QStringLiteral("metadata"),
+                                   error)) {
             return false;
         }
-        xmpFile.close();
         arguments << QStringLiteral("--xmp") << xmpPath;
+    }
+
+    if (!iccProfile.isEmpty()) {
+        const QString iccPath = QDir(temporaryDirectory.path())
+                                    .filePath(QStringLiteral("color-profile.icc"));
+        if (!writeTemporaryPayload(iccPath,
+                                   iccProfile,
+                                   QStringLiteral("color profile"),
+                                   error)) {
+            return false;
+        }
+        arguments << QStringLiteral("--icc") << iccPath;
     }
 
     const QString encodedPath = QDir(temporaryDirectory.path())
