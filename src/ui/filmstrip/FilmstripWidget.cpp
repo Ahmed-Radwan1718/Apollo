@@ -2,6 +2,7 @@
 
 #include "app/ApplicationStateStore.h"
 #include "app/DevelopSettingsClipboard.h"
+#include "app/DevelopSettingsSync.h"
 #include "ui/canvas/PhotoCanvas.h"
 
 #include <QAction>
@@ -58,6 +59,23 @@ QLabel *photoCounterLabel(QScrollArea *scrollArea)
         QStringLiteral("filmstripPhotoCounter"), Qt::FindDirectChildrenOnly);
 }
 
+QWidget *thumbnailForPath(const QHash<QString, QWidget *> &thumbnails,
+                          const QString &filePath)
+{
+    QWidget *thumbnail = thumbnails.value(filePath, nullptr);
+    if (thumbnail || filePath.isEmpty()) {
+        return thumbnail;
+    }
+
+    const QString absolutePath = QFileInfo(filePath).absoluteFilePath();
+    for (auto iterator = thumbnails.constBegin(); iterator != thumbnails.constEnd(); ++iterator) {
+        if (QFileInfo(iterator.key()).absoluteFilePath() == absolutePath) {
+            return iterator.value();
+        }
+    }
+    return nullptr;
+}
+
 void positionPhotoCounter(QScrollArea *scrollArea)
 {
     QLabel *counter = photoCounterLabel(scrollArea);
@@ -82,16 +100,7 @@ void updatePhotoCounter(QScrollArea *scrollArea,
         return;
     }
 
-    QWidget *currentThumbnail = thumbnails.value(currentFilePath, nullptr);
-    if (!currentThumbnail && !currentFilePath.isEmpty()) {
-        const QString absoluteCurrentPath = QFileInfo(currentFilePath).absoluteFilePath();
-        for (auto iterator = thumbnails.constBegin(); iterator != thumbnails.constEnd(); ++iterator) {
-            if (QFileInfo(iterator.key()).absoluteFilePath() == absoluteCurrentPath) {
-                currentThumbnail = iterator.value();
-                break;
-            }
-        }
-    }
+    QWidget *currentThumbnail = thumbnailForPath(thumbnails, currentFilePath);
 
     int currentIndex = 0;
     if (currentThumbnail && contentLayout) {
@@ -365,7 +374,10 @@ public:
                                 int status,
                                 int colorLabel,
                                 bool edited,
-                                std::function<void()> activated,
+                                std::function<void(bool)> activated,
+                                std::function<void()> contextSelected,
+                                std::function<bool()> syncAvailable,
+                                std::function<void()> syncRequested,
                                 std::function<void(int)> ratingChanged,
                                 std::function<void(int)> statusChanged,
                                 std::function<void(int)> colorLabelChanged,
@@ -379,6 +391,9 @@ public:
         , m_filePath(QFileInfo(filePath).absoluteFilePath())
         , m_fileName(QFileInfo(filePath).fileName())
         , m_activated(std::move(activated))
+        , m_contextSelected(std::move(contextSelected))
+        , m_syncAvailable(std::move(syncAvailable))
+        , m_syncRequested(std::move(syncRequested))
         , m_ratingChanged(std::move(ratingChanged))
         , m_statusChanged(std::move(statusChanged))
         , m_colorLabelChanged(std::move(colorLabelChanged))
@@ -399,6 +414,16 @@ public:
         }
 
         m_selected = selected;
+        update();
+    }
+
+    void setPrimary(bool primary)
+    {
+        if (m_primary == primary) {
+            return;
+        }
+
+        m_primary = primary;
         update();
     }
 
@@ -451,7 +476,7 @@ protected:
         if (event->button() == Qt::LeftButton
             && rect().contains(event->position().toPoint())
             && m_activated) {
-            m_activated();
+            m_activated(event->modifiers().testFlag(Qt::ControlModifier));
         }
 
         QWidget::mouseReleaseEvent(event);
@@ -459,6 +484,10 @@ protected:
 
     void contextMenuEvent(QContextMenuEvent *event) override
     {
+        if (m_contextSelected) {
+            m_contextSelected();
+        }
+
         QMenu menu(this);
         configureContextMenu(&menu, kContextMenuWidth);
 
@@ -520,6 +549,8 @@ protected:
         QAction *copyEditSettingsAction = menu.addAction(tr("Copy Edit Settings"));
         QAction *pasteEditSettingsAction = menu.addAction(tr("Paste Edit Settings"));
         pasteEditSettingsAction->setEnabled(DevelopSettingsClipboard::canPaste());
+        QAction *syncSettingsAction = menu.addAction(tr("Sync Settings..."));
+        syncSettingsAction->setEnabled(m_syncAvailable && m_syncAvailable());
         QAction *resetAllEditsAction = menu.addAction(tr("Reset All Edits"));
         menu.addSeparator();
         QAction *showInExplorerAction = menu.addAction(tr("Show in File Explorer"));
@@ -543,6 +574,10 @@ protected:
             DevelopSettingsClipboard::copyFromPhoto(m_filePath);
         } else if (selectedAction == pasteEditSettingsAction) {
             DevelopSettingsClipboard::pasteToPhoto(window(), m_filePath);
+        } else if (selectedAction == syncSettingsAction) {
+            if (m_syncRequested) {
+                m_syncRequested();
+            }
         } else if (selectedAction == resetAllEditsAction) {
             QMetaObject::invokeMethod(window(),
                                       "openImage",
@@ -566,12 +601,14 @@ protected:
         Q_UNUSED(event)
 
         QPainter painter(this);
-        painter.fillRect(rect(), m_selected ? QColor(36, 36, 36)
-                                            : QColor(21, 21, 21));
+        painter.fillRect(rect(), m_primary ? QColor(48, 48, 48)
+                                           : (m_selected ? QColor(36, 36, 36)
+                                                         : QColor(21, 21, 21)));
 
         const QRect imageRect(0, 0, width(), kThumbnailImageHeight);
-        painter.fillRect(imageRect, m_selected ? QColor(31, 31, 31)
-                                               : QColor(17, 17, 17));
+        painter.fillRect(imageRect, m_primary ? QColor(40, 40, 40)
+                                              : (m_selected ? QColor(31, 31, 31)
+                                                            : QColor(17, 17, 17)));
 
         if (!m_thumbnail.isNull()) {
             painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
@@ -652,8 +689,9 @@ protected:
         fileNameFont.setPointSizeF(7.5);
         fileNameFont.setBold(false);
         painter.setFont(fileNameFont);
-        painter.setPen(m_selected ? QColor(214, 214, 214)
-                                  : QColor(166, 166, 166));
+        painter.setPen(m_primary ? QColor(238, 238, 238)
+                                 : (m_selected ? QColor(214, 214, 214)
+                                               : QColor(166, 166, 166)));
 
         const QRect labelRect(2,
                               kThumbnailImageHeight + 1,
@@ -670,7 +708,10 @@ private:
     QImage m_thumbnail;
     QString m_filePath;
     QString m_fileName;
-    std::function<void()> m_activated;
+    std::function<void(bool)> m_activated;
+    std::function<void()> m_contextSelected;
+    std::function<bool()> m_syncAvailable;
+    std::function<void()> m_syncRequested;
     std::function<void(int)> m_ratingChanged;
     std::function<void(int)> m_statusChanged;
     std::function<void(int)> m_colorLabelChanged;
@@ -680,6 +721,7 @@ private:
     int m_colorLabel = 0;
     bool m_edited = false;
     bool m_selected = false;
+    bool m_primary = false;
 };
 
 } // namespace
@@ -784,21 +826,8 @@ FilmstripWidget::FilmstripWidget(QWidget *parent)
 
             connect(historyList, &QListWidget::currentRowChanged, this,
                     [this](int) {
-                        QWidget *current = m_thumbnails.value(m_currentFilePath, nullptr);
-                        if (!current && !m_currentFilePath.isEmpty()) {
-                            const QString absoluteCurrentPath =
-                                QFileInfo(m_currentFilePath).absoluteFilePath();
-                            for (auto iterator = m_thumbnails.constBegin();
-                                 iterator != m_thumbnails.constEnd();
-                                 ++iterator) {
-                                if (QFileInfo(iterator.key()).absoluteFilePath()
-                                    == absoluteCurrentPath) {
-                                    current = iterator.value();
-                                    break;
-                                }
-                            }
-                        }
-
+                        QWidget *current = thumbnailForPath(m_thumbnails,
+                                                            m_currentFilePath);
                         if (current) {
                             static_cast<FilmstripThumbnail *>(current)->setEdited(
                                 photoHasEdits(m_currentFilePath));
@@ -829,8 +858,17 @@ void FilmstripWidget::addPhoto(const QString &filePath, const QImage &image)
         m_photoStatuses.value(absoluteFilePath, 0),
         m_photoColorLabels.value(absoluteFilePath, 0),
         photoHasEdits(absoluteFilePath),
+        [this, filePath](bool additiveSelection) {
+            handleThumbnailActivated(filePath, additiveSelection);
+        },
         [this, filePath]() {
-            activatePhoto(filePath);
+            prepareContextSelection(filePath);
+        },
+        [this]() {
+            return canSyncSettings();
+        },
+        [this]() {
+            syncSelectedSettings();
         },
         [this, filePath](int rating) {
             setPhotoRating(filePath, rating);
@@ -886,14 +924,71 @@ bool FilmstripWidget::eventFilter(QObject *watched, QEvent *event)
 
 void FilmstripWidget::activatePhoto(const QString &filePath)
 {
-    if (filePath.isEmpty() || filePath == m_currentFilePath) {
+    const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
+    if (absoluteFilePath.isEmpty()
+        || absoluteFilePath == QFileInfo(m_currentFilePath).absoluteFilePath()) {
         return;
     }
 
     QMetaObject::invokeMethod(window(),
                               "openImage",
                               Qt::QueuedConnection,
-                              Q_ARG(QString, filePath));
+                              Q_ARG(QString, absoluteFilePath));
+}
+
+void FilmstripWidget::handleThumbnailActivated(const QString &filePath,
+                                               bool additiveSelection)
+{
+    const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
+    if (absoluteFilePath.isEmpty()) {
+        return;
+    }
+
+    if (!additiveSelection) {
+        m_selectedFilePaths.clear();
+        m_selectedFilePaths.insert(absoluteFilePath);
+        updateSelectionVisuals();
+        activatePhoto(absoluteFilePath);
+        return;
+    }
+
+    if (m_selectedFilePaths.contains(absoluteFilePath)) {
+        if (m_selectedFilePaths.size() <= 1) {
+            return;
+        }
+
+        const bool removingPrimary =
+            absoluteFilePath == QFileInfo(m_currentFilePath).absoluteFilePath();
+        m_selectedFilePaths.remove(absoluteFilePath);
+        updateSelectionVisuals();
+
+        if (removingPrimary) {
+            const QString replacement = firstSelectedPhotoPath();
+            if (!replacement.isEmpty()) {
+                QMetaObject::invokeMethod(window(),
+                                          "openImage",
+                                          Qt::QueuedConnection,
+                                          Q_ARG(QString, replacement));
+            }
+        }
+        return;
+    }
+
+    m_selectedFilePaths.insert(absoluteFilePath);
+    updateSelectionVisuals();
+    activatePhoto(absoluteFilePath);
+}
+
+void FilmstripWidget::prepareContextSelection(const QString &filePath)
+{
+    const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
+    if (absoluteFilePath.isEmpty() || m_selectedFilePaths.contains(absoluteFilePath)) {
+        return;
+    }
+
+    m_selectedFilePaths.clear();
+    m_selectedFilePaths.insert(absoluteFilePath);
+    updateSelectionVisuals();
 }
 
 void FilmstripWidget::removePhoto(const QString &filePath)
@@ -938,10 +1033,14 @@ void FilmstripWidget::removePhoto(const QString &filePath)
     }
 
     const bool removingCurrent =
-        m_currentFilePath == storedPath
-        || (!m_currentFilePath.isEmpty()
-            && QFileInfo(m_currentFilePath).absoluteFilePath() == absoluteFilePath);
+        QFileInfo(m_currentFilePath).absoluteFilePath() == absoluteFilePath;
+
+    m_selectedFilePaths.remove(absoluteFilePath);
     if (removingCurrent) {
+        const QString selectedReplacement = firstSelectedPhotoPath();
+        if (!selectedReplacement.isEmpty()) {
+            nextPath = selectedReplacement;
+        }
         m_currentFilePath.clear();
     }
 
@@ -958,6 +1057,8 @@ void FilmstripWidget::removePhoto(const QString &filePath)
     if (removingCurrent && !nextPath.isEmpty()) {
         activatePhoto(nextPath);
         setCurrentPhoto(nextPath);
+    } else {
+        updateSelectionVisuals();
     }
 
     updatePhotoCounter(m_scrollArea,
@@ -969,24 +1070,22 @@ void FilmstripWidget::removePhoto(const QString &filePath)
 
 void FilmstripWidget::setCurrentPhoto(const QString &filePath)
 {
-    if (filePath == m_currentFilePath) {
-        if (QWidget *current = m_thumbnails.value(m_currentFilePath, nullptr)) {
-            static_cast<FilmstripThumbnail *>(current)->setEdited(
-                photoHasEdits(m_currentFilePath));
-        }
+    const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
+    if (absoluteFilePath.isEmpty()) {
         return;
     }
 
-    if (QWidget *previous = m_thumbnails.value(m_currentFilePath, nullptr)) {
-        static_cast<FilmstripThumbnail *>(previous)->setSelected(false);
+    if (!m_selectedFilePaths.contains(absoluteFilePath)) {
+        m_selectedFilePaths.clear();
+        m_selectedFilePaths.insert(absoluteFilePath);
     }
 
-    m_currentFilePath = filePath;
+    m_currentFilePath = absoluteFilePath;
+    updateSelectionVisuals();
 
-    if (QWidget *current = m_thumbnails.value(m_currentFilePath, nullptr)) {
-        auto *thumbnail = static_cast<FilmstripThumbnail *>(current);
-        thumbnail->setEdited(photoHasEdits(m_currentFilePath));
-        thumbnail->setSelected(true);
+    if (QWidget *current = thumbnailForPath(m_thumbnails, m_currentFilePath)) {
+        static_cast<FilmstripThumbnail *>(current)->setEdited(
+            photoHasEdits(m_currentFilePath));
     }
 
     updatePhotoCounter(m_scrollArea,
@@ -1009,10 +1108,7 @@ void FilmstripWidget::setPhotoRating(const QString &filePath, int rating)
     }
     ApplicationStateStore::setPhotoRating(absoluteFilePath, rating);
 
-    QWidget *thumbnail = m_thumbnails.value(filePath, nullptr);
-    if (!thumbnail) {
-        thumbnail = m_thumbnails.value(absoluteFilePath, nullptr);
-    }
+    QWidget *thumbnail = thumbnailForPath(m_thumbnails, filePath);
     if (thumbnail) {
         static_cast<FilmstripThumbnail *>(thumbnail)->setRating(rating);
     }
@@ -1033,10 +1129,7 @@ void FilmstripWidget::setPhotoStatus(const QString &filePath, int status)
     }
     ApplicationStateStore::setPhotoStatus(absoluteFilePath, status);
 
-    QWidget *thumbnail = m_thumbnails.value(filePath, nullptr);
-    if (!thumbnail) {
-        thumbnail = m_thumbnails.value(absoluteFilePath, nullptr);
-    }
+    QWidget *thumbnail = thumbnailForPath(m_thumbnails, filePath);
     if (thumbnail) {
         static_cast<FilmstripThumbnail *>(thumbnail)->setStatus(status);
     }
@@ -1056,12 +1149,81 @@ void FilmstripWidget::setPhotoColorLabel(const QString &filePath, int colorLabel
     }
     ApplicationStateStore::setPhotoColorLabel(absoluteFilePath, colorLabel);
 
-    QWidget *thumbnail = m_thumbnails.value(filePath, nullptr);
-    if (!thumbnail) {
-        thumbnail = m_thumbnails.value(absoluteFilePath, nullptr);
-    }
+    QWidget *thumbnail = thumbnailForPath(m_thumbnails, filePath);
     if (thumbnail) {
         static_cast<FilmstripThumbnail *>(thumbnail)->setColorLabel(colorLabel);
+    }
+}
+
+void FilmstripWidget::updateSelectionVisuals()
+{
+    const QString primaryPath = QFileInfo(m_currentFilePath).absoluteFilePath();
+    for (auto iterator = m_thumbnails.constBegin(); iterator != m_thumbnails.constEnd(); ++iterator) {
+        const QString absolutePath = QFileInfo(iterator.key()).absoluteFilePath();
+        auto *thumbnail = static_cast<FilmstripThumbnail *>(iterator.value());
+        const bool selected = m_selectedFilePaths.contains(absolutePath);
+        thumbnail->setSelected(selected);
+        thumbnail->setPrimary(selected && absolutePath == primaryPath);
+    }
+}
+
+QStringList FilmstripWidget::selectedPhotoPaths() const
+{
+    QStringList result;
+    if (!m_contentLayout) {
+        return result;
+    }
+
+    for (int index = 0; index < m_contentLayout->count(); ++index) {
+        QLayoutItem *item = m_contentLayout->itemAt(index);
+        QWidget *widget = item ? item->widget() : nullptr;
+        if (!widget) {
+            continue;
+        }
+
+        const QString storedPath = m_thumbnails.key(widget);
+        if (storedPath.isEmpty()) {
+            continue;
+        }
+
+        const QString absolutePath = QFileInfo(storedPath).absoluteFilePath();
+        if (m_selectedFilePaths.contains(absolutePath)) {
+            result.push_back(absolutePath);
+        }
+    }
+    return result;
+}
+
+QString FilmstripWidget::firstSelectedPhotoPath() const
+{
+    const QStringList paths = selectedPhotoPaths();
+    return paths.isEmpty() ? QString() : paths.first();
+}
+
+bool FilmstripWidget::canSyncSettings() const
+{
+    const QString primaryPath = QFileInfo(m_currentFilePath).absoluteFilePath();
+    return m_selectedFilePaths.size() >= 2
+        && !primaryPath.isEmpty()
+        && m_selectedFilePaths.contains(primaryPath);
+}
+
+void FilmstripWidget::syncSelectedSettings()
+{
+    if (!canSyncSettings()) {
+        return;
+    }
+
+    const QStringList selectedPaths = selectedPhotoPaths();
+    if (!DevelopSettingsSync::run(window(), m_currentFilePath, selectedPaths)) {
+        return;
+    }
+
+    for (const QString &filePath : selectedPaths) {
+        if (QWidget *thumbnail = thumbnailForPath(m_thumbnails, filePath)) {
+            static_cast<FilmstripThumbnail *>(thumbnail)->setEdited(
+                photoHasEdits(filePath));
+        }
     }
 }
 
