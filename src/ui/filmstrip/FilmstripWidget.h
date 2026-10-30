@@ -2,7 +2,9 @@
 
 #include <QHash>
 #include <QImage>
+#include <QSet>
 #include <QString>
+#include <QStringList>
 #include <QWidget>
 
 #include <functional>
@@ -34,11 +36,18 @@ protected:
 
 private:
     void activatePhoto(const QString &filePath);
+    void handleThumbnailActivated(const QString &filePath, bool additiveSelection);
+    void prepareContextSelection(const QString &filePath);
     void removePhoto(const QString &filePath);
     void setCurrentPhoto(const QString &filePath);
     void setPhotoRating(const QString &filePath, int rating);
     void setPhotoStatus(const QString &filePath, int status);
     void setPhotoColorLabel(const QString &filePath, int colorLabel);
+    void updateSelectionVisuals();
+    [[nodiscard]] QStringList selectedPhotoPaths() const;
+    [[nodiscard]] QString firstSelectedPhotoPath() const;
+    [[nodiscard]] bool canSyncSettings() const;
+    void syncSelectedSettings();
     void alignToDefaultPhotoBounds(bool updateWhileManual = false);
 
     PhotoCanvas *m_canvas = nullptr;
@@ -49,6 +58,7 @@ private:
     QHash<QString, int> m_photoRatings;
     QHash<QString, int> m_photoStatuses;
     QHash<QString, int> m_photoColorLabels;
+    QSet<QString> m_selectedFilePaths;
     QString m_currentFilePath;
     PhotoOpenedCallback m_photoOpenedCallback;
     PhotoRemovedCallback m_photoRemovedCallback;
