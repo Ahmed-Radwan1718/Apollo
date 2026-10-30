@@ -27,6 +27,8 @@ qt_add_executable(Nexus WIN32
     src/app/ApplicationStateStore.h
     src/app/DevelopSettingsClipboard.cpp
     src/app/DevelopSettingsClipboard.h
+    src/app/DevelopSettingsSync.cpp
+    src/app/DevelopSettingsSync.h
     src/app/DevelopState.h
     src/app/ExportDialog.cpp
     src/app/ExportDialog.h
