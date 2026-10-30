@@ -20,6 +20,10 @@ function(nexus_add_libavif)
     set(AVIF_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(AVIF_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
 
+    # Use libaom's generic C implementation so MinGW builds do not require
+    # an external NASM/YASM assembler for x86/x64 optimized assembly paths.
+    set(AOM_TARGET_CPU generic CACHE STRING "" FORCE)
+
     FetchContent_Declare(
         nexus_libavif
         GIT_REPOSITORY https://github.com/AOMediaCodec/libavif.git
