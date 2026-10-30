@@ -446,8 +446,11 @@ TransformPanel::TransformPanel(QWidget *parent)
     uprightGrid->setObjectName(QStringLiteral("uprightGrid"));
     auto *uprightLayout = new QGridLayout(uprightGrid);
     uprightLayout->setContentsMargins(0, 0, 0, 0);
-    uprightLayout->setHorizontalSpacing(1);
-    uprightLayout->setVerticalSpacing(1);
+    uprightLayout->setHorizontalSpacing(0);
+    uprightLayout->setVerticalSpacing(0);
+    uprightLayout->setColumnStretch(0, 1);
+    uprightLayout->setColumnStretch(1, 1);
+    uprightLayout->setColumnStretch(2, 1);
 
     m_uprightButtons = new QButtonGroup(this);
     m_uprightButtons->setExclusive(true);
@@ -462,8 +465,11 @@ TransformPanel::TransformPanel(QWidget *parent)
         button->setCheckable(true);
         button->setAutoExclusive(true);
         button->setFixedHeight(26);
+        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         button->setCursor(Qt::PointingHandCursor);
         button->setFocusPolicy(Qt::NoFocus);
+        button->setProperty("rightDivider", column < 2);
+        button->setProperty("bottomDivider", row == 0);
         const int id = static_cast<int>(mode);
         m_uprightButtons->addButton(button, id);
         uprightLayout->addWidget(button, row, column);
@@ -532,10 +538,12 @@ TransformPanel::TransformPanel(QWidget *parent)
         "QToolButton#transformChevron { color:#bebebe; background:transparent; border:0; }"
         "QFrame#transformContent, QWidget#transformControl { background:#181818; border:0; }"
         "QLabel#transformSectionLabel { color:#b3b3b3; font-size:11px; font-weight:600; padding:1px 0; }"
-        "QFrame#uprightGrid { background:#2b2b2b; border:1px solid #2b2b2b; border-radius:2px; }"
-        "QToolButton#uprightCell { color:#b9b9b9; background:#181818; border:0; font-size:11px; padding:0 3px; }"
-        "QToolButton#uprightCell:hover { color:#f0f0f0; background:#202020; }"
-        "QToolButton#uprightCell:checked { font-weight:700; }"
+        "QFrame#uprightGrid { background:transparent; border:1px solid #2b2b2b; border-radius:2px; }"
+        "QToolButton#uprightCell { color:#b9b9b9; background:transparent; border:0; font-size:11px; padding:0 3px; }"
+        "QToolButton#uprightCell[rightDivider=\"true\"] { border-right:1px solid #2b2b2b; }"
+        "QToolButton#uprightCell[bottomDivider=\"true\"] { border-bottom:1px solid #2b2b2b; }"
+        "QToolButton#uprightCell:hover { color:#f0f0f0; background:transparent; }"
+        "QToolButton#uprightCell:checked { font-weight:700; background:transparent; }"
         "QLabel#transformControlLabel { color:#d0d0d0; font-size:12px; }"
         "QLabel#transformValueLabel { color:#9f9f9f; font-size:11px; }"
         "QSlider#transformSlider { min-height:14px; max-height:14px; }"
