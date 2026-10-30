@@ -2,6 +2,7 @@
 
 #include "imaging/GeometryTransform.h"
 
+#include <QPainterPath>
 #include <QTransform>
 
 #include <algorithm>
@@ -38,11 +39,20 @@ struct Candidate
     int vertical = 0;
     int horizontal = 0;
     int rotateHundredths = 0;
+    int aspect = 0;
 };
 
 DevelopState analysisBaseState(const DevelopState &state)
 {
     DevelopState base = state;
+
+    // Upright is solved against the photo's crop/orientation, not against any
+    // previous Upright or manual Transform correction.
+    base.transformUprightVertical = 0;
+    base.transformUprightHorizontal = 0;
+    base.transformUprightRotateHundredths = 0;
+    base.transformUprightAspect = 0;
+
     base.transformVertical = 0;
     base.transformHorizontal = 0;
     base.transformRotateHundredths = 0;
@@ -248,81 +258,128 @@ qreal groupAlignmentScore(const std::vector<SegmentSample> &samples,
                              : std::numeric_limits<qreal>::quiet_NaN();
 }
 
+qreal polygonArea(const QPolygonF &polygon)
+{
+    if (polygon.size() < 3) {
+        return 0.0;
+    }
+
+    qreal twiceArea = 0.0;
+    for (qsizetype index = 0; index < polygon.size(); ++index) {
+        const QPointF a = polygon.at(index);
+        const QPointF b = polygon.at((index + 1) % polygon.size());
+        twiceArea += a.x() * b.y() - b.x() * a.y();
+    }
+    return std::abs(twiceArea) * 0.5;
+}
+
+qreal visibleCanvasCoverage(const GeometryMapping &mapping)
+{
+    const qreal canvasArea = mapping.canvasRect.width() * mapping.canvasRect.height();
+    if (!mapping.valid || canvasArea <= 1.0e-9 || mapping.contentPolygon.size() < 3) {
+        return 0.0;
+    }
+
+    QPainterPath contentPath;
+    contentPath.addPolygon(mapping.contentPolygon);
+    contentPath.closeSubpath();
+
+    QPainterPath canvasPath;
+    canvasPath.addRect(mapping.canvasRect);
+
+    const QPolygonF visible = contentPath.intersected(canvasPath).toFillPolygon();
+    return std::clamp(polygonArea(visible) / canvasArea, 0.0, 1.0);
+}
+
 qreal candidateScore(const QSizeF &sourceSize,
                      const DevelopState &base,
                      const ClassifiedSegments &segments,
                      const Candidate &candidate,
-                     bool useHorizontal,
-                     bool useVertical,
-                     qreal regularization)
+                     qreal horizontalWeight,
+                     qreal verticalWeight,
+                     qreal regularization,
+                     qreal coverageWeight)
 {
     DevelopState state = base;
     state.transformVertical = candidate.vertical;
     state.transformHorizontal = candidate.horizontal;
     state.transformRotateHundredths = candidate.rotateHundredths;
+    state.transformAspect = candidate.aspect;
 
     const GeometryMapping mapping = geometryMappingForState(sourceSize, state, false);
     if (!mapping.valid) {
         return -std::numeric_limits<qreal>::infinity();
     }
 
-    qreal score = 0.0;
-    int groups = 0;
-    if (useHorizontal && !segments.horizontal.empty()) {
+    qreal alignmentScore = 0.0;
+    qreal totalAxisWeight = 0.0;
+    if (horizontalWeight > 0.0 && !segments.horizontal.empty()) {
         const qreal horizontal = groupAlignmentScore(segments.horizontal,
                                                      mapping.transform,
                                                      false);
         if (std::isfinite(horizontal)) {
-            score += horizontal;
-            ++groups;
+            alignmentScore += horizontal * horizontalWeight;
+            totalAxisWeight += horizontalWeight;
         }
     }
-    if (useVertical && !segments.vertical.empty()) {
+    if (verticalWeight > 0.0 && !segments.vertical.empty()) {
         const qreal vertical = groupAlignmentScore(segments.vertical,
                                                    mapping.transform,
                                                    true);
         if (std::isfinite(vertical)) {
-            score += vertical;
-            ++groups;
+            alignmentScore += vertical * verticalWeight;
+            totalAxisWeight += verticalWeight;
         }
     }
-    if (groups == 0) {
+    if (totalAxisWeight <= 0.0) {
         return -std::numeric_limits<qreal>::infinity();
     }
 
-    score /= groups;
+    alignmentScore /= totalAxisWeight;
     const qreal correctionMagnitude =
         std::abs(candidate.vertical) / 100.0
         + std::abs(candidate.horizontal) / 100.0
-        + std::abs(candidate.rotateHundredths) / 1000.0;
-    return score - regularization * correctionMagnitude;
+        + std::abs(candidate.rotateHundredths) / 1000.0
+        + std::abs(candidate.aspect) / 100.0;
+
+    const qreal coverageBonus = coverageWeight > 0.0
+        ? coverageWeight * visibleCanvasCoverage(mapping)
+        : 0.0;
+
+    return alignmentScore + coverageBonus
+        - regularization * correctionMagnitude;
 }
 
 Candidate optimizeCandidate(const QSizeF &sourceSize,
                             const DevelopState &base,
                             const ClassifiedSegments &segments,
-                            bool useHorizontal,
-                            bool useVertical,
+                            qreal horizontalWeight,
+                            qreal verticalWeight,
                             bool enableHorizontal,
                             bool enableVertical,
                             bool enableRotate,
-                            qreal regularization)
+                            bool enableAspect,
+                            qreal regularization,
+                            qreal coverageWeight)
 {
     Candidate best;
     qreal bestScore = candidateScore(sourceSize,
                                      base,
                                      segments,
                                      best,
-                                     useHorizontal,
-                                     useVertical,
-                                     regularization);
+                                     horizontalWeight,
+                                     verticalWeight,
+                                     regularization,
+                                     coverageWeight);
 
-    constexpr std::array<int, 7> perspectiveSteps{30, 16, 8, 4, 2, 1, 1};
-    constexpr std::array<int, 7> rotateSteps{300, 160, 80, 40, 20, 8, 2};
+    constexpr std::array<int, 7> perspectiveSteps{28, 14, 8, 4, 2, 1, 1};
+    constexpr std::array<int, 7> rotateSteps{250, 120, 60, 30, 12, 5, 2};
+    constexpr std::array<int, 7> aspectSteps{18, 10, 5, 3, 2, 1, 1};
 
     for (std::size_t stage = 0; stage < perspectiveSteps.size(); ++stage) {
         const int perspectiveStep = perspectiveSteps[stage];
         const int rotateStep = rotateSteps[stage];
+        const int aspectStep = aspectSteps[stage];
         for (int iteration = 0; iteration < 18; ++iteration) {
             Candidate nextBest = best;
             qreal nextScore = bestScore;
@@ -333,13 +390,15 @@ Candidate optimizeCandidate(const QSizeF &sourceSize,
                 candidate.rotateHundredths = std::clamp(candidate.rotateHundredths,
                                                         -1000,
                                                         1000);
+                candidate.aspect = std::clamp(candidate.aspect, -100, 100);
                 const qreal score = candidateScore(sourceSize,
                                                    base,
                                                    segments,
                                                    candidate,
-                                                   useHorizontal,
-                                                   useVertical,
-                                                   regularization);
+                                                   horizontalWeight,
+                                                   verticalWeight,
+                                                   regularization,
+                                                   coverageWeight);
                 if (score > nextScore + 1.0e-8) {
                     nextScore = score;
                     nextBest = candidate;
@@ -370,10 +429,19 @@ Candidate optimizeCandidate(const QSizeF &sourceSize,
                 negative.rotateHundredths -= rotateStep;
                 consider(negative);
             }
+            if (enableAspect) {
+                Candidate positive = best;
+                positive.aspect += aspectStep;
+                consider(positive);
+                Candidate negative = best;
+                negative.aspect -= aspectStep;
+                consider(negative);
+            }
 
             if (nextBest.vertical == best.vertical
                 && nextBest.horizontal == best.horizontal
-                && nextBest.rotateHundredths == best.rotateHundredths) {
+                && nextBest.rotateHundredths == best.rotateHundredths
+                && nextBest.aspect == best.aspect) {
                 break;
             }
             best = nextBest;
@@ -393,12 +461,22 @@ Candidate optimizeCandidate(const QSizeF &sourceSize,
                 negative.rotateHundredths = std::clamp(best.rotateHundredths - step,
                                                        -1000,
                                                        1000);
-                const qreal positiveScore = candidateScore(sourceSize, base, segments,
-                                                           positive, useHorizontal,
-                                                           useVertical, regularization);
-                const qreal negativeScore = candidateScore(sourceSize, base, segments,
-                                                           negative, useHorizontal,
-                                                           useVertical, regularization);
+                const qreal positiveScore = candidateScore(sourceSize,
+                                                           base,
+                                                           segments,
+                                                           positive,
+                                                           horizontalWeight,
+                                                           verticalWeight,
+                                                           regularization,
+                                                           coverageWeight);
+                const qreal negativeScore = candidateScore(sourceSize,
+                                                           base,
+                                                           segments,
+                                                           negative,
+                                                           horizontalWeight,
+                                                           verticalWeight,
+                                                           regularization,
+                                                           coverageWeight);
                 if (positiveScore > bestScore + 1.0e-8
                     && positiveScore >= negativeScore) {
                     best = positive;
@@ -439,6 +517,37 @@ ClassifiedSegments guidedSegments(const QSizeF &sourceSize,
     return result;
 }
 
+UprightCorrection correctionFromCandidate(const QSizeF &sourceSize,
+                                          const DevelopState &base,
+                                          const ClassifiedSegments &segments,
+                                          const Candidate &candidate,
+                                          qreal horizontalWeight,
+                                          qreal verticalWeight,
+                                          qreal regularization,
+                                          qreal coverageWeight)
+{
+    UprightCorrection result;
+    const qreal score = candidateScore(sourceSize,
+                                       base,
+                                       segments,
+                                       candidate,
+                                       horizontalWeight,
+                                       verticalWeight,
+                                       regularization,
+                                       coverageWeight);
+    if (!std::isfinite(score)) {
+        return result;
+    }
+
+    result.valid = true;
+    result.vertical = candidate.vertical;
+    result.horizontal = candidate.horizontal;
+    result.rotateHundredths = candidate.rotateHundredths;
+    result.aspect = candidate.aspect;
+    result.score = score;
+    return result;
+}
+
 } // namespace
 
 UprightCorrection estimateAutomaticUpright(const QImage &image,
@@ -456,43 +565,60 @@ UprightCorrection estimateAutomaticUpright(const QImage &image,
     const bool haveVertical =
         static_cast<int>(segments.vertical.size()) >= kMinimumAutomaticConstraintsPerAxis;
 
-    bool useHorizontal = false;
-    bool useVertical = false;
+    qreal horizontalWeight = 0.0;
+    qreal verticalWeight = 0.0;
     bool enableHorizontal = false;
     bool enableVertical = false;
-    bool enableRotate = true;
+    bool enableRotate = false;
+    bool enableAspect = false;
     qreal regularization = 0.01;
+    qreal coverageWeight = 0.0;
 
     switch (mode) {
     case UprightMode::Level:
         if (!haveHorizontal) return result;
-        useHorizontal = true;
-        enableHorizontal = true;
-        regularization = 0.010;
+        horizontalWeight = 1.0;
+        enableRotate = true;
+        regularization = 0.006;
+        coverageWeight = 0.02;
         break;
+
     case UprightMode::Vertical:
         if (!haveVertical) return result;
-        useVertical = true;
-        useHorizontal = haveHorizontal;
+        verticalWeight = 1.0;
+        horizontalWeight = haveHorizontal ? 0.35 : 0.0;
         enableVertical = true;
-        regularization = 0.010;
+        enableRotate = true;
+        regularization = 0.008;
+        coverageWeight = 0.03;
         break;
+
     case UprightMode::Full:
         if (!haveHorizontal && !haveVertical) return result;
-        useHorizontal = haveHorizontal;
-        useVertical = haveVertical;
+        horizontalWeight = haveHorizontal ? 1.0 : 0.0;
+        verticalWeight = haveVertical ? 1.0 : 0.0;
         enableHorizontal = haveHorizontal;
         enableVertical = haveVertical;
-        regularization = 0.004;
+        enableRotate = true;
+        enableAspect = haveHorizontal && haveVertical;
+        regularization = 0.003;
+        coverageWeight = 0.0;
         break;
+
     case UprightMode::Auto:
         if (!haveHorizontal && !haveVertical) return result;
-        useHorizontal = haveHorizontal;
-        useVertical = haveVertical;
+        horizontalWeight = haveHorizontal ? 1.0 : 0.0;
+        verticalWeight = haveVertical ? 1.0 : 0.0;
         enableHorizontal = haveHorizontal;
         enableVertical = haveVertical;
-        regularization = 0.028;
+        enableRotate = true;
+        enableAspect = haveHorizontal && haveVertical;
+        regularization = 0.015;
+        // Auto deliberately trades a little alignment accuracy for keeping more
+        // of the visible frame, which separates it from the aggressive Full mode.
+        coverageWeight = 0.14;
         break;
+
     default:
         return result;
     }
@@ -501,25 +627,23 @@ UprightCorrection estimateAutomaticUpright(const QImage &image,
     const Candidate best = optimizeCandidate(QSizeF(image.size()),
                                              base,
                                              segments,
-                                             useHorizontal,
-                                             useVertical,
+                                             horizontalWeight,
+                                             verticalWeight,
                                              enableHorizontal,
                                              enableVertical,
                                              enableRotate,
-                                             regularization);
+                                             enableAspect,
+                                             regularization,
+                                             coverageWeight);
 
-    result.valid = true;
-    result.vertical = best.vertical;
-    result.horizontal = best.horizontal;
-    result.rotateHundredths = best.rotateHundredths;
-    result.score = candidateScore(QSizeF(image.size()),
-                                  base,
-                                  segments,
-                                  best,
-                                  useHorizontal,
-                                  useVertical,
-                                  regularization);
-    return result;
+    return correctionFromCandidate(QSizeF(image.size()),
+                                   base,
+                                   segments,
+                                   best,
+                                   horizontalWeight,
+                                   verticalWeight,
+                                   regularization,
+                                   coverageWeight);
 }
 
 UprightCorrection estimateGuidedUpright(
@@ -537,31 +661,35 @@ UprightCorrection estimateGuidedUpright(
         return result;
     }
 
-    const bool useHorizontal = !segments.horizontal.empty();
-    const bool useVertical = !segments.vertical.empty();
+    const qreal horizontalWeight = segments.horizontal.empty() ? 0.0 : 1.0;
+    const qreal verticalWeight = segments.vertical.empty() ? 0.0 : 1.0;
+    const bool enableHorizontal = !segments.horizontal.empty();
+    const bool enableVertical = !segments.vertical.empty();
+    const bool enableAspect = enableHorizontal && enableVertical;
     const DevelopState base = analysisBaseState(state);
+    constexpr qreal regularization = 0.0015;
+    constexpr qreal coverageWeight = 0.0;
+
     const Candidate best = optimizeCandidate(sourceSize,
                                              base,
                                              segments,
-                                             useHorizontal,
-                                             useVertical,
-                                             useHorizontal,
-                                             useVertical,
+                                             horizontalWeight,
+                                             verticalWeight,
+                                             enableHorizontal,
+                                             enableVertical,
                                              true,
-                                             0.0015);
+                                             enableAspect,
+                                             regularization,
+                                             coverageWeight);
 
-    result.valid = true;
-    result.vertical = best.vertical;
-    result.horizontal = best.horizontal;
-    result.rotateHundredths = best.rotateHundredths;
-    result.score = candidateScore(sourceSize,
-                                  base,
-                                  segments,
-                                  best,
-                                  useHorizontal,
-                                  useVertical,
-                                  0.0015);
-    return result;
+    return correctionFromCandidate(sourceSize,
+                                   base,
+                                   segments,
+                                   best,
+                                   horizontalWeight,
+                                   verticalWeight,
+                                   regularization,
+                                   coverageWeight);
 }
 
 } // namespace imaging

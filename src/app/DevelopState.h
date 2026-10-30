@@ -30,12 +30,15 @@ struct DevelopState {
     int cropStraightenHundredths = 0;
     int cropAspectMode = 0;
 
-    // Manual Transform controls are also geometry-only and are applied after
-    // Crop/Rotate orientation and fine straighten, before the crop rectangle.
-    // Upright modes write their solved correction into the same non-destructive
-    // transform controls, while this mode value records which Upright option was
-    // selected for UI/history restoration.
+    // Upright is an analyzed geometry stage that is kept separate from the
+    // manual Transform sliders. The hidden Upright correction is applied first;
+    // the manual controls below are then layered on top for user refinement.
     int transformUprightMode = 0;
+    int transformUprightVertical = 0;
+    int transformUprightHorizontal = 0;
+    int transformUprightRotateHundredths = 0;
+    int transformUprightAspect = 0;
+
     int transformVertical = 0;
     int transformHorizontal = 0;
     int transformRotateHundredths = 0;
@@ -83,6 +86,10 @@ struct DevelopState {
             && cropStraightenHundredths == other.cropStraightenHundredths
             && cropAspectMode == other.cropAspectMode
             && transformUprightMode == other.transformUprightMode
+            && transformUprightVertical == other.transformUprightVertical
+            && transformUprightHorizontal == other.transformUprightHorizontal
+            && transformUprightRotateHundredths == other.transformUprightRotateHundredths
+            && transformUprightAspect == other.transformUprightAspect
             && transformVertical == other.transformVertical
             && transformHorizontal == other.transformHorizontal
             && transformRotateHundredths == other.transformRotateHundredths

@@ -58,6 +58,39 @@ QString uprightHistoryLabel(imaging::UprightMode mode)
     }
 }
 
+void clearUprightCorrection(DevelopState &state)
+{
+    state.transformUprightVertical = 0;
+    state.transformUprightHorizontal = 0;
+    state.transformUprightRotateHundredths = 0;
+    state.transformUprightAspect = 0;
+}
+
+void applyUprightCorrection(DevelopState &state,
+                            const imaging::UprightCorrection &correction)
+{
+    if (!correction.valid) {
+        clearUprightCorrection(state);
+        return;
+    }
+
+    state.transformUprightVertical = correction.vertical;
+    state.transformUprightHorizontal = correction.horizontal;
+    state.transformUprightRotateHundredths = correction.rotateHundredths;
+    state.transformUprightAspect = correction.aspect;
+}
+
+void resetManualTransform(DevelopState &state)
+{
+    state.transformVertical = 0;
+    state.transformHorizontal = 0;
+    state.transformRotateHundredths = 0;
+    state.transformAspect = 0;
+    state.transformScale = 100;
+    state.transformXOffset = 0;
+    state.transformYOffset = 0;
+}
+
 } // namespace
 
 TransformController::TransformController(MainWindow *window,
@@ -338,6 +371,7 @@ void TransformController::applyUprightMode(int mode)
 
     DevelopState state = m_window->m_requestedState;
     state.transformUprightMode = static_cast<int>(uprightMode);
+    clearUprightCorrection(state);
 
     if (m_guideOverlay) {
         m_guideOverlay->clearGuides();
@@ -345,32 +379,19 @@ void TransformController::applyUprightMode(int mode)
     m_guideFilePath = m_window->m_currentFilePath;
 
     if (uprightMode != imaging::UprightMode::Off) {
-        // Upright starts from a neutral manual Transform state, matching the
-        // established Upright workflow; the sliders remain available afterwards
-        // for refinement. Constrain Crop is intentionally preserved.
-        state.transformVertical = 0;
-        state.transformHorizontal = 0;
-        state.transformRotateHundredths = 0;
-        state.transformAspect = 0;
-        state.transformScale = 100;
-        state.transformXOffset = 0;
-        state.transformYOffset = 0;
+        // Like Lightroom's normal Upright workflow, selecting an analyzed mode
+        // starts from neutral manual Transform adjustments. Those sliders remain
+        // independent and can be used afterwards to refine the Upright result.
+        resetManualTransform(state);
     }
 
-    if (uprightMode == imaging::UprightMode::Off
-        || uprightMode == imaging::UprightMode::Guided) {
-        state.transformVertical = 0;
-        state.transformHorizontal = 0;
-        state.transformRotateHundredths = 0;
-    } else {
+    if (uprightMode != imaging::UprightMode::Off
+        && uprightMode != imaging::UprightMode::Guided) {
         const imaging::UprightCorrection correction = imaging::estimateAutomaticUpright(
             m_window->m_originalImage,
             state,
             uprightMode);
-        state.transformVertical = correction.valid ? correction.vertical : 0;
-        state.transformHorizontal = correction.valid ? correction.horizontal : 0;
-        state.transformRotateHundredths =
-            correction.valid ? correction.rotateHundredths : 0;
+        applyUprightCorrection(state, correction);
     }
 
     commitState(state, uprightHistoryLabel(uprightMode));
@@ -395,9 +416,7 @@ void TransformController::handleGuidesChanged(
         return;
     }
 
-    state.transformVertical = correction.vertical;
-    state.transformHorizontal = correction.horizontal;
-    state.transformRotateHundredths = correction.rotateHundredths;
+    applyUprightCorrection(state, correction);
     commitState(state, uprightHistoryLabel(imaging::UprightMode::Guided));
 }
 

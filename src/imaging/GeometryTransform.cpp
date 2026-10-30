@@ -225,15 +225,60 @@ QRectF largestSafeRect(const QRectF &canvas, const QPolygonF &contentPolygon)
     return refinedSafeRect(safe, canvas, contentPolygon).intersected(canvas);
 }
 
+bool applyPerspectiveControls(QPolygonF &polygon,
+                              const QRectF &canvasRect,
+                              int verticalControl,
+                              int horizontalControl)
+{
+    const QPolygonF canvas = canvasQuad(canvasRect);
+    QPolygonF target = canvas;
+
+    const qreal vertical = std::clamp(verticalControl, -100, 100) / 100.0;
+    const qreal horizontal = std::clamp(horizontalControl, -100, 100) / 100.0;
+    const qreal insetX = std::abs(vertical) * kMaximumPerspectiveInset
+        * canvasRect.width();
+    const qreal insetY = std::abs(horizontal) * kMaximumPerspectiveInset
+        * canvasRect.height();
+
+    if (vertical > 0.0) {
+        target[0].rx() += insetX;
+        target[1].rx() -= insetX;
+    } else if (vertical < 0.0) {
+        target[3].rx() += insetX;
+        target[2].rx() -= insetX;
+    }
+
+    if (horizontal > 0.0) {
+        target[0].ry() += insetY;
+        target[3].ry() -= insetY;
+    } else if (horizontal < 0.0) {
+        target[1].ry() += insetY;
+        target[2].ry() -= insetY;
+    }
+
+    QTransform perspective;
+    if (!QTransform::quadToQuad(canvas, target, perspective)
+        || !perspective.isInvertible()) {
+        return false;
+    }
+
+    polygon = perspective.map(polygon);
+    return true;
+}
+
 QPointF applyAffineControls(const QPointF &point,
                             const QRectF &canvas,
-                            const DevelopState &state)
+                            int rotateHundredths,
+                            int aspectControl,
+                            int scalePercent,
+                            int xOffsetControl,
+                            int yOffsetControl)
 {
     const QPointF center = canvas.center();
-    const qreal scale = std::clamp(state.transformScale, 50, 150) / 100.0;
-    const qreal aspect = std::clamp(state.transformAspect, -100, 100);
+    const qreal scale = std::clamp(scalePercent, 50, 150) / 100.0;
+    const qreal aspect = std::clamp(aspectControl, -100, 100);
     const qreal aspectScale = std::exp2(aspect / 200.0);
-    const qreal radians = std::clamp(state.transformRotateHundredths, -1000, 1000)
+    const qreal radians = std::clamp(rotateHundredths, -1000, 1000)
         / 100.0 * std::numbers::pi_v<qreal> / 180.0;
     const qreal cosine = std::cos(radians);
     const qreal sine = std::sin(radians);
@@ -243,20 +288,43 @@ QPointF applyAffineControls(const QPointF &point,
     const qreal rotatedX = x * cosine - y * sine;
     const qreal rotatedY = x * sine + y * cosine;
 
-    const qreal offsetX = std::clamp(state.transformXOffset, -100, 100)
+    const qreal offsetX = std::clamp(xOffsetControl, -100, 100)
         / 100.0 * canvas.width() * 0.5;
-    const qreal offsetY = std::clamp(state.transformYOffset, -100, 100)
+    const qreal offsetY = std::clamp(yOffsetControl, -100, 100)
         / 100.0 * canvas.height() * 0.5;
 
     return QPointF(center.x() + rotatedX + offsetX,
                    center.y() + rotatedY + offsetY);
 }
 
+void applyAffineControls(QPolygonF &polygon,
+                         const QRectF &canvas,
+                         int rotateHundredths,
+                         int aspectControl,
+                         int scalePercent,
+                         int xOffsetControl,
+                         int yOffsetControl)
+{
+    for (QPointF &point : polygon) {
+        point = applyAffineControls(point,
+                                    canvas,
+                                    rotateHundredths,
+                                    aspectControl,
+                                    scalePercent,
+                                    xOffsetControl,
+                                    yOffsetControl);
+    }
+}
+
 } // namespace
 
 bool hasManualTransform(const DevelopState &state) noexcept
 {
-    return state.transformVertical != 0
+    return state.transformUprightVertical != 0
+        || state.transformUprightHorizontal != 0
+        || state.transformUprightRotateHundredths != 0
+        || state.transformUprightAspect != 0
+        || state.transformVertical != 0
         || state.transformHorizontal != 0
         || state.transformRotateHundredths != 0
         || state.transformAspect != 0
@@ -289,42 +357,35 @@ GeometryMapping geometryMappingForState(const QSizeF &sourceSize,
     }
 
     result.canvasRect = QRectF(QPointF(0.0, 0.0), orientedBounds.size());
-    const QPolygonF canvas = canvasQuad(result.canvasRect);
-    QPolygonF perspectiveTarget = canvas;
+    QPolygonF destination = oriented;
 
-    const qreal vertical = std::clamp(state.transformVertical, -100, 100) / 100.0;
-    const qreal horizontal = std::clamp(state.transformHorizontal, -100, 100) / 100.0;
-    const qreal insetX = std::abs(vertical) * kMaximumPerspectiveInset
-        * result.canvasRect.width();
-    const qreal insetY = std::abs(horizontal) * kMaximumPerspectiveInset
-        * result.canvasRect.height();
-
-    if (vertical > 0.0) {
-        perspectiveTarget[0].rx() += insetX;
-        perspectiveTarget[1].rx() -= insetX;
-    } else if (vertical < 0.0) {
-        perspectiveTarget[3].rx() += insetX;
-        perspectiveTarget[2].rx() -= insetX;
-    }
-
-    if (horizontal > 0.0) {
-        perspectiveTarget[0].ry() += insetY;
-        perspectiveTarget[3].ry() -= insetY;
-    } else if (horizontal < 0.0) {
-        perspectiveTarget[1].ry() += insetY;
-        perspectiveTarget[2].ry() -= insetY;
-    }
-
-    QTransform perspective;
-    if (!QTransform::quadToQuad(canvas, perspectiveTarget, perspective)
-        || !perspective.isInvertible()) {
+    if (!applyPerspectiveControls(destination,
+                                  result.canvasRect,
+                                  state.transformUprightVertical,
+                                  state.transformUprightHorizontal)) {
         return result;
     }
+    applyAffineControls(destination,
+                        result.canvasRect,
+                        state.transformUprightRotateHundredths,
+                        state.transformUprightAspect,
+                        100,
+                        0,
+                        0);
 
-    QPolygonF destination = perspective.map(oriented);
-    for (QPointF &point : destination) {
-        point = applyAffineControls(point, result.canvasRect, state);
+    if (!applyPerspectiveControls(destination,
+                                  result.canvasRect,
+                                  state.transformVertical,
+                                  state.transformHorizontal)) {
+        return result;
     }
+    applyAffineControls(destination,
+                        result.canvasRect,
+                        state.transformRotateHundredths,
+                        state.transformAspect,
+                        state.transformScale,
+                        state.transformXOffset,
+                        state.transformYOffset);
 
     QTransform complete;
     if (!QTransform::quadToQuad(source, destination, complete) || !complete.isInvertible()) {

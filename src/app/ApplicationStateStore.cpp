@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int kStateSchemaVersion = 9;
+constexpr int kStateSchemaVersion = 10;
 constexpr auto kStateFileName = "apollo-state.json";
 
 QString stateFilePath()
@@ -191,6 +191,13 @@ QJsonObject developStateToJson(const DevelopState &state)
                   state.cropStraightenHundredths);
     object.insert(QStringLiteral("cropAspectMode"), state.cropAspectMode);
     object.insert(QStringLiteral("transformUprightMode"), state.transformUprightMode);
+    object.insert(QStringLiteral("transformUprightVertical"),
+                  state.transformUprightVertical);
+    object.insert(QStringLiteral("transformUprightHorizontal"),
+                  state.transformUprightHorizontal);
+    object.insert(QStringLiteral("transformUprightRotateHundredths"),
+                  state.transformUprightRotateHundredths);
+    object.insert(QStringLiteral("transformUprightAspect"), state.transformUprightAspect);
     object.insert(QStringLiteral("transformVertical"), state.transformVertical);
     object.insert(QStringLiteral("transformHorizontal"), state.transformHorizontal);
     object.insert(QStringLiteral("transformRotateHundredths"),
@@ -238,6 +245,30 @@ DevelopState developStateFromJson(const QJsonObject &object)
     state.transformUprightMode = std::clamp(
         object.value(QStringLiteral("transformUprightMode")).toInt(state.transformUprightMode),
         0, 5);
+
+    const bool hasSeparatedUpright =
+        object.contains(QStringLiteral("transformUprightVertical"))
+        || object.contains(QStringLiteral("transformUprightHorizontal"))
+        || object.contains(QStringLiteral("transformUprightRotateHundredths"))
+        || object.contains(QStringLiteral("transformUprightAspect"));
+
+    state.transformUprightVertical = std::clamp(
+        object.value(QStringLiteral("transformUprightVertical"))
+            .toInt(state.transformUprightVertical),
+        -100, 100);
+    state.transformUprightHorizontal = std::clamp(
+        object.value(QStringLiteral("transformUprightHorizontal"))
+            .toInt(state.transformUprightHorizontal),
+        -100, 100);
+    state.transformUprightRotateHundredths = std::clamp(
+        object.value(QStringLiteral("transformUprightRotateHundredths"))
+            .toInt(state.transformUprightRotateHundredths),
+        -1000, 1000);
+    state.transformUprightAspect = std::clamp(
+        object.value(QStringLiteral("transformUprightAspect"))
+            .toInt(state.transformUprightAspect),
+        -100, 100);
+
     state.transformVertical = std::clamp(
         object.value(QStringLiteral("transformVertical")).toInt(state.transformVertical),
         -100, 100);
@@ -263,6 +294,19 @@ DevelopState developStateFromJson(const QJsonObject &object)
     state.transformConstrainCrop =
         object.value(QStringLiteral("transformConstrainCrop"))
             .toBool(state.transformConstrainCrop);
+
+    // Schema 9 stored the Upright solver output directly in the manual sliders.
+    // Move those values into the separated Upright stage so existing edits keep
+    // the same appearance while the sliders become true post-Upright refinement.
+    if (!hasSeparatedUpright && state.transformUprightMode != 0) {
+        state.transformUprightVertical = state.transformVertical;
+        state.transformUprightHorizontal = state.transformHorizontal;
+        state.transformUprightRotateHundredths = state.transformRotateHundredths;
+        state.transformVertical = 0;
+        state.transformHorizontal = 0;
+        state.transformRotateHundredths = 0;
+    }
+
     return state;
 }
 

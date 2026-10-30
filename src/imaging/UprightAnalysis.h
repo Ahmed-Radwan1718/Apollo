@@ -38,6 +38,7 @@ struct UprightCorrection
     int vertical = 0;
     int horizontal = 0;
     int rotateHundredths = 0;
+    int aspect = 0;
     qreal score = 0.0;
 };
 

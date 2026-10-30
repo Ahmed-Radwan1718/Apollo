@@ -178,6 +178,12 @@ void CropToolController::refreshGeometryFromWindowState(bool forceFit)
 
     if (m_editing) {
         DevelopState state = m_workingState;
+        state.transformUprightMode = m_window->m_requestedState.transformUprightMode;
+        state.transformUprightVertical = m_window->m_requestedState.transformUprightVertical;
+        state.transformUprightHorizontal = m_window->m_requestedState.transformUprightHorizontal;
+        state.transformUprightRotateHundredths =
+            m_window->m_requestedState.transformUprightRotateHundredths;
+        state.transformUprightAspect = m_window->m_requestedState.transformUprightAspect;
         state.transformVertical = m_window->m_requestedState.transformVertical;
         state.transformHorizontal = m_window->m_requestedState.transformHorizontal;
         state.transformRotateHundredths = m_window->m_requestedState.transformRotateHundredths;
