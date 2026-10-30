@@ -539,7 +539,7 @@ TransformPanel::TransformPanel(QWidget *parent)
         "QToolButton#uprightCell[rightDivider=\"true\"] { border-right:1px solid #2b2b2b; }"
         "QToolButton#uprightCell[bottomDivider=\"true\"] { border-bottom:1px solid #2b2b2b; }"
         "QToolButton#uprightCell:hover { color:#f0f0f0; background:#202020; }"
-        "QToolButton#uprightCell:checked { color:#ffffff; background:#292929; }"
+        "QToolButton#uprightCell:checked { font-weight:700; }"
         "QLabel#transformControlLabel { color:#d0d0d0; font-size:12px; }"
         "QLabel#transformValueLabel { color:#9f9f9f; font-size:11px; }"
         "QSlider#transformSlider { min-height:14px; max-height:14px; }"
