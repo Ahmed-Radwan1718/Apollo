@@ -472,6 +472,8 @@ protected:
             action->setChecked(m_status == status);
             flagActions.insert(action, status);
         };
+        addFlagAction(tr("No Flag"), 0);
+        flagMenu->addSeparator();
         addFlagAction(tr("Accept"), 1);
         addFlagAction(tr("Rejected"), -1);
 
@@ -1013,12 +1015,17 @@ void FilmstripWidget::setPhotoRating(const QString &filePath, int rating)
 
 void FilmstripWidget::setPhotoStatus(const QString &filePath, int status)
 {
-    if (filePath.isEmpty() || (status != 1 && status != -1)) {
+    if (filePath.isEmpty()
+        || (status != 0 && status != 1 && status != -1)) {
         return;
     }
 
     const QString absoluteFilePath = QFileInfo(filePath).absoluteFilePath();
-    m_photoStatuses.insert(absoluteFilePath, status);
+    if (status == 0) {
+        m_photoStatuses.remove(absoluteFilePath);
+    } else {
+        m_photoStatuses.insert(absoluteFilePath, status);
+    }
     ApplicationStateStore::setPhotoStatus(absoluteFilePath, status);
 
     QWidget *thumbnail = m_thumbnails.value(filePath, nullptr);
