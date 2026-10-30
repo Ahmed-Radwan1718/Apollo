@@ -1,36 +1,49 @@
 include(FetchContent)
 
-function(nexus_add_libavif)
-    if(TARGET avif)
-        return()
+function(nexus_prepare_avif_tool)
+    if(NOT WIN32)
+        message(FATAL_ERROR "Apollo's bundled AVIF encoder is currently provided for Windows builds only.")
     endif()
 
-    # libavif does not enable an AV1 codec by default. Build a pinned static
-    # libavif + libaom encoder so AVIF export works without a system codec.
-    set(BUILD_SHARED_LIBS OFF)
-    set(AVIF_CODEC_AOM LOCAL CACHE STRING "" FORCE)
-    set(AVIF_CODEC_AOM_DECODE OFF CACHE BOOL "" FORCE)
-    set(AVIF_CODEC_AOM_ENCODE ON CACHE BOOL "" FORCE)
-    set(AVIF_LIBYUV OFF CACHE STRING "" FORCE)
-    set(AVIF_LIBSHARPYUV OFF CACHE STRING "" FORCE)
-    set(AVIF_JPEG OFF CACHE STRING "" FORCE)
-    set(AVIF_ZLIBPNG OFF CACHE STRING "" FORCE)
-    set(AVIF_BUILD_APPS OFF CACHE BOOL "" FORCE)
-    set(AVIF_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(AVIF_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(AVIF_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
-
-    # Use libaom's generic C implementation so MinGW builds do not require
-    # an external NASM/YASM assembler for x86/x64 optimized assembly paths.
-    set(AOM_TARGET_CPU generic CACHE STRING "" FORCE)
-
+    # Use libavif's official statically linked Windows tools instead of building
+    # libaom locally. This keeps Apollo self-contained without requiring Perl,
+    # NASM, YASM, or another system-installed AV1 toolchain.
     FetchContent_Declare(
-        nexus_libavif
-        GIT_REPOSITORY https://github.com/AOMediaCodec/libavif.git
-        GIT_TAG v1.4.1
-        GIT_SHALLOW TRUE
-        GIT_PROGRESS TRUE
+        nexus_avif_tools
+        URL https://github.com/AOMediaCodec/libavif/releases/download/v1.4.1/windows-artifacts.zip
+        URL_HASH SHA256=54d665ba6ca8f4ba98fa3dc2c761ebe78c32fadf93d3bf92d5880a6622271656
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
-    FetchContent_MakeAvailable(nexus_libavif)
+    FetchContent_GetProperties(nexus_avif_tools)
+    if(NOT nexus_avif_tools_POPULATED)
+        FetchContent_Populate(nexus_avif_tools)
+    endif()
+
+    file(GLOB_RECURSE _avifenc_candidates
+        LIST_DIRECTORIES FALSE
+        "${nexus_avif_tools_SOURCE_DIR}/*avifenc.exe"
+    )
+    list(LENGTH _avifenc_candidates _avifenc_count)
+    if(_avifenc_count EQUAL 0)
+        message(FATAL_ERROR "Apollo could not locate avifenc.exe in the official libavif Windows artifact.")
+    endif()
+
+    list(GET _avifenc_candidates 0 _avifenc_executable)
+    set(NEXUS_AVIFENC_EXECUTABLE "${_avifenc_executable}" PARENT_SCOPE)
+endfunction()
+
+function(nexus_bundle_avif_tool target_name)
+    if(NOT NEXUS_AVIFENC_EXECUTABLE OR NOT EXISTS "${NEXUS_AVIFENC_EXECUTABLE}")
+        message(FATAL_ERROR "nexus_prepare_avif_tool() must be called before nexus_bundle_avif_tool().")
+    endif()
+
+    add_custom_command(
+        TARGET ${target_name}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${NEXUS_AVIFENC_EXECUTABLE}"
+                "$<TARGET_FILE_DIR:${target_name}>/avifenc.exe"
+        VERBATIM
+    )
 endfunction()
