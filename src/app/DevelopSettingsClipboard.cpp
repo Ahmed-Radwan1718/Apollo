@@ -159,6 +159,8 @@ QJsonObject stateToJson(const DevelopState &state)
     object.insert(QStringLiteral("cropWidth"), state.cropWidth);
     object.insert(QStringLiteral("cropHeight"), state.cropHeight);
     object.insert(QStringLiteral("cropQuarterTurns"), state.cropQuarterTurns);
+    object.insert(QStringLiteral("cropFlipHorizontal"), state.cropFlipHorizontal);
+    object.insert(QStringLiteral("cropFlipVertical"), state.cropFlipVertical);
     object.insert(QStringLiteral("cropStraightenHundredths"), state.cropStraightenHundredths);
     object.insert(QStringLiteral("cropAspectMode"), state.cropAspectMode);
     object.insert(QStringLiteral("transformUprightMode"), state.transformUprightMode);
@@ -206,6 +208,10 @@ DevelopState stateFromJson(const QJsonObject &object)
     state.cropHeight = object.value(QStringLiteral("cropHeight")).toInt(state.cropHeight);
     state.cropQuarterTurns = object.value(QStringLiteral("cropQuarterTurns"))
                                  .toInt(state.cropQuarterTurns);
+    state.cropFlipHorizontal = object.value(QStringLiteral("cropFlipHorizontal"))
+                                   .toBool(state.cropFlipHorizontal);
+    state.cropFlipVertical = object.value(QStringLiteral("cropFlipVertical"))
+                                 .toBool(state.cropFlipVertical);
     state.cropStraightenHundredths =
         object.value(QStringLiteral("cropStraightenHundredths"))
             .toInt(state.cropStraightenHundredths);

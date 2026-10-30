@@ -316,11 +316,34 @@ void applyAffineControls(QPolygonF &polygon,
     }
 }
 
+void applyPhotoFlip(QPolygonF &polygon,
+                    const QRectF &canvas,
+                    bool horizontal,
+                    bool vertical)
+{
+    if (!horizontal && !vertical) {
+        return;
+    }
+
+    const qreal mirroredXSum = canvas.left() + canvas.right();
+    const qreal mirroredYSum = canvas.top() + canvas.bottom();
+    for (QPointF &point : polygon) {
+        if (horizontal) {
+            point.setX(mirroredXSum - point.x());
+        }
+        if (vertical) {
+            point.setY(mirroredYSum - point.y());
+        }
+    }
+}
+
 } // namespace
 
 bool hasManualTransform(const DevelopState &state) noexcept
 {
-    return state.transformUprightVertical != 0
+    return state.cropFlipHorizontal
+        || state.cropFlipVertical
+        || state.transformUprightVertical != 0
         || state.transformUprightHorizontal != 0
         || state.transformUprightRotateHundredths != 0
         || state.transformUprightAspect != 0
@@ -386,6 +409,11 @@ GeometryMapping geometryMappingForState(const QSizeF &sourceSize,
                         state.transformScale,
                         state.transformXOffset,
                         state.transformYOffset);
+
+    applyPhotoFlip(destination,
+                   result.canvasRect,
+                   state.cropFlipHorizontal,
+                   state.cropFlipVertical);
 
     QTransform complete;
     if (!QTransform::quadToQuad(source, destination, complete) || !complete.isInvertible()) {

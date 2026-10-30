@@ -38,6 +38,8 @@ qt_add_executable(Nexus WIN32
     src/app/MainWindow.h
     src/app/PhotoExportController.cpp
     src/app/PhotoExportController.h
+    src/app/PhotoFlipController.cpp
+    src/app/PhotoFlipController.h
     src/imaging/ArwPipeline.cpp
     src/imaging/ArwDecoder.cpp
     src/imaging/ArwDecoder.h

@@ -29,6 +29,8 @@ struct DevelopState {
     int cropWidth = 100000;
     int cropHeight = 100000;
     int cropQuarterTurns = 0;
+    bool cropFlipHorizontal = false;
+    bool cropFlipVertical = false;
     int cropStraightenHundredths = 0;
     int cropAspectMode = 0;
 
@@ -87,6 +89,8 @@ struct DevelopState {
             && cropWidth == other.cropWidth
             && cropHeight == other.cropHeight
             && cropQuarterTurns == other.cropQuarterTurns
+            && cropFlipHorizontal == other.cropFlipHorizontal
+            && cropFlipVertical == other.cropFlipVertical
             && cropStraightenHundredths == other.cropStraightenHundredths
             && cropAspectMode == other.cropAspectMode
             && transformUprightMode == other.transformUprightMode

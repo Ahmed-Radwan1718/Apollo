@@ -191,6 +191,8 @@ void applySelection(DevelopState &target,
         target.cropWidth = source.cropWidth;
         target.cropHeight = source.cropHeight;
         target.cropQuarterTurns = source.cropQuarterTurns;
+        target.cropFlipHorizontal = source.cropFlipHorizontal;
+        target.cropFlipVertical = source.cropFlipVertical;
         target.cropStraightenHundredths = source.cropStraightenHundredths;
         target.cropAspectMode = source.cropAspectMode;
     }

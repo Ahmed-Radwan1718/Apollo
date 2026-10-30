@@ -1,5 +1,6 @@
 #include "app/MainWindow.h"
 #include "app/PhotoExportController.h"
+#include "app/PhotoFlipController.h"
 #include "ui/leftpanel/HistoryPanel.h"
 #include "ui/library/LibraryWorkspaceController.h"
 #include "ui/rightpanel/AutoStraightenController.h"
@@ -51,6 +52,7 @@ int main(int argc, char *argv[])
 
     auto *cropToolController = new CropToolController(&window, &window);
     new TransformController(&window, cropToolController, &window);
+    auto *photoFlipController = new PhotoFlipController(&window, cropToolController, &window);
     DetailPanel::install(&window);
     EffectsPanel::install(&window);
     new AutoStraightenController(&window, &window);
@@ -180,8 +182,7 @@ int main(int argc, char *argv[])
     photoMenu->addSeparator();
     addPlaceholderAction(photoMenu, QObject::tr("Rotate Left"));
     addPlaceholderAction(photoMenu, QObject::tr("Rotate Right"));
-    addPlaceholderAction(photoMenu, QObject::tr("Flip Horizontal"));
-    addPlaceholderAction(photoMenu, QObject::tr("Flip Vertical"));
+    photoFlipController->addActions(photoMenu);
 
     photoMenu->addSeparator();
     addPlaceholderAction(photoMenu, QObject::tr("Crop…"));

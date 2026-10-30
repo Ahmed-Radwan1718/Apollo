@@ -23,6 +23,7 @@ class HistogramWidget;
 class HistoryPanel;
 class NavigatorPanel;
 class PhotoCanvas;
+class PhotoFlipController;
 class PhotoMetadataWidget;
 class QSlider;
 class TransformController;
@@ -74,6 +75,7 @@ private:
     friend class DevelopSettingsClipboard;
     friend class DevelopSettingsSync;
     friend class EffectsPanel;
+    friend class PhotoFlipController;
     friend class TransformController;
 
     void createActions();
