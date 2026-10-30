@@ -538,7 +538,7 @@ TransformPanel::TransformPanel(QWidget *parent)
         "QToolButton#transformChevron { color:#bebebe; background:transparent; border:0; }"
         "QFrame#transformContent, QWidget#transformControl { background:#181818; border:0; }"
         "QLabel#transformSectionLabel { color:#b3b3b3; font-size:11px; font-weight:600; padding:1px 0; }"
-        "QFrame#uprightGrid { background:transparent; border:1px solid #2b2b2b; border-radius:2px; }"
+        "QFrame#uprightGrid { background:transparent; border:0; }"
         "QToolButton#uprightCell { color:#b9b9b9; background:transparent; border:0; font-size:11px; padding:0 3px; }"
         "QToolButton#uprightCell[rightDivider=\"true\"] { border-right:1px solid #2b2b2b; }"
         "QToolButton#uprightCell[bottomDivider=\"true\"] { border-bottom:1px solid #2b2b2b; }"
