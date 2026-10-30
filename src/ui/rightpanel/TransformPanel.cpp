@@ -14,6 +14,7 @@
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QResizeEvent>
 #include <QSignalBlocker>
@@ -53,6 +54,68 @@ protected:
         painter.setRenderHint(QPainter::TextAntialiasing, true);
         painter.setPen(underMouse() ? QColor(255, 255, 255) : QColor(214, 214, 214));
         painter.drawText(rect(), Qt::AlignLeft | Qt::AlignVCenter, text());
+    }
+};
+
+class TransformEyeButton final : public QToolButton
+{
+public:
+    explicit TransformEyeButton(QWidget *parent = nullptr)
+        : QToolButton(parent)
+    {
+        setFixedSize(28, 30);
+        setCursor(Qt::PointingHandCursor);
+        setFocusPolicy(Qt::NoFocus);
+        setToolTip(tr("Transform adjustments visibility"));
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        const QColor color = underMouse()
+            ? QColor(255, 255, 255)
+            : QColor(194, 194, 194);
+
+        constexpr qreal iconScale = 0.95;
+        painter.translate(width() / 2.0, (height() / 2.0) - 0.25);
+        painter.scale(iconScale, iconScale);
+        painter.translate(-12.0, -13.0);
+
+        QPainterPath eye;
+        eye.moveTo(12.0, 7.5);
+        eye.cubicTo(7.69517, 7.5,
+                    4.47617, 11.0833,
+                    3.39473, 12.4653);
+        eye.cubicTo(3.14595, 12.7832,
+                    3.14595, 13.2168,
+                    3.39473, 13.5347);
+        eye.cubicTo(4.47617, 14.9167,
+                    7.69517, 18.5,
+                    12.0, 18.5);
+        eye.cubicTo(16.3048, 18.5,
+                    19.5238, 14.9167,
+                    20.6053, 13.5347);
+        eye.cubicTo(20.8541, 13.2168,
+                    20.8541, 12.7832,
+                    20.6053, 12.4653);
+        eye.cubicTo(19.5238, 11.0833,
+                    16.3048, 7.5,
+                    12.0, 7.5);
+        eye.closeSubpath();
+
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(color,
+                            1.2 / iconScale,
+                            Qt::SolidLine,
+                            Qt::RoundCap,
+                            Qt::RoundJoin));
+        painter.drawPath(eye);
+        painter.drawEllipse(QPointF(12.0, 13.0), 2.0, 2.0);
     }
 };
 
@@ -357,18 +420,14 @@ TransformPanel::TransformPanel(QWidget *parent)
     title->setCursor(Qt::PointingHandCursor);
     title->setFocusPolicy(Qt::NoFocus);
 
-    auto *reset = new QToolButton(header);
-    reset->setObjectName(QStringLiteral("transformReset"));
-    reset->setText(tr("Reset"));
-    reset->setCursor(Qt::PointingHandCursor);
-    reset->setFocusPolicy(Qt::NoFocus);
+    auto *eye = new TransformEyeButton(header);
 
     auto *chevron = new TransformChevronButton(header);
     chevron->setObjectName(QStringLiteral("transformChevron"));
     m_chevronButton = chevron;
 
     headerLayout->addWidget(title, 1);
-    headerLayout->addWidget(reset);
+    headerLayout->addWidget(eye);
     headerLayout->addWidget(chevron);
     outerLayout->addWidget(header);
 
@@ -455,7 +514,6 @@ TransformPanel::TransformPanel(QWidget *parent)
         reveal->setExpanded(expanded);
     });
     connect(chevron, &QToolButton::clicked, title, [title]() { title->toggle(); });
-    connect(reset, &QToolButton::clicked, this, &TransformPanel::resetAll);
     connect(m_uprightButtons, &QButtonGroup::idClicked,
             this, [this](int mode) {
                 if (m_settingControls) return;
@@ -473,8 +531,6 @@ TransformPanel::TransformPanel(QWidget *parent)
         "QFrame#transformHeader { background:transparent; border:0; border-top:1px solid #2a2a2a; }"
         "QToolButton#transformTitle { color:#d6d6d6; background:transparent; border:0; font-size:13px; font-weight:600; padding:0; }"
         "QToolButton#transformTitle:hover { color:#ffffff; }"
-        "QToolButton#transformReset { color:#9f9f9f; background:transparent; border:0; padding:3px 5px; font-size:11px; }"
-        "QToolButton#transformReset:hover { color:#dedede; background:#252525; border-radius:4px; }"
         "QToolButton#transformChevron { color:#bebebe; background:transparent; border:0; }"
         "QFrame#transformContent, QWidget#transformControl { background:#181818; border:0; }"
         "QLabel#transformSectionLabel { color:#b3b3b3; font-size:11px; font-weight:600; padding:1px 0; }"
