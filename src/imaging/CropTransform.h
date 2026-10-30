@@ -41,9 +41,9 @@ void setCropRectOnState(DevelopState &state, const QRectF &normalizedRect);
 [[nodiscard]] QRectF effectiveCropRectFromState(const QSizeF &sourceSize,
                                                 const DevelopState &state);
 
-// Geometry is applied after develop rendering. The input image is never changed.
-// This function intentionally retains its existing name for callers, but now
-// applies the full geometry stack before taking the normalized crop.
+// Applies the full geometry stack after develop rendering, takes the normalized
+// crop, then applies Effects in final post-crop coordinates. The input image is
+// never changed.
 [[nodiscard]] QImage applyCropTransform(const QImage &image,
                                         const DevelopState &state);
 

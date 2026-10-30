@@ -1,5 +1,6 @@
 #include "imaging/CropTransform.h"
 
+#include "imaging/EffectsProcessor.h"
 #include "imaging/GeometryTransform.h"
 
 #include <QPainter>
@@ -48,6 +49,11 @@ QImage cropNormalizedRect(const QImage &image, const QRectF &normalized)
     QImage cropped = image.copy(pixelRect);
     cropped.setDevicePixelRatio(1.0);
     return cropped;
+}
+
+QImage applyFinalEffects(const QImage &image, const DevelopState &state)
+{
+    return EffectsProcessor::apply(image, state.effects);
 }
 
 } // namespace
@@ -197,8 +203,11 @@ QRectF effectiveCropRectFromState(const QSizeF &sourceSize,
 
 QImage applyCropTransform(const QImage &image, const DevelopState &state)
 {
-    if (image.isNull() || !hasCropGeometry(state)) {
+    if (image.isNull()) {
         return image;
+    }
+    if (!hasCropGeometry(state)) {
+        return applyFinalEffects(image, state);
     }
 
     if (!hasManualTransform(state)) {
@@ -214,14 +223,16 @@ QImage applyCropTransform(const QImage &image, const DevelopState &state)
         if (transformed.isNull()) {
             return transformed;
         }
-        return cropNormalizedRect(
-            transformed,
-            effectiveCropRectFromState(QSizeF(image.size()), state));
+        return applyFinalEffects(
+            cropNormalizedRect(
+                transformed,
+                effectiveCropRectFromState(QSizeF(image.size()), state)),
+            state);
     }
 
     const GeometryMapping mapping = geometryMappingForState(QSizeF(image.size()), state);
     if (!mapping.valid || mapping.canvasRect.isEmpty()) {
-        return image;
+        return applyFinalEffects(image, state);
     }
 
     const QSize outputSize(
@@ -237,9 +248,11 @@ QImage applyCropTransform(const QImage &image, const DevelopState &state)
     painter.end();
     transformed.setDevicePixelRatio(1.0);
 
-    return cropNormalizedRect(
-        transformed,
-        effectiveCropRectFromState(QSizeF(image.size()), state));
+    return applyFinalEffects(
+        cropNormalizedRect(
+            transformed,
+            effectiveCropRectFromState(QSizeF(image.size()), state)),
+        state);
 }
 
 } // namespace imaging

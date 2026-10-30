@@ -53,6 +53,9 @@ qt_add_executable(Nexus WIN32
     src/imaging/DetailProcessor.cpp
     src/imaging/DetailProcessor.h
     src/imaging/DetailSettings.h
+    src/imaging/EffectsProcessor.cpp
+    src/imaging/EffectsProcessor.h
+    src/imaging/EffectsSettings.h
     src/imaging/GeometryTransform.cpp
     src/imaging/GeometryTransform.h
     src/imaging/Histogram.cpp
@@ -105,6 +108,8 @@ qt_add_executable(Nexus WIN32
     src/ui/rightpanel/DetailPanel.h
     src/ui/rightpanel/DevelopToolPlaceholderButtons.cpp
     src/ui/rightpanel/DevelopToolPlaceholderButtons.h
+    src/ui/rightpanel/EffectsPanel.cpp
+    src/ui/rightpanel/EffectsPanel.h
     src/ui/rightpanel/PhotoMetadataWidget.cpp
     src/ui/rightpanel/PhotoMetadataWidget.h
     src/ui/rightpanel/TransformController.cpp

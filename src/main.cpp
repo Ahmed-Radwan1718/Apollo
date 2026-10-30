@@ -7,6 +7,7 @@
 #include "ui/rightpanel/CropToolController.h"
 #include "ui/rightpanel/DetailPanel.h"
 #include "ui/rightpanel/DevelopToolPlaceholderButtons.h"
+#include "ui/rightpanel/EffectsPanel.h"
 #include "ui/rightpanel/TransformController.h"
 #include "ui/workspace/WorkspaceModeBar.h"
 
@@ -51,6 +52,7 @@ int main(int argc, char *argv[])
     auto *cropToolController = new CropToolController(&window, &window);
     new TransformController(&window, cropToolController, &window);
     DetailPanel::install(&window);
+    EffectsPanel::install(&window);
     new AutoStraightenController(&window, &window);
     installDevelopToolPlaceholderButtons(&window);
     new PhotoExportController(&window, &window);

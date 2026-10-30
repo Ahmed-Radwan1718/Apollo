@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int kStateSchemaVersion = 10;
+constexpr int kStateSchemaVersion = 11;
 constexpr auto kStateFileName = "apollo-state.json";
 
 QString stateFilePath()
@@ -164,6 +164,58 @@ imaging::DetailSettings detailFromJson(const QJsonObject &object)
     return detail;
 }
 
+QJsonObject effectsToJson(const imaging::EffectsSettings &effects)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("vignetteAmount"), effects.vignetteAmount);
+    object.insert(QStringLiteral("vignetteMidpoint"), effects.vignetteMidpoint);
+    object.insert(QStringLiteral("vignetteRoundness"), effects.vignetteRoundness);
+    object.insert(QStringLiteral("vignetteFeather"), effects.vignetteFeather);
+    object.insert(QStringLiteral("vignetteHighlights"), effects.vignetteHighlights);
+    object.insert(QStringLiteral("grainAmount"), effects.grainAmount);
+    object.insert(QStringLiteral("grainSize"), effects.grainSize);
+    object.insert(QStringLiteral("grainRoughness"), effects.grainRoughness);
+    return object;
+}
+
+imaging::EffectsSettings effectsFromJson(const QJsonObject &object)
+{
+    imaging::EffectsSettings effects;
+    effects.vignetteAmount = std::clamp(
+        object.value(QStringLiteral("vignetteAmount")).toInt(effects.vignetteAmount),
+        -100,
+        100);
+    effects.vignetteMidpoint = std::clamp(
+        object.value(QStringLiteral("vignetteMidpoint")).toInt(effects.vignetteMidpoint),
+        0,
+        100);
+    effects.vignetteRoundness = std::clamp(
+        object.value(QStringLiteral("vignetteRoundness")).toInt(effects.vignetteRoundness),
+        -100,
+        100);
+    effects.vignetteFeather = std::clamp(
+        object.value(QStringLiteral("vignetteFeather")).toInt(effects.vignetteFeather),
+        0,
+        100);
+    effects.vignetteHighlights = std::clamp(
+        object.value(QStringLiteral("vignetteHighlights")).toInt(effects.vignetteHighlights),
+        0,
+        100);
+    effects.grainAmount = std::clamp(
+        object.value(QStringLiteral("grainAmount")).toInt(effects.grainAmount),
+        0,
+        100);
+    effects.grainSize = std::clamp(
+        object.value(QStringLiteral("grainSize")).toInt(effects.grainSize),
+        0,
+        100);
+    effects.grainRoughness = std::clamp(
+        object.value(QStringLiteral("grainRoughness")).toInt(effects.grainRoughness),
+        0,
+        100);
+    return effects;
+}
+
 QJsonObject developStateToJson(const DevelopState &state)
 {
     QJsonObject object;
@@ -182,6 +234,7 @@ QJsonObject developStateToJson(const DevelopState &state)
     object.insert(QStringLiteral("vibrance"), state.vibrance);
     object.insert(QStringLiteral("calibration"), calibrationToJson(state.calibration));
     object.insert(QStringLiteral("detail"), detailToJson(state.detail));
+    object.insert(QStringLiteral("effects"), effectsToJson(state.effects));
     object.insert(QStringLiteral("cropX"), state.cropX);
     object.insert(QStringLiteral("cropY"), state.cropY);
     object.insert(QStringLiteral("cropWidth"), state.cropWidth);
@@ -231,6 +284,7 @@ DevelopState developStateFromJson(const QJsonObject &object)
     state.calibration = calibrationFromJson(
         object.value(QStringLiteral("calibration")).toObject());
     state.detail = detailFromJson(object.value(QStringLiteral("detail")).toObject());
+    state.effects = effectsFromJson(object.value(QStringLiteral("effects")).toObject());
     state.cropX = object.value(QStringLiteral("cropX")).toInt(state.cropX);
     state.cropY = object.value(QStringLiteral("cropY")).toInt(state.cropY);
     state.cropWidth = object.value(QStringLiteral("cropWidth")).toInt(state.cropWidth);
