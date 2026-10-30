@@ -360,6 +360,7 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
 
     auto *metadataGroup = new QGroupBox(tr("Metadata"), this);
     metadataGroup->setObjectName(QStringLiteral("exportSection"));
+    metadataGroup->setProperty("exportFileSection", true);
     auto *metadataLayout = new QGridLayout(metadataGroup);
     metadataLayout->setContentsMargins(12, 20, 12, 10);
     metadataLayout->setHorizontalSpacing(28);
