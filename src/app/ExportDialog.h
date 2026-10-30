@@ -25,6 +25,12 @@ public:
         Original,
     };
 
+    enum class ColorSpace {
+        SRgb,
+        DisplayP3,
+        AdobeRgb,
+    };
+
     enum class ResizeMode {
         Original,
         Percent50,
@@ -40,6 +46,7 @@ public:
 
     struct Settings {
         Format format = Format::Jpeg;
+        ColorSpace colorSpace = ColorSpace::SRgb;
         ResizeMode resizeMode = ResizeMode::Original;
         LocationMode locationMode = LocationMode::SameAsOriginal;
         int longEdgePixels = 2048;
@@ -71,6 +78,8 @@ private:
     QLabel *m_qualityLabel = nullptr;
     QSlider *m_qualitySlider = nullptr;
     QSpinBox *m_qualitySpinBox = nullptr;
+    QLabel *m_colorSpaceLabel = nullptr;
+    QComboBox *m_colorSpaceCombo = nullptr;
     QComboBox *m_locationCombo = nullptr;
     QLabel *m_subfolderLabel = nullptr;
     QLineEdit *m_subfolderEdit = nullptr;
