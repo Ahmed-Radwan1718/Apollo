@@ -16,6 +16,7 @@ class CalibrationPanel;
 class CropToolController;
 class DetailPanel;
 class DevelopSettingsClipboard;
+class DevelopSettingsSync;
 class EffectsPanel;
 class FilmstripWidget;
 class HistogramWidget;
@@ -71,6 +72,7 @@ private:
     friend class CropToolController;
     friend class DetailPanel;
     friend class DevelopSettingsClipboard;
+    friend class DevelopSettingsSync;
     friend class EffectsPanel;
     friend class TransformController;
 
