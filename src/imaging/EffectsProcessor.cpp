@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <numbers>
 
 namespace imaging {
 namespace {
@@ -20,6 +21,13 @@ struct EffectMapping {
     QTransform transform;
     QRectF cropCanvasRect;
     bool useTransform = false;
+};
+
+struct VignetteShape {
+    double xScale = 1.0;
+    double yScale = 1.0;
+    double normPower = 2.0;
+    double radiusAdjustment = 0.0;
 };
 
 double clamp01(double value)
@@ -35,6 +43,25 @@ double smoothStep(double edge0, double edge1, double value)
 
     const double t = clamp01((value - edge0) / (edge1 - edge0));
     return t * t * (3.0 - 2.0 * t);
+}
+
+double interpolateThreePoint(double value,
+                             double x0,
+                             double y0,
+                             double x1,
+                             double y1,
+                             double x2,
+                             double y2)
+{
+    if (value <= x1) {
+        const double span = std::max(0.000001, x1 - x0);
+        const double t = clamp01((value - x0) / span);
+        return y0 + (y1 - y0) * t;
+    }
+
+    const double span = std::max(0.000001, x2 - x1);
+    const double t = clamp01((value - x1) / span);
+    return y1 + (y2 - y1) * t;
 }
 
 std::uint32_t mixBits(std::uint32_t value)
@@ -103,30 +130,56 @@ double grainNoise(double x,
     return smoothGrain + (roughGrain - smoothGrain) * rough;
 }
 
+VignetteShape vignetteShape(int roundness, double aspectRatio)
+{
+    VignetteShape result;
+    const double clampedAspect = std::clamp(aspectRatio, 0.05, 20.0);
+    const double round = std::clamp(static_cast<double>(roundness), -100.0, 100.0);
+
+    if (round < 0.0) {
+        // Lightroom's negative Roundness moves the post-crop shape toward an
+        // almost rectangular superellipse while preserving the crop aspect.
+        const double t = -round / 100.0;
+        result.normPower = 2.0 + 14.0 * t;
+        return result;
+    }
+
+    if (round <= 0.0 || std::abs(clampedAspect - 1.0) < 0.000001) {
+        return result;
+    }
+
+    // Positive Roundness progressively makes the vignette circular in image
+    // space instead of merely changing a radial exponent. The ratio progression
+    // mirrors Lightroom's observed post-crop geometry and keeps +100 circular.
+    const double t = round / 100.0;
+    const double ratioParameter = clampedAspect <= 1.0
+        ? clampedAspect
+        : 2.0 - 1.0 / clampedAspect;
+    const double newRatio = ratioParameter
+        - (ratioParameter - 1.0) * t;
+
+    if (clampedAspect >= 1.0) {
+        result.yScale = 1.0
+            / std::max(0.000001,
+                       clampedAspect * (2.0 - newRatio));
+    } else {
+        result.xScale = clampedAspect / std::max(0.000001, newRatio);
+    }
+
+    result.radiusAdjustment =
+        (1.0 - newRatio / std::max(0.000001, ratioParameter)) * 0.5;
+    return result;
+}
+
 double vignetteDistance(double u,
                         double v,
-                        int roundness,
-                        double aspectRatio)
+                        const VignetteShape &shape)
 {
-    const double dx = std::abs(u - 0.5) * 2.0;
-    const double dy = std::abs(v - 0.5) * 2.0;
-    const double ellipse = std::sqrt(dx * dx + dy * dy);
-    const double box = std::max(dx, dy);
-
-    double circle = ellipse;
-    if (aspectRatio > 1.0) {
-        const double scaledX = dx * aspectRatio;
-        circle = std::sqrt(scaledX * scaledX + dy * dy);
-    } else if (aspectRatio > 0.0 && aspectRatio < 1.0) {
-        const double scaledY = dy / aspectRatio;
-        circle = std::sqrt(dx * dx + scaledY * scaledY);
-    }
-
-    const double amount = clamp01(std::abs(static_cast<double>(roundness)) / 100.0);
-    if (roundness < 0) {
-        return ellipse + (box - ellipse) * amount;
-    }
-    return ellipse + (circle - ellipse) * amount;
+    const double x = std::abs(u - 0.5) * 2.0 * shape.xScale;
+    const double y = std::abs(v - 0.5) * 2.0 * shape.yScale;
+    const double power = std::max(2.0, shape.normPower);
+    return std::pow(std::pow(x, power) + std::pow(y, power),
+                    1.0 / power);
 }
 
 double vignetteMask(double u,
@@ -134,21 +187,47 @@ double vignetteMask(double u,
                     const EffectsSettings &settings,
                     double aspectRatio)
 {
-    const double distance = vignetteDistance(u,
-                                             v,
-                                             settings.vignetteRoundness,
-                                             aspectRatio);
-    const double midpoint = clamp01(
-        static_cast<double>(settings.vignetteMidpoint) / 100.0);
-    const double innerRadius = 0.10 + 0.70 * midpoint;
-    const double normalized = clamp01(
-        (distance - innerRadius) / std::max(0.001, 1.0 - innerRadius));
-    const double eased = normalized * normalized * (3.0 - 2.0 * normalized);
+    const VignetteShape shape = vignetteShape(settings.vignetteRoundness,
+                                              aspectRatio);
+    const double distance = vignetteDistance(u, v, shape);
 
-    const double feather = clamp01(
-        static_cast<double>(settings.vignetteFeather) / 100.0);
-    const double exponent = 1.0 + (1.0 - feather) * 5.0;
-    return std::pow(eased, exponent);
+    const double feather = std::clamp(
+        static_cast<double>(settings.vignetteFeather), 0.0, 100.0);
+    const double midpoint = std::clamp(
+        static_cast<double>(settings.vignetteMidpoint), 0.0, 100.0);
+
+    // Lightroom's Feather control is deliberately nonlinear. Around the
+    // default value of 50 it creates a very broad transition; Feather 0 is
+    // almost a hard edge. Midpoint translates that complete transition rather
+    // than simply changing an exponent.
+    const double falloffPercent = interpolateThreePoint(
+        feather,
+        0.0, 5.0,
+        50.0, 75.5,
+        100.0, 82.0);
+    const double centerPercent = interpolateThreePoint(
+        feather,
+        0.0, 99.5,
+        50.0, 92.2,
+        100.0, 106.9);
+
+    const double falloff = std::max(0.001, falloffPercent / 100.0);
+    double start = centerPercent / 100.0
+        + 0.00576 * (midpoint - 50.0)
+        - falloff * 0.5;
+    start -= shape.radiusAdjustment;
+
+    const double t = clamp01((distance - start) / falloff);
+    if (t <= 0.0) {
+        return 0.0;
+    }
+    if (t >= 1.0) {
+        return 1.0;
+    }
+
+    // Cosine easing matches the characteristic Lightroom post-crop transition
+    // much more closely than a generic smoothstep.
+    return 0.5 - 0.5 * std::cos(std::numbers::pi_v<double> * t);
 }
 
 EffectMapping mappingForState(const QImage &image, const DevelopState &state)
@@ -232,21 +311,51 @@ QImage applyMapped(const QImage &image,
             double red = static_cast<double>(qRed(pixel)) / 255.0;
             double green = static_cast<double>(qGreen(pixel)) / 255.0;
             double blue = static_cast<double>(qBlue(pixel)) / 255.0;
+            const double originalRed = red;
+            const double originalGreen = green;
+            const double originalBlue = blue;
             const double luminance = clamp01(
                 0.2126 * red + 0.7152 * green + 0.0722 * blue);
 
             if (vignetteStrength != 0.0) {
                 const double mask = vignetteMask(u, v, settings, aspectRatio);
-                double factor = std::exp2(vignetteStrength * 1.5 * mask);
-                if (vignetteStrength < 0.0 && highlightStrength > 0.0) {
-                    const double bright = smoothStep(0.55, 0.95, luminance);
-                    const double protect = highlightStrength * bright;
-                    factor = 1.0 + (factor - 1.0) * (1.0 - protect);
+
+                if (vignetteStrength < 0.0) {
+                    // Lightroom's negative Amount behaves like a fraction of
+                    // the encoded image values. At -100, a fully affected pixel
+                    // can therefore reach black rather than stopping at a mild
+                    // exposure reduction.
+                    const double factor = std::max(
+                        0.0,
+                        1.0 + vignetteStrength * mask);
+                    red *= factor;
+                    green *= factor;
+                    blue *= factor;
+
+                    if (highlightStrength > 0.0) {
+                        // Highlight Priority restores bright local contrast from
+                        // the pre-vignette pixel instead of simply weakening the
+                        // entire vignette uniformly.
+                        const double highlightGate = smoothStep(0.48, 0.98, luminance);
+                        const double preserve = clamp01(
+                            highlightStrength * highlightGate * (0.35 + 0.65 * mask));
+                        red += (originalRed - red) * preserve;
+                        green += (originalGreen - green) * preserve;
+                        blue += (originalBlue - blue) * preserve;
+                    }
+                } else {
+                    // A screen-style lift retains more local contrast than a
+                    // flat white overlay while still allowing +100 to produce
+                    // Lightroom-like bright corners.
+                    const double lift = clamp01(vignetteStrength * mask);
+                    red = red + (1.0 - red) * lift;
+                    green = green + (1.0 - green) * lift;
+                    blue = blue + (1.0 - blue) * lift;
                 }
 
-                red = clamp01(red * factor);
-                green = clamp01(green * factor);
-                blue = clamp01(blue * factor);
+                red = clamp01(red);
+                green = clamp01(green);
+                blue = clamp01(blue);
             }
 
             if (grainStrength > 0.0) {
