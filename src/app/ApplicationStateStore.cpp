@@ -493,13 +493,18 @@ QHash<QString, int> ApplicationStateStore::loadPhotoStatuses()
 void ApplicationStateStore::setPhotoStatus(const QString &filePath, int status)
 {
     const QString absoluteFilePath = normalizedPath(filePath);
-    if (absoluteFilePath.isEmpty() || (status != 1 && status != -1)) {
+    if (absoluteFilePath.isEmpty()
+        || (status != 0 && status != 1 && status != -1)) {
         return;
     }
 
     QJsonObject root = loadStateObject();
     QJsonObject statuses = root.value(QStringLiteral("photoStatuses")).toObject();
-    statuses.insert(absoluteFilePath, status);
+    if (status == 0) {
+        statuses.remove(absoluteFilePath);
+    } else {
+        statuses.insert(absoluteFilePath, status);
+    }
     root.insert(QStringLiteral("photoStatuses"), statuses);
     saveStateObject(std::move(root));
 }
