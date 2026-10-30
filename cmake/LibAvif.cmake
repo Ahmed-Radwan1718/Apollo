@@ -14,11 +14,7 @@ function(nexus_prepare_avif_tool)
         URL_HASH SHA256=54d665ba6ca8f4ba98fa3dc2c761ebe78c32fadf93d3bf92d5880a6622271656
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
-
-    FetchContent_GetProperties(nexus_avif_tools)
-    if(NOT nexus_avif_tools_POPULATED)
-        FetchContent_Populate(nexus_avif_tools)
-    endif()
+    FetchContent_MakeAvailable(nexus_avif_tools)
 
     file(GLOB_RECURSE _avifenc_candidates
         LIST_DIRECTORIES FALSE
