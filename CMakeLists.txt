@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(Nexus VERSION 0.1.0 LANGUAGES C CXX)
+project(Nexus VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,7 +13,7 @@ include(cmake/LibRaw.cmake)
 nexus_add_libraw()
 
 include(cmake/LibAvif.cmake)
-nexus_add_libavif()
+nexus_prepare_avif_tool()
 
 set_source_files_properties(
     src/imaging/ArwDecoder.cpp
@@ -130,9 +130,10 @@ target_link_libraries(Nexus PRIVATE
     Qt6::Widgets
     Qt6::Svg
     libraw::libraw_r
-    avif
 )
 
 set_target_properties(Nexus PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
+
+nexus_bundle_avif_tool(Nexus)
