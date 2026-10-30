@@ -215,6 +215,31 @@ int comboIndexForFormat(ExportDialog::Format format)
     }
 }
 
+ExportDialog::ColorSpace colorSpaceFromComboIndex(int index)
+{
+    switch (index) {
+    case 1:
+        return ExportDialog::ColorSpace::DisplayP3;
+    case 2:
+        return ExportDialog::ColorSpace::AdobeRgb;
+    default:
+        return ExportDialog::ColorSpace::SRgb;
+    }
+}
+
+int comboIndexForColorSpace(ExportDialog::ColorSpace colorSpace)
+{
+    switch (colorSpace) {
+    case ExportDialog::ColorSpace::DisplayP3:
+        return 1;
+    case ExportDialog::ColorSpace::AdobeRgb:
+        return 2;
+    case ExportDialog::ColorSpace::SRgb:
+    default:
+        return 0;
+    }
+}
+
 bool formatUsesQuality(ExportDialog::Format format)
 {
     return format == ExportDialog::Format::Jpeg
@@ -230,6 +255,8 @@ ExportDialog::Settings loadRememberedExportSettings()
 
     remembered.format = formatFromComboIndex(
         settings.value(QStringLiteral("format"), 0).toInt());
+    remembered.colorSpace = colorSpaceFromComboIndex(
+        settings.value(QStringLiteral("colorSpace"), 0).toInt());
 
     switch (settings.value(QStringLiteral("locationMode"), 0).toInt()) {
     case 1:
@@ -279,6 +306,8 @@ void saveRememberedExportSettings(const ExportDialog::Settings &remembered)
     settings.beginGroup(QStringLiteral("exportDialog"));
 
     settings.setValue(QStringLiteral("format"), comboIndexForFormat(remembered.format));
+    settings.setValue(QStringLiteral("colorSpace"),
+                      comboIndexForColorSpace(remembered.colorSpace));
 
     int locationMode = 0;
     switch (remembered.locationMode) {
@@ -396,6 +425,14 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     qualityLayout->addWidget(qualityValueLabel);
     fileLayout->addRow(m_qualityLabel, qualityRow);
 
+    m_colorSpaceLabel = new QLabel(tr("Color space"), fileGroup);
+    m_colorSpaceCombo = new QComboBox(fileGroup);
+    m_colorSpaceCombo->setObjectName(QStringLiteral("exportCombo"));
+    m_colorSpaceCombo->addItem(tr("sRGB"));
+    m_colorSpaceCombo->addItem(tr("Display P3"));
+    m_colorSpaceCombo->addItem(tr("Adobe RGB"));
+    fileLayout->addRow(m_colorSpaceLabel, m_colorSpaceCombo);
+
     m_subfolderLabel = new QLabel(tr("Subfolder"), fileGroup);
     m_subfolderEdit = new QLineEdit(fileGroup);
     m_subfolderEdit->setObjectName(QStringLiteral("exportLineEdit"));
@@ -488,6 +525,8 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
 
     const Settings rememberedSettings = loadRememberedExportSettings();
     m_formatCombo->setCurrentIndex(comboIndexForFormat(rememberedSettings.format));
+    m_colorSpaceCombo->setCurrentIndex(
+        comboIndexForColorSpace(rememberedSettings.colorSpace));
     m_qualitySlider->setValue(rememberedSettings.quality);
     m_cameraLensMetadataCheckBox->setChecked(
         rememberedSettings.includeCameraLensInfo);
@@ -707,6 +746,7 @@ ExportDialog::Settings ExportDialog::settings() const
 {
     Settings result;
     result.format = formatFromComboIndex(m_formatCombo->currentIndex());
+    result.colorSpace = colorSpaceFromComboIndex(m_colorSpaceCombo->currentIndex());
 
     switch (m_locationCombo->currentIndex()) {
     case 1:
@@ -740,8 +780,12 @@ void ExportDialog::updateControlStates()
     m_qualityLabel->setEnabled(usesQuality);
     m_qualitySlider->setEnabled(usesQuality);
 
+    const bool renderedExport = format != Format::Original;
+    m_colorSpaceLabel->setEnabled(renderedExport);
+    m_colorSpaceCombo->setEnabled(renderedExport);
+
     if (m_metadataGroup) {
-        m_metadataGroup->setEnabled(format != Format::Original);
+        m_metadataGroup->setEnabled(renderedExport);
     }
 
     const bool subfolder = m_locationCombo->currentIndex() == 1;
