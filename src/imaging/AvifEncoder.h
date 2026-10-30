@@ -14,6 +14,7 @@ public:
                       const QString &filePath,
                       int quality,
                       const QByteArray &xmpMetadata,
+                      const QByteArray &iccProfile,
                       QString *error = nullptr);
 };
 
