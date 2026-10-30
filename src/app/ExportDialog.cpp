@@ -178,15 +178,58 @@ protected:
     }
 };
 
+ExportDialog::Format formatFromComboIndex(int index)
+{
+    switch (index) {
+    case 1:
+        return ExportDialog::Format::Png;
+    case 2:
+        return ExportDialog::Format::Tiff;
+    case 3:
+        return ExportDialog::Format::WebP;
+    case 4:
+        return ExportDialog::Format::Avif;
+    case 5:
+        return ExportDialog::Format::Original;
+    default:
+        return ExportDialog::Format::Jpeg;
+    }
+}
+
+int comboIndexForFormat(ExportDialog::Format format)
+{
+    switch (format) {
+    case ExportDialog::Format::Png:
+        return 1;
+    case ExportDialog::Format::Tiff:
+        return 2;
+    case ExportDialog::Format::WebP:
+        return 3;
+    case ExportDialog::Format::Avif:
+        return 4;
+    case ExportDialog::Format::Original:
+        return 5;
+    case ExportDialog::Format::Jpeg:
+    default:
+        return 0;
+    }
+}
+
+bool formatUsesQuality(ExportDialog::Format format)
+{
+    return format == ExportDialog::Format::Jpeg
+        || format == ExportDialog::Format::WebP
+        || format == ExportDialog::Format::Avif;
+}
+
 ExportDialog::Settings loadRememberedExportSettings()
 {
     ExportDialog::Settings remembered;
     QSettings settings;
     settings.beginGroup(QStringLiteral("exportDialog"));
 
-    remembered.format = settings.value(QStringLiteral("format"), 0).toInt() == 1
-        ? ExportDialog::Format::Png
-        : ExportDialog::Format::Jpeg;
+    remembered.format = formatFromComboIndex(
+        settings.value(QStringLiteral("format"), 0).toInt());
 
     switch (settings.value(QStringLiteral("locationMode"), 0).toInt()) {
     case 1:
@@ -235,8 +278,7 @@ void saveRememberedExportSettings(const ExportDialog::Settings &remembered)
     QSettings settings;
     settings.beginGroup(QStringLiteral("exportDialog"));
 
-    settings.setValue(QStringLiteral("format"),
-                      remembered.format == ExportDialog::Format::Png ? 1 : 0);
+    settings.setValue(QStringLiteral("format"), comboIndexForFormat(remembered.format));
 
     int locationMode = 0;
     switch (remembered.locationMode) {
@@ -301,6 +343,10 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     m_formatCombo->setObjectName(QStringLiteral("exportCombo"));
     m_formatCombo->addItem(tr("JPEG"));
     m_formatCombo->addItem(tr("PNG"));
+    m_formatCombo->addItem(tr("TIFF"));
+    m_formatCombo->addItem(tr("WebP"));
+    m_formatCombo->addItem(tr("AVIF"));
+    m_formatCombo->addItem(tr("Original"));
 
     m_locationCombo = new ExportLocationComboBox(fileGroup);
     m_locationCombo->setObjectName(QStringLiteral("exportCombo"));
@@ -358,72 +404,72 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
 
     rootLayout->addWidget(fileGroup);
 
-    auto *metadataGroup = new QGroupBox(tr("Metadata"), this);
-    metadataGroup->setObjectName(QStringLiteral("exportSection"));
-    metadataGroup->setProperty("exportFileSection", true);
-    auto *metadataLayout = new QGridLayout(metadataGroup);
+    m_metadataGroup = new QGroupBox(tr("Metadata"), this);
+    m_metadataGroup->setObjectName(QStringLiteral("exportSection"));
+    m_metadataGroup->setProperty("exportFileSection", true);
+    auto *metadataLayout = new QGridLayout(m_metadataGroup);
     metadataLayout->setContentsMargins(12, 20, 12, 10);
     metadataLayout->setHorizontalSpacing(28);
     metadataLayout->setVerticalSpacing(6);
     metadataLayout->setColumnStretch(0, 1);
     metadataLayout->setColumnStretch(1, 1);
 
-    auto *technicalLabel = new QLabel(tr("Technical"), metadataGroup);
+    auto *technicalLabel = new QLabel(tr("Technical"), m_metadataGroup);
     technicalLabel->setObjectName(QStringLiteral("metadataSubheading"));
     metadataLayout->addWidget(technicalLabel, 0, 0, Qt::AlignLeft | Qt::AlignVCenter);
 
-    auto *detailsLabel = new QLabel(tr("Details"), metadataGroup);
+    auto *detailsLabel = new QLabel(tr("Details"), m_metadataGroup);
     detailsLabel->setObjectName(QStringLiteral("metadataSubheading"));
     metadataLayout->addWidget(detailsLabel, 0, 1, Qt::AlignLeft | Qt::AlignVCenter);
 
     m_cameraLensMetadataCheckBox = new ExportCheckBox(
-        tr("Camera && lens information"), metadataGroup);
+        tr("Camera && lens information"), m_metadataGroup);
     m_cameraLensMetadataCheckBox->setChecked(true);
     metadataLayout->addWidget(m_cameraLensMetadataCheckBox, 1, 0);
 
     m_copyrightCreatorMetadataCheckBox = new ExportCheckBox(
-        tr("Copyright && creator"), metadataGroup);
+        tr("Copyright && creator"), m_metadataGroup);
     m_copyrightCreatorMetadataCheckBox->setChecked(true);
     metadataLayout->addWidget(m_copyrightCreatorMetadataCheckBox, 1, 1);
 
     m_captureSettingsMetadataCheckBox = new ExportCheckBox(
-        tr("Capture settings"), metadataGroup);
+        tr("Capture settings"), m_metadataGroup);
     m_captureSettingsMetadataCheckBox->setChecked(true);
     metadataLayout->addWidget(m_captureSettingsMetadataCheckBox, 2, 0);
 
     m_descriptionKeywordsMetadataCheckBox = new ExportCheckBox(
-        tr("Description && keywords"), metadataGroup);
+        tr("Description && keywords"), m_metadataGroup);
     m_descriptionKeywordsMetadataCheckBox->setChecked(true);
     metadataLayout->addWidget(m_descriptionKeywordsMetadataCheckBox, 2, 1);
 
     m_captureDateTimeMetadataCheckBox = new ExportCheckBox(
-        tr("Date && time captured"), metadataGroup);
+        tr("Date && time captured"), m_metadataGroup);
     m_captureDateTimeMetadataCheckBox->setChecked(true);
     metadataLayout->addWidget(m_captureDateTimeMetadataCheckBox, 3, 0);
 
-    auto *identifiersLabel = new QLabel(tr("Identifiers"), metadataGroup);
+    auto *identifiersLabel = new QLabel(tr("Identifiers"), m_metadataGroup);
     identifiersLabel->setObjectName(QStringLiteral("metadataSubheading"));
     metadataLayout->addWidget(identifiersLabel, 4, 0,
                               Qt::AlignLeft | Qt::AlignBottom);
 
-    auto *privacyLabel = new QLabel(tr("Privacy"), metadataGroup);
+    auto *privacyLabel = new QLabel(tr("Privacy"), m_metadataGroup);
     privacyLabel->setObjectName(QStringLiteral("metadataSubheading"));
     metadataLayout->addWidget(privacyLabel, 4, 1,
                               Qt::AlignLeft | Qt::AlignBottom);
     metadataLayout->setRowMinimumHeight(4, 22);
 
     m_deviceIdentifiersMetadataCheckBox = new ExportCheckBox(
-        tr("Device identifiers"), metadataGroup);
+        tr("Device identifiers"), m_metadataGroup);
     m_deviceIdentifiersMetadataCheckBox->setChecked(false);
     metadataLayout->addWidget(m_deviceIdentifiersMetadataCheckBox, 5, 0);
 
     m_locationMetadataCheckBox = new ExportCheckBox(
-        tr("Location information (GPS)"), metadataGroup);
+        tr("Location information (GPS)"), m_metadataGroup);
     m_locationMetadataCheckBox->setChecked(false);
     metadataLayout->addWidget(m_locationMetadataCheckBox, 5, 1);
 
     auto *deviceIdentifiersHint = new QLabel(
-        tr("May include camera or lens serial numbers"), metadataGroup);
+        tr("May include camera or lens serial numbers"), m_metadataGroup);
     deviceIdentifiersHint->setObjectName(QStringLiteral("metadataHint"));
     deviceIdentifiersHint->setWordWrap(true);
     deviceIdentifiersHint->setContentsMargins(22, 0, 0, 0);
@@ -431,18 +477,17 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
                               Qt::AlignLeft | Qt::AlignTop);
 
     auto *locationHint = new QLabel(
-        tr("May reveal where the photo was taken"), metadataGroup);
+        tr("May reveal where the photo was taken"), m_metadataGroup);
     locationHint->setObjectName(QStringLiteral("metadataHint"));
     locationHint->setWordWrap(true);
     locationHint->setContentsMargins(22, 0, 0, 0);
     metadataLayout->addWidget(locationHint, 6, 1,
                               Qt::AlignLeft | Qt::AlignTop);
 
-    rootLayout->addWidget(metadataGroup);
+    rootLayout->addWidget(m_metadataGroup);
 
     const Settings rememberedSettings = loadRememberedExportSettings();
-    m_formatCombo->setCurrentIndex(
-        rememberedSettings.format == Format::Png ? 1 : 0);
+    m_formatCombo->setCurrentIndex(comboIndexForFormat(rememberedSettings.format));
     m_qualitySlider->setValue(rememberedSettings.quality);
     m_cameraLensMetadataCheckBox->setChecked(
         rememberedSettings.includeCameraLensInfo);
@@ -478,7 +523,7 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     m_locationCombo->lineEdit()->setCursorPosition(0);
     m_locationCombo->lineEdit()->deselect();
     qualityValueLabel->setText(QStringLiteral("%1%").arg(m_qualitySlider->value()));
-    qualityValueLabel->setEnabled(m_formatCombo->currentIndex() == 0);
+    qualityValueLabel->setEnabled(formatUsesQuality(rememberedSettings.format));
 
     rootLayout->addStretch(1);
 
@@ -503,7 +548,8 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     connect(m_formatCombo, &QComboBox::currentIndexChanged,
             this, [this, qualityValueLabel](int) {
                 updateControlStates();
-                qualityValueLabel->setEnabled(m_formatCombo->currentIndex() == 0);
+                qualityValueLabel->setEnabled(
+                    formatUsesQuality(formatFromComboIndex(m_formatCombo->currentIndex())));
             });
     connect(m_locationCombo, &QComboBox::currentIndexChanged,
             this, [this](int index) {
@@ -660,7 +706,7 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
 ExportDialog::Settings ExportDialog::settings() const
 {
     Settings result;
-    result.format = m_formatCombo->currentIndex() == 1 ? Format::Png : Format::Jpeg;
+    result.format = formatFromComboIndex(m_formatCombo->currentIndex());
 
     switch (m_locationCombo->currentIndex()) {
     case 1:
@@ -689,9 +735,14 @@ ExportDialog::Settings ExportDialog::settings() const
 
 void ExportDialog::updateControlStates()
 {
-    const bool jpeg = m_formatCombo->currentIndex() == 0;
-    m_qualityLabel->setEnabled(jpeg);
-    m_qualitySlider->setEnabled(jpeg);
+    const Format format = formatFromComboIndex(m_formatCombo->currentIndex());
+    const bool usesQuality = formatUsesQuality(format);
+    m_qualityLabel->setEnabled(usesQuality);
+    m_qualitySlider->setEnabled(usesQuality);
+
+    if (m_metadataGroup) {
+        m_metadataGroup->setEnabled(format != Format::Original);
+    }
 
     const bool subfolder = m_locationCombo->currentIndex() == 1;
     const bool customFolder = m_locationCombo->currentIndex() == 2;
