@@ -12,6 +12,7 @@
 #include "ui/filmstrip/FilmstripWidget.h"
 
 #include <QAction>
+#include <QColorSpace>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -299,6 +300,52 @@ QImage resizeForExport(const QImage &image, const ExportDialog::Settings &settin
                         Qt::SmoothTransformation);
 }
 
+QColorSpace outputColorSpace(ExportDialog::ColorSpace colorSpace)
+{
+    switch (colorSpace) {
+    case ExportDialog::ColorSpace::DisplayP3:
+        return QColorSpace(QColorSpace::DisplayP3);
+    case ExportDialog::ColorSpace::AdobeRgb:
+        return QColorSpace(QColorSpace::AdobeRgb);
+    case ExportDialog::ColorSpace::SRgb:
+    default:
+        return QColorSpace(QColorSpace::SRgb);
+    }
+}
+
+QImage convertToOutputColorSpace(const QImage &image,
+                                 const ExportDialog::Settings &settings,
+                                 QString *error)
+{
+    if (image.isNull()) {
+        if (error) {
+            *error = QStringLiteral("The rendered image is empty.");
+        }
+        return {};
+    }
+
+    QImage source = image;
+    if (!source.colorSpace().isValid()) {
+        source.setColorSpace(QColorSpace(QColorSpace::SRgb));
+    }
+
+    const QColorSpace target = outputColorSpace(settings.colorSpace);
+    if (source.colorSpace() == target) {
+        source.setColorSpace(target);
+        return source;
+    }
+
+    QImage converted = source.convertedToColorSpace(target);
+    if (converted.isNull()) {
+        if (error) {
+            *error = QStringLiteral("Apollo could not convert the image to the selected color space.");
+        }
+        return {};
+    }
+
+    return converted;
+}
+
 QString shutterMetadataValue(double seconds)
 {
     if (seconds <= 0.0) {
@@ -535,6 +582,7 @@ bool writeExportImage(const QImage &image,
                                            filePath,
                                            settings.quality,
                                            avifXmpForMetadata(metadata, settings),
+                                           image.colorSpace().iccProfile(),
                                            error);
     }
 
@@ -710,8 +758,17 @@ void PhotoExportController::exportCurrentPhoto()
             rendered.metadata.whiteBalanceTemperatureKelvin;
     }
 
-    const QImage outputImage = resizeForExport(rendered.image, settings);
     QString error;
+    const QImage resizedImage = resizeForExport(rendered.image, settings);
+    const QImage outputImage = convertToOutputColorSpace(resizedImage, settings, &error);
+    if (outputImage.isNull()) {
+        QMessageBox::critical(m_window,
+                              tr("Export Failed"),
+                              tr("Apollo could not prepare the selected output color space.\n\n%1")
+                                  .arg(error));
+        return;
+    }
+
     if (!writeExportImage(outputImage,
                           exportPath,
                           settings,
