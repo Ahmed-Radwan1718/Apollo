@@ -5,6 +5,7 @@
 
 class QCheckBox;
 class QComboBox;
+class QGroupBox;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -18,6 +19,10 @@ public:
     enum class Format {
         Jpeg,
         Png,
+        Tiff,
+        WebP,
+        Avif,
+        Original,
     };
 
     enum class ResizeMode {
@@ -78,6 +83,7 @@ private:
     QLabel *m_longEdgeLabel = nullptr;
     QSpinBox *m_longEdgeSpinBox = nullptr;
 
+    QGroupBox *m_metadataGroup = nullptr;
     QCheckBox *m_cameraLensMetadataCheckBox = nullptr;
     QCheckBox *m_captureSettingsMetadataCheckBox = nullptr;
     QCheckBox *m_captureDateTimeMetadataCheckBox = nullptr;
