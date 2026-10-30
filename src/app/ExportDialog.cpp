@@ -8,6 +8,7 @@
 #include <QEvent>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -299,89 +300,78 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
 
     auto *metadataGroup = new QGroupBox(tr("Metadata"), this);
     metadataGroup->setObjectName(QStringLiteral("exportSection"));
-    auto *metadataLayout = new QHBoxLayout(metadataGroup);
+    auto *metadataLayout = new QGridLayout(metadataGroup);
     metadataLayout->setContentsMargins(12, 20, 12, 10);
-    metadataLayout->setSpacing(24);
+    metadataLayout->setHorizontalSpacing(28);
+    metadataLayout->setVerticalSpacing(6);
+    metadataLayout->setColumnStretch(0, 1);
+    metadataLayout->setColumnStretch(1, 1);
 
-    auto *technicalColumn = new QWidget(metadataGroup);
-    auto *technicalLayout = new QVBoxLayout(technicalColumn);
-    technicalLayout->setContentsMargins(0, 0, 0, 0);
-    technicalLayout->setSpacing(6);
-
-    auto *technicalLabel = new QLabel(tr("Technical"), technicalColumn);
+    auto *technicalLabel = new QLabel(tr("Technical"), metadataGroup);
     technicalLabel->setObjectName(QStringLiteral("metadataSubheading"));
-    technicalLayout->addWidget(technicalLabel);
+    metadataLayout->addWidget(technicalLabel, 0, 0, Qt::AlignLeft | Qt::AlignVCenter);
+
+    auto *detailsLabel = new QLabel(tr("Details"), metadataGroup);
+    detailsLabel->setObjectName(QStringLiteral("metadataSubheading"));
+    metadataLayout->addWidget(detailsLabel, 0, 1, Qt::AlignLeft | Qt::AlignVCenter);
 
     m_cameraLensMetadataCheckBox = new QCheckBox(
-        tr("Camera && lens information"), technicalColumn);
+        tr("Camera && lens information"), metadataGroup);
     m_cameraLensMetadataCheckBox->setChecked(true);
-    technicalLayout->addWidget(m_cameraLensMetadataCheckBox);
+    metadataLayout->addWidget(m_cameraLensMetadataCheckBox, 1, 0);
+
+    m_copyrightCreatorMetadataCheckBox = new QCheckBox(
+        tr("Copyright && creator"), metadataGroup);
+    m_copyrightCreatorMetadataCheckBox->setChecked(true);
+    metadataLayout->addWidget(m_copyrightCreatorMetadataCheckBox, 1, 1);
 
     m_captureSettingsMetadataCheckBox = new QCheckBox(
-        tr("Capture settings"), technicalColumn);
+        tr("Capture settings"), metadataGroup);
     m_captureSettingsMetadataCheckBox->setChecked(true);
-    technicalLayout->addWidget(m_captureSettingsMetadataCheckBox);
+    metadataLayout->addWidget(m_captureSettingsMetadataCheckBox, 2, 0);
+
+    m_descriptionKeywordsMetadataCheckBox = new QCheckBox(
+        tr("Description && keywords"), metadataGroup);
+    m_descriptionKeywordsMetadataCheckBox->setChecked(true);
+    metadataLayout->addWidget(m_descriptionKeywordsMetadataCheckBox, 2, 1);
 
     m_captureDateTimeMetadataCheckBox = new QCheckBox(
-        tr("Date && time captured"), technicalColumn);
+        tr("Date && time captured"), metadataGroup);
     m_captureDateTimeMetadataCheckBox->setChecked(true);
-    technicalLayout->addWidget(m_captureDateTimeMetadataCheckBox);
+    metadataLayout->addWidget(m_captureDateTimeMetadataCheckBox, 3, 0);
 
-    technicalLayout->addSpacing(10);
+    auto *privacyLabel = new QLabel(tr("Privacy"), metadataGroup);
+    privacyLabel->setObjectName(QStringLiteral("metadataSubheading"));
+    metadataLayout->addWidget(privacyLabel, 4, 1,
+                              Qt::AlignLeft | Qt::AlignBottom);
+    metadataLayout->setRowMinimumHeight(4, 22);
 
     m_deviceIdentifiersMetadataCheckBox = new QCheckBox(
-        tr("Device identifiers"), technicalColumn);
+        tr("Device identifiers"), metadataGroup);
     m_deviceIdentifiersMetadataCheckBox->setChecked(false);
-    technicalLayout->addWidget(m_deviceIdentifiersMetadataCheckBox);
+    metadataLayout->addWidget(m_deviceIdentifiersMetadataCheckBox, 5, 0);
+
+    m_locationMetadataCheckBox = new QCheckBox(
+        tr("Location information (GPS)"), metadataGroup);
+    m_locationMetadataCheckBox->setChecked(false);
+    metadataLayout->addWidget(m_locationMetadataCheckBox, 5, 1);
 
     auto *deviceIdentifiersHint = new QLabel(
-        tr("May include camera or lens serial numbers"), technicalColumn);
+        tr("May include camera or lens serial numbers"), metadataGroup);
     deviceIdentifiersHint->setObjectName(QStringLiteral("metadataHint"));
     deviceIdentifiersHint->setWordWrap(true);
     deviceIdentifiersHint->setContentsMargins(22, 0, 0, 0);
-    technicalLayout->addWidget(deviceIdentifiersHint);
-    technicalLayout->addStretch(1);
-
-    auto *detailsColumn = new QWidget(metadataGroup);
-    auto *detailsLayout = new QVBoxLayout(detailsColumn);
-    detailsLayout->setContentsMargins(0, 0, 0, 0);
-    detailsLayout->setSpacing(6);
-
-    auto *detailsLabel = new QLabel(tr("Details"), detailsColumn);
-    detailsLabel->setObjectName(QStringLiteral("metadataSubheading"));
-    detailsLayout->addWidget(detailsLabel);
-
-    m_copyrightCreatorMetadataCheckBox = new QCheckBox(
-        tr("Copyright && creator"), detailsColumn);
-    m_copyrightCreatorMetadataCheckBox->setChecked(true);
-    detailsLayout->addWidget(m_copyrightCreatorMetadataCheckBox);
-
-    m_descriptionKeywordsMetadataCheckBox = new QCheckBox(
-        tr("Description && keywords"), detailsColumn);
-    m_descriptionKeywordsMetadataCheckBox->setChecked(true);
-    detailsLayout->addWidget(m_descriptionKeywordsMetadataCheckBox);
-
-    detailsLayout->addSpacing(16);
-
-    auto *privacyLabel = new QLabel(tr("Privacy"), detailsColumn);
-    privacyLabel->setObjectName(QStringLiteral("metadataSubheading"));
-    detailsLayout->addWidget(privacyLabel);
-
-    m_locationMetadataCheckBox = new QCheckBox(
-        tr("Location information (GPS)"), detailsColumn);
-    m_locationMetadataCheckBox->setChecked(false);
-    detailsLayout->addWidget(m_locationMetadataCheckBox);
+    metadataLayout->addWidget(deviceIdentifiersHint, 6, 0,
+                              Qt::AlignLeft | Qt::AlignTop);
 
     auto *locationHint = new QLabel(
-        tr("May reveal where the photo was taken"), detailsColumn);
+        tr("May reveal where the photo was taken"), metadataGroup);
     locationHint->setObjectName(QStringLiteral("metadataHint"));
     locationHint->setWordWrap(true);
     locationHint->setContentsMargins(22, 0, 0, 0);
-    detailsLayout->addWidget(locationHint);
-    detailsLayout->addStretch(1);
+    metadataLayout->addWidget(locationHint, 6, 1,
+                              Qt::AlignLeft | Qt::AlignTop);
 
-    metadataLayout->addWidget(technicalColumn, 1);
-    metadataLayout->addWidget(detailsColumn, 1);
     rootLayout->addWidget(metadataGroup);
 
     const Settings rememberedSettings = loadRememberedExportSettings();
