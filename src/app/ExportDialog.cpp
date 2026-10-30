@@ -401,6 +401,11 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     m_captureDateTimeMetadataCheckBox->setChecked(true);
     metadataLayout->addWidget(m_captureDateTimeMetadataCheckBox, 3, 0);
 
+    auto *identifiersLabel = new QLabel(tr("Identifiers"), metadataGroup);
+    identifiersLabel->setObjectName(QStringLiteral("metadataSubheading"));
+    metadataLayout->addWidget(identifiersLabel, 4, 0,
+                              Qt::AlignLeft | Qt::AlignBottom);
+
     auto *privacyLabel = new QLabel(tr("Privacy"), metadataGroup);
     privacyLabel->setObjectName(QStringLiteral("metadataSubheading"));
     metadataLayout->addWidget(privacyLabel, 4, 1,
