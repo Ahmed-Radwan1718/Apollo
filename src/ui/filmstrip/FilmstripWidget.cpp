@@ -1,6 +1,7 @@
 #include "ui/filmstrip/FilmstripWidget.h"
 
 #include "app/ApplicationStateStore.h"
+#include "app/DevelopSettingsClipboard.h"
 #include "ui/canvas/PhotoCanvas.h"
 
 #include <QAction>
@@ -517,6 +518,8 @@ protected:
 
         menu.addSeparator();
         QAction *copyEditSettingsAction = menu.addAction(tr("Copy Edit Settings"));
+        QAction *pasteEditSettingsAction = menu.addAction(tr("Paste Edit Settings"));
+        pasteEditSettingsAction->setEnabled(DevelopSettingsClipboard::canPaste());
         QAction *resetAllEditsAction = menu.addAction(tr("Reset All Edits"));
         menu.addSeparator();
         QAction *showInExplorerAction = menu.addAction(tr("Show in File Explorer"));
@@ -537,7 +540,9 @@ protected:
                 m_colorLabelChanged(colorActions.value(selectedAction));
             }
         } else if (selectedAction == copyEditSettingsAction) {
-            copyDevelopSettingsToClipboard(m_filePath);
+            DevelopSettingsClipboard::copyFromPhoto(m_filePath);
+        } else if (selectedAction == pasteEditSettingsAction) {
+            DevelopSettingsClipboard::pasteToPhoto(window(), m_filePath);
         } else if (selectedAction == resetAllEditsAction) {
             QMetaObject::invokeMethod(window(),
                                       "openImage",
@@ -558,7 +563,7 @@ protected:
 
     void paintEvent(QPaintEvent *event) override
     {
-        Q_UNUSED(event);
+        Q_UNUSED(event)
 
         QPainter painter(this);
         painter.fillRect(rect(), m_selected ? QColor(36, 36, 36)
