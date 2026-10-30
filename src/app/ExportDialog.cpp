@@ -15,11 +15,13 @@
 #include <QLineEdit>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPushButton>
 #include <QSettings>
 #include <QSlider>
 #include <QSpinBox>
 #include <QStyle>
+#include <QStyleOptionButton>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -78,6 +80,64 @@ protected:
                                              : QColor(QStringLiteral("#d9d9d9")))
                              : QColor(QStringLiteral("#666666")));
         painter.drawEllipse(QPointF(handleX, centerY), handleRadius, handleRadius);
+    }
+};
+
+class ExportCheckBox final : public QCheckBox
+{
+public:
+    explicit ExportCheckBox(const QString &text, QWidget *parent = nullptr)
+        : QCheckBox(text, parent)
+    {
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        QCheckBox::paintEvent(event);
+
+        QStyleOptionButton option;
+        initStyleOption(&option);
+        const QRect indicatorRect = style()->subElementRect(
+            QStyle::SE_CheckBoxIndicator, &option, this);
+        if (!indicatorRect.isValid()) {
+            return;
+        }
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        if (hasFocus()) {
+            painter.setBrush(Qt::NoBrush);
+            painter.setPen(QPen(QColor(QStringLiteral("#9b9b9b")), 1.0));
+            painter.drawRoundedRect(QRectF(indicatorRect).adjusted(1.0, 1.0, -1.0, -1.0),
+                                    2.5,
+                                    2.5);
+        }
+
+        if (!isChecked()) {
+            return;
+        }
+
+        QPen checkPen(isEnabled()
+                          ? QColor(QStringLiteral("#181818"))
+                          : QColor(QStringLiteral("#505050")),
+                      1.8,
+                      Qt::SolidLine,
+                      Qt::RoundCap,
+                      Qt::RoundJoin);
+        painter.setPen(checkPen);
+        painter.setBrush(Qt::NoBrush);
+
+        const QRectF box(indicatorRect);
+        QPainterPath checkPath;
+        checkPath.moveTo(box.left() + box.width() * 0.24,
+                         box.top() + box.height() * 0.53);
+        checkPath.lineTo(box.left() + box.width() * 0.43,
+                         box.top() + box.height() * 0.72);
+        checkPath.lineTo(box.left() + box.width() * 0.78,
+                         box.top() + box.height() * 0.31);
+        painter.drawPath(checkPath);
     }
 };
 
@@ -315,27 +375,27 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     detailsLabel->setObjectName(QStringLiteral("metadataSubheading"));
     metadataLayout->addWidget(detailsLabel, 0, 1, Qt::AlignLeft | Qt::AlignVCenter);
 
-    m_cameraLensMetadataCheckBox = new QCheckBox(
+    m_cameraLensMetadataCheckBox = new ExportCheckBox(
         tr("Camera && lens information"), metadataGroup);
     m_cameraLensMetadataCheckBox->setChecked(true);
     metadataLayout->addWidget(m_cameraLensMetadataCheckBox, 1, 0);
 
-    m_copyrightCreatorMetadataCheckBox = new QCheckBox(
+    m_copyrightCreatorMetadataCheckBox = new ExportCheckBox(
         tr("Copyright && creator"), metadataGroup);
     m_copyrightCreatorMetadataCheckBox->setChecked(true);
     metadataLayout->addWidget(m_copyrightCreatorMetadataCheckBox, 1, 1);
 
-    m_captureSettingsMetadataCheckBox = new QCheckBox(
+    m_captureSettingsMetadataCheckBox = new ExportCheckBox(
         tr("Capture settings"), metadataGroup);
     m_captureSettingsMetadataCheckBox->setChecked(true);
     metadataLayout->addWidget(m_captureSettingsMetadataCheckBox, 2, 0);
 
-    m_descriptionKeywordsMetadataCheckBox = new QCheckBox(
+    m_descriptionKeywordsMetadataCheckBox = new ExportCheckBox(
         tr("Description && keywords"), metadataGroup);
     m_descriptionKeywordsMetadataCheckBox->setChecked(true);
     metadataLayout->addWidget(m_descriptionKeywordsMetadataCheckBox, 2, 1);
 
-    m_captureDateTimeMetadataCheckBox = new QCheckBox(
+    m_captureDateTimeMetadataCheckBox = new ExportCheckBox(
         tr("Date && time captured"), metadataGroup);
     m_captureDateTimeMetadataCheckBox->setChecked(true);
     metadataLayout->addWidget(m_captureDateTimeMetadataCheckBox, 3, 0);
@@ -346,12 +406,12 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
                               Qt::AlignLeft | Qt::AlignBottom);
     metadataLayout->setRowMinimumHeight(4, 22);
 
-    m_deviceIdentifiersMetadataCheckBox = new QCheckBox(
+    m_deviceIdentifiersMetadataCheckBox = new ExportCheckBox(
         tr("Device identifiers"), metadataGroup);
     m_deviceIdentifiersMetadataCheckBox->setChecked(false);
     metadataLayout->addWidget(m_deviceIdentifiersMetadataCheckBox, 5, 0);
 
-    m_locationMetadataCheckBox = new QCheckBox(
+    m_locationMetadataCheckBox = new ExportCheckBox(
         tr("Location information (GPS)"), metadataGroup);
     m_locationMetadataCheckBox->setChecked(false);
     metadataLayout->addWidget(m_locationMetadataCheckBox, 5, 1);
@@ -500,13 +560,29 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
         "QCheckBox::indicator {"
         "  width: 14px;"
         "  height: 14px;"
-        "  border: 1px solid #777777;"
+        "  border: 1px solid #6f6f6f;"
         "  border-radius: 3px;"
         "  background: #181818;"
         "}"
+        "QCheckBox::indicator:hover {"
+        "  border-color: #9d9d9d;"
+        "  background: #202020;"
+        "}"
         "QCheckBox::indicator:checked {"
-        "  background: #ffffff;"
-        "  border-color: #ffffff;"
+        "  background: #e3e3e3;"
+        "  border-color: #e3e3e3;"
+        "}"
+        "QCheckBox::indicator:checked:hover {"
+        "  background: #f2f2f2;"
+        "  border-color: #f2f2f2;"
+        "}"
+        "QCheckBox::indicator:disabled {"
+        "  border-color: #4a4a4a;"
+        "  background: #181818;"
+        "}"
+        "QCheckBox::indicator:checked:disabled {"
+        "  border-color: #777777;"
+        "  background: #777777;"
         "}"
         "QComboBox#exportCombo, QSpinBox#exportSpinBox, QLineEdit#exportLineEdit {"
         "  background: #1a1a1a;"
