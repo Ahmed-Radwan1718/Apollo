@@ -15,6 +15,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
+#include <QSettings>
 #include <QSlider>
 #include <QSpinBox>
 #include <QStyle>
@@ -116,6 +117,70 @@ protected:
     }
 };
 
+ExportDialog::Settings loadRememberedExportSettings()
+{
+    ExportDialog::Settings remembered;
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("exportDialog"));
+
+    remembered.format = settings.value(QStringLiteral("format"), 0).toInt() == 1
+        ? ExportDialog::Format::Png
+        : ExportDialog::Format::Jpeg;
+
+    switch (settings.value(QStringLiteral("locationMode"), 0).toInt()) {
+    case 1:
+        remembered.locationMode = ExportDialog::LocationMode::OriginalSubfolder;
+        break;
+    case 2:
+        remembered.locationMode = ExportDialog::LocationMode::CustomFolder;
+        break;
+    default:
+        remembered.locationMode = ExportDialog::LocationMode::SameAsOriginal;
+        break;
+    }
+
+    remembered.quality = qBound(
+        1,
+        settings.value(QStringLiteral("quality"), remembered.quality).toInt(),
+        100);
+    remembered.includeMetadata = settings.value(
+        QStringLiteral("includeMetadata"), remembered.includeMetadata).toBool();
+    remembered.subfolderName = settings.value(
+        QStringLiteral("subfolderName"), QStringLiteral("Exports")).toString();
+    remembered.customFolder = settings.value(QStringLiteral("customFolder")).toString();
+
+    settings.endGroup();
+    return remembered;
+}
+
+void saveRememberedExportSettings(const ExportDialog::Settings &remembered)
+{
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("exportDialog"));
+
+    settings.setValue(QStringLiteral("format"),
+                      remembered.format == ExportDialog::Format::Png ? 1 : 0);
+
+    int locationMode = 0;
+    switch (remembered.locationMode) {
+    case ExportDialog::LocationMode::OriginalSubfolder:
+        locationMode = 1;
+        break;
+    case ExportDialog::LocationMode::CustomFolder:
+        locationMode = 2;
+        break;
+    case ExportDialog::LocationMode::SameAsOriginal:
+        break;
+    }
+    settings.setValue(QStringLiteral("locationMode"), locationMode);
+
+    settings.setValue(QStringLiteral("quality"), remembered.quality);
+    settings.setValue(QStringLiteral("includeMetadata"), remembered.includeMetadata);
+    settings.setValue(QStringLiteral("subfolderName"), remembered.subfolderName);
+    settings.setValue(QStringLiteral("customFolder"), remembered.customFolder);
+    settings.endGroup();
+}
+
 } // namespace
 
 ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
@@ -214,6 +279,33 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
     metadataLayout->addWidget(m_includeMetadataCheckBox);
     rootLayout->addWidget(metadataGroup);
 
+    const Settings rememberedSettings = loadRememberedExportSettings();
+    m_formatCombo->setCurrentIndex(
+        rememberedSettings.format == Format::Png ? 1 : 0);
+    m_qualitySlider->setValue(rememberedSettings.quality);
+    m_includeMetadataCheckBox->setChecked(rememberedSettings.includeMetadata);
+    m_subfolderEdit->setText(rememberedSettings.subfolderName);
+    m_customFolder = rememberedSettings.customFolder;
+
+    switch (rememberedSettings.locationMode) {
+    case LocationMode::OriginalSubfolder:
+        m_locationCombo->setCurrentIndex(1);
+        break;
+    case LocationMode::CustomFolder:
+        m_locationCombo->setCurrentIndex(2);
+        if (!m_customFolder.isEmpty()) {
+            m_locationCombo->setEditText(QDir::toNativeSeparators(m_customFolder));
+        }
+        break;
+    case LocationMode::SameAsOriginal:
+        m_locationCombo->setCurrentIndex(0);
+        break;
+    }
+    m_locationCombo->lineEdit()->setCursorPosition(0);
+    m_locationCombo->lineEdit()->deselect();
+    qualityValueLabel->setText(QStringLiteral("%1%").arg(m_qualitySlider->value()));
+    qualityValueLabel->setEnabled(m_formatCombo->currentIndex() == 0);
+
     rootLayout->addStretch(1);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Cancel | QDialogButtonBox::Ok,
@@ -225,6 +317,11 @@ ExportDialog::ExportDialog(const QString &sourceDirectory, QWidget *parent)
         m_exportButton->setText(tr("Export"));
         m_exportButton->setDefault(true);
     }
+    auto *doneButton = buttons->addButton(tr("Done"), QDialogButtonBox::ActionRole);
+    connect(doneButton, &QPushButton::clicked, this, [this]() {
+        saveRememberedExportSettings(settings());
+        reject();
+    });
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     rootLayout->addWidget(buttons);
