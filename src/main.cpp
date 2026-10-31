@@ -1,6 +1,7 @@
 #include "app/MainWindow.h"
 #include "app/PhotoExportController.h"
 #include "app/PhotoFlipController.h"
+#include "ui/canvas/PhotoCanvas.h"
 #include "ui/leftpanel/HistoryPanel.h"
 #include "ui/library/LibraryWorkspaceController.h"
 #include "ui/rightpanel/AutoStraightenController.h"
@@ -218,7 +219,15 @@ int main(int argc, char *argv[])
     addPlaceholderAction(viewMenu, QObject::tr("Basic Panel"));
 
     viewMenu->addSeparator();
-    addPlaceholderAction(viewMenu, QObject::tr("Show Clipping Warnings"));
+    QAction *clippingWarningsAction =
+        viewMenu->addAction(QObject::tr("Show Clipping Warnings"));
+    clippingWarningsAction->setCheckable(true);
+    if (PhotoCanvas *canvas = window.findChild<PhotoCanvas *>()) {
+        QObject::connect(clippingWarningsAction, &QAction::toggled,
+                         canvas, &PhotoCanvas::setClippingWarningsEnabled);
+    } else {
+        clippingWarningsAction->setEnabled(false);
+    }
     addPlaceholderAction(viewMenu, QObject::tr("Show Grid"));
 
     viewMenu->addSeparator();

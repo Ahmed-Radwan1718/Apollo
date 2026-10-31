@@ -37,6 +37,7 @@ public:
     void replaceImage(const QImage &image);
     void replacePreviewImage(const QImage &image, const QSize &fullResolutionSize);
     void clearImage();
+    void setClippingWarningsEnabled(bool enabled);
 
     [[nodiscard]] bool hasImage() const noexcept;
     [[nodiscard]] qreal zoomPercent() const noexcept;
@@ -116,6 +117,7 @@ private:
     ZoomMode m_zoomMode = ZoomMode::Fit;
     qreal m_manualZoomPercent = 100.0;
 
+    bool m_clippingWarningsEnabled = false;
     bool m_spacePressed = false;
     bool m_panning = false;
     QPointF m_lastPanPosition;

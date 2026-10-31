@@ -13,6 +13,7 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPolygonF>
 #include <QResizeEvent>
 #include <QSizeF>
 #include <QUrl>
@@ -22,6 +23,9 @@
 #include <cmath>
 
 namespace {
+
+constexpr int kShadowClipLuminance = 1;
+constexpr int kHighlightClipLuminance = 254;
 
 class PhotoImageItem final : public QGraphicsItem
 {
@@ -42,6 +46,7 @@ public:
         m_image = image;
         m_image.setDevicePixelRatio(1.0);
         m_logicalSize = nextLogicalSize;
+        rebuildClippingOverlay();
 
         if (!preserveVisibleRect) {
             resetVisibleLogicalRect();
@@ -49,6 +54,17 @@ public:
             setVisibleLogicalRect(m_visibleLogicalRect);
         }
 
+        update();
+    }
+
+    void setClippingWarningsEnabled(bool enabled)
+    {
+        if (m_clippingWarningsEnabled == enabled) {
+            return;
+        }
+
+        m_clippingWarningsEnabled = enabled;
+        rebuildClippingOverlay();
         update();
     }
 
@@ -115,6 +131,33 @@ public:
             return;
         }
 
+        painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
+        painter->drawImage(fullRect, m_image, visibleSourceRect());
+    }
+
+    void paintClippingOverlay(QPainter *painter) const
+    {
+        if (!painter || m_clippingOverlay.isNull()) {
+            return;
+        }
+
+        const QRectF fullRect = boundingRect();
+        if (fullRect.isEmpty()) {
+            return;
+        }
+
+        painter->setRenderHint(QPainter::SmoothPixmapTransform, false);
+        painter->drawImage(fullRect, m_clippingOverlay, visibleSourceRect());
+    }
+
+private:
+    [[nodiscard]] QRectF visibleSourceRect() const
+    {
+        const QRectF fullRect = boundingRect();
+        if (m_image.isNull() || fullRect.isEmpty()) {
+            return {};
+        }
+
         const QRectF visibleRect =
             m_visibleLogicalRect.isValid() && !m_visibleLogicalRect.isEmpty()
                 ? m_visibleLogicalRect
@@ -123,20 +166,58 @@ public:
             static_cast<qreal>(m_image.width()) / fullRect.width();
         const qreal sourceScaleY =
             static_cast<qreal>(m_image.height()) / fullRect.height();
-        const QRectF sourceRect(
+        return QRectF(
             (visibleRect.left() - fullRect.left()) * sourceScaleX,
             (visibleRect.top() - fullRect.top()) * sourceScaleY,
             visibleRect.width() * sourceScaleX,
             visibleRect.height() * sourceScaleY);
-
-        painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
-        painter->drawImage(fullRect, m_image, sourceRect);
     }
 
-private:
+    void rebuildClippingOverlay()
+    {
+        m_clippingOverlay = {};
+        if (!m_clippingWarningsEnabled || m_image.isNull()) {
+            return;
+        }
+
+        const QImage rgbImage = m_image.format() == QImage::Format_RGB888
+            ? m_image
+            : m_image.convertToFormat(QImage::Format_RGB888);
+        if (rgbImage.isNull()) {
+            return;
+        }
+
+        QImage overlay(rgbImage.size(), QImage::Format_Indexed8);
+        overlay.setDevicePixelRatio(1.0);
+        overlay.setColorCount(3);
+        overlay.setColor(0, qRgba(0, 0, 0, 0));
+        overlay.setColor(1, qRgba(0, 72, 255, 230));
+        overlay.setColor(2, qRgba(255, 48, 48, 230));
+        overlay.fill(0);
+
+        for (int y = 0; y < rgbImage.height(); ++y) {
+            const uchar *source = rgbImage.constScanLine(y);
+            uchar *target = overlay.scanLine(y);
+
+            for (int x = 0; x < rgbImage.width(); ++x) {
+                const uchar *pixel = source + (x * 3);
+                const int luminance = qGray(pixel[0], pixel[1], pixel[2]);
+                if (luminance <= kShadowClipLuminance) {
+                    target[x] = 1;
+                } else if (luminance >= kHighlightClipLuminance) {
+                    target[x] = 2;
+                }
+            }
+        }
+
+        m_clippingOverlay = std::move(overlay);
+    }
+
     QImage m_image;
+    QImage m_clippingOverlay;
     QSizeF m_logicalSize;
     QRectF m_visibleLogicalRect;
+    bool m_clippingWarningsEnabled = false;
 };
 
 PhotoImageItem *asPhotoItem(QGraphicsItem *item)
@@ -343,6 +424,17 @@ void PhotoCanvas::clearImage()
     updateCursor();
 }
 
+void PhotoCanvas::setClippingWarningsEnabled(bool enabled)
+{
+    if (m_clippingWarningsEnabled == enabled) {
+        return;
+    }
+
+    m_clippingWarningsEnabled = enabled;
+    asPhotoItem(m_imageItem)->setClippingWarningsEnabled(enabled);
+    viewport()->update();
+}
+
 bool PhotoCanvas::hasImage() const noexcept
 {
     return !asPhotoItem(m_imageItem)->image().isNull();
@@ -443,6 +535,36 @@ void PhotoCanvas::paintEvent(QPaintEvent *event)
     QGraphicsView::paintEvent(event);
 
     if (hasImage()) {
+        if (m_clippingWarningsEnabled) {
+            const PhotoImageItem *item = asPhotoItem(m_imageItem);
+            const QRectF itemRect = item->boundingRect();
+            if (!itemRect.isEmpty()) {
+                const QPolygonF itemQuad({
+                    itemRect.topLeft(),
+                    itemRect.topRight(),
+                    itemRect.bottomRight(),
+                    itemRect.bottomLeft(),
+                });
+                QPolygonF viewportQuad;
+                viewportQuad.reserve(itemQuad.size());
+
+                const QTransform itemToScene = m_imageItem->sceneTransform();
+                const QTransform sceneToViewport = viewportTransform();
+                for (const QPointF &point : itemQuad) {
+                    viewportQuad.push_back(
+                        sceneToViewport.map(itemToScene.map(point)));
+                }
+
+                QTransform itemToViewport;
+                if (QTransform::quadToQuad(itemQuad,
+                                           viewportQuad,
+                                           itemToViewport)) {
+                    QPainter overlayPainter(viewport());
+                    overlayPainter.setTransform(itemToViewport);
+                    item->paintClippingOverlay(&overlayPainter);
+                }
+            }
+        }
         return;
     }
 
