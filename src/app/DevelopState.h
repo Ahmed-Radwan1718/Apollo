@@ -1,5 +1,6 @@
 #pragma once
 
+#include "imaging/ColorMixerSettings.h"
 #include "imaging/DetailSettings.h"
 #include "imaging/EffectsSettings.h"
 #include "imaging/RawCalibration.h"
@@ -18,6 +19,7 @@ struct DevelopState {
     int dehaze = 0;
     int saturation = 0;
     int vibrance = 0;
+    imaging::ColorMixerSettings colorMixer;
     imaging::RawCalibration calibration;
     imaging::DetailSettings detail;
     imaging::EffectsSettings effects;
@@ -71,6 +73,7 @@ struct DevelopState {
             && dehaze == other.dehaze
             && saturation == other.saturation
             && vibrance == other.vibrance
+            && colorMixer == other.colorMixer
             && calibration == other.calibration;
     }
 
