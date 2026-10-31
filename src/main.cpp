@@ -60,21 +60,6 @@ int main(int argc, char *argv[])
     installDevelopToolPlaceholderButtons(&window);
     new PhotoExportController(&window, &window);
 
-    // Keep the develop/edit infrastructure alive, but reduce the visible right
-    // sidebar to only the histogram and the photo metadata row beneath it.
-    if (QScrollArea *adjustmentsScrollArea =
-            window.findChild<QScrollArea *>(QStringLiteral("adjustmentsScrollArea"))) {
-        adjustmentsScrollArea->hide();
-    }
-    if (QWidget *developToolStrip =
-            window.findChild<QWidget *>(QStringLiteral("developToolStrip"))) {
-        developToolStrip->hide();
-    }
-    if (QWidget *cropToolPanel =
-            window.findChild<QWidget *>(QStringLiteral("cropToolPanel"))) {
-        cropToolPanel->hide();
-    }
-
     auto *menuBar = window.menuBar();
     auto *fileMenu = menuBar->addMenu(QObject::tr("&File"));
     auto *editMenu = menuBar->addMenu(QObject::tr("&Edit"));
