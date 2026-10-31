@@ -236,6 +236,7 @@ void LibraryWorkspaceController::setLibraryMode(bool libraryMode)
 
         const QStringList editorialPanelNames = {
             QStringLiteral("basicPanel"),
+            QStringLiteral("colorMixerPanel"),
             QStringLiteral("detailPanel"),
             QStringLiteral("calibrationPanel"),
             QStringLiteral("transformPanel"),
