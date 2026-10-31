@@ -1,5 +1,6 @@
 #pragma once
 
+#include "imaging/ColorMixerSettings.h"
 #include "imaging/PhotoMetadata.h"
 #include "imaging/RawCalibration.h"
 
@@ -42,7 +43,8 @@ public:
                                        int saturation = 0,
                                        int vibrance = 0,
                                        const RawCalibration &calibration = RawCalibration{},
-                                       bool halfSizePreview = false);
+                                       bool halfSizePreview = false,
+                                       const ColorMixerSettings &colorMixer = ColorMixerSettings{});
 
     [[nodiscard]] static WhiteBalancePickResult pickWhiteBalance(
         const QString &filePath,
