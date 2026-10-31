@@ -744,7 +744,8 @@ QImage ArwPreviewSession::render(const QString &filePath,
                                  int clarity,
                                  int dehaze,
                                  int saturation,
-                                 int vibrance)
+                                 int vibrance,
+                                 const ColorMixerSettings &colorMixer)
 {
     if (error != nullptr) {
         error->clear();
@@ -805,6 +806,7 @@ QImage ArwPreviewSession::render(const QString &filePath,
                               dehaze,
                               saturation,
                               vibrance,
+                              colorMixer,
                               error);
 }
 
