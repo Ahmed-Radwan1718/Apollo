@@ -13,6 +13,7 @@
 class QAction;
 class BasicPanel;
 class CalibrationPanel;
+class ColorMixerPanel;
 class CropToolController;
 class DetailPanel;
 class DevelopSettingsClipboard;
@@ -60,6 +61,7 @@ private slots:
                              int dehaze,
                              int saturation,
                              int vibrance,
+                             const imaging::ColorMixerSettings &colorMixer,
                              bool preview,
                              const QImage &image,
                              const QString &error);
@@ -70,6 +72,7 @@ private slots:
     void handleHistoryEntryActivated(int index);
 
 private:
+    friend class ColorMixerPanel;
     friend class CropToolController;
     friend class DetailPanel;
     friend class DevelopSettingsClipboard;
@@ -116,6 +119,7 @@ private:
     HistogramWidget *m_histogram = nullptr;
     PhotoMetadataWidget *m_photoMetadata = nullptr;
     BasicPanel *m_basicPanel = nullptr;
+    ColorMixerPanel *m_colorMixerPanel = nullptr;
     CalibrationPanel *m_calibrationPanel = nullptr;
     QSlider *m_temperatureSlider = nullptr;
     QSlider *m_tintSlider = nullptr;
