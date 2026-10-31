@@ -1,5 +1,6 @@
 #pragma once
 
+#include "imaging/ColorMixerSettings.h"
 #include "imaging/RawCalibration.h"
 
 #include <QImage>
@@ -39,7 +40,8 @@ public:
                                 int clarity,
                                 int dehaze,
                                 int saturation,
-                                int vibrance);
+                                int vibrance,
+                                const ColorMixerSettings &colorMixer);
 
 private:
     struct Impl;
