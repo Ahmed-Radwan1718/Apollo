@@ -85,7 +85,7 @@ std::array<int, imaging::kColorMixerBandCount> colorMixerValuesFromJson(
 {
     std::array<int, imaging::kColorMixerBandCount> values{};
     const QJsonArray array = value.toArray();
-    const int count = std::min(array.size(),
+    const int count = std::min(static_cast<int>(array.size()),
                                static_cast<int>(imaging::kColorMixerBandCount));
     for (int index = 0; index < count; ++index) {
         values[static_cast<std::size_t>(index)] =
