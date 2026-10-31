@@ -175,6 +175,7 @@ void applySelection(DevelopState &target,
     if (selection.color) {
         target.saturation = source.saturation;
         target.vibrance = source.vibrance;
+        target.colorMixer = source.colorMixer;
     }
 
     if (selection.calibration) {
