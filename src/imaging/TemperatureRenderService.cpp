@@ -83,7 +83,8 @@ void TemperatureRenderService::requestPreview(const QString &filePath,
                                               int clarity,
                                               int dehaze,
                                               int saturation,
-                                              int vibrance)
+                                              int vibrance,
+                                              const ColorMixerSettings &colorMixer)
 {
     Request renderRequest;
     renderRequest.filePath = filePath;
@@ -101,6 +102,7 @@ void TemperatureRenderService::requestPreview(const QString &filePath,
     renderRequest.dehaze = dehaze;
     renderRequest.saturation = saturation;
     renderRequest.vibrance = vibrance;
+    renderRequest.colorMixer = colorMixer;
     request(std::move(renderRequest), true);
 }
 
@@ -118,7 +120,8 @@ void TemperatureRenderService::requestFullRender(const QString &filePath,
                                                  int clarity,
                                                  int dehaze,
                                                  int saturation,
-                                                 int vibrance)
+                                                 int vibrance,
+                                                 const ColorMixerSettings &colorMixer)
 {
     {
         std::lock_guard lock(m_previewMutex);
@@ -141,6 +144,7 @@ void TemperatureRenderService::requestFullRender(const QString &filePath,
     renderRequest.dehaze = dehaze;
     renderRequest.saturation = saturation;
     renderRequest.vibrance = vibrance;
+    renderRequest.colorMixer = colorMixer;
     request(std::move(renderRequest), false);
 }
 
@@ -221,7 +225,8 @@ void TemperatureRenderService::workerLoop(bool preview)
                                            request.clarity,
                                            request.dehaze,
                                            request.saturation,
-                                           request.vibrance);
+                                           request.vibrance,
+                                           request.colorMixer);
         } else {
             image = ArwDecoder::decode(request.filePath,
                                        &error,
@@ -240,7 +245,8 @@ void TemperatureRenderService::workerLoop(bool preview)
                                        request.saturation,
                                        request.vibrance,
                                        request.calibration,
-                                       false);
+                                       false,
+                                       request.colorMixer);
         }
 
         if (!image.isNull()) {
@@ -278,6 +284,7 @@ void TemperatureRenderService::workerLoop(bool preview)
                                  request.dehaze,
                                  request.saturation,
                                  request.vibrance,
+                                 request.colorMixer,
                                  preview,
                                  image,
                                  error);
