@@ -432,6 +432,7 @@ EffectsPanel::EffectsPanel(MainWindow *window, QWidget *parent)
                            int dehaze,
                            int saturation,
                            int vibrance,
+                           const imaging::ColorMixerSettings &colorMixer,
                            bool preview,
                            const QImage &image,
                            const QString &) {
@@ -449,6 +450,7 @@ EffectsPanel::EffectsPanel(MainWindow *window, QWidget *parent)
                         renderedState.dehaze = dehaze;
                         renderedState.saturation = saturation;
                         renderedState.vibrance = vibrance;
+                        renderedState.colorMixer = colorMixer;
                         renderedState.calibration = calibration;
                         applyRenderedEffects(filePath, renderedState, preview, image);
                     });
