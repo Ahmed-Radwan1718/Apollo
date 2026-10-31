@@ -1,22 +1,22 @@
 #include "ui/histogram/HistogramWidget.h"
 
 #include <QImage>
+#include <QLinearGradient>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPaintEvent>
 #include <QPen>
-#include <QPolygonF>
 #include <QSizePolicy>
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 
 namespace {
 
 constexpr int kHistogramPreviewMaximumEdge = 1024;
-constexpr int kClippingIndicatorSize = 14;
-constexpr int kClippingIndicatorInset = 5;
 constexpr int kClippingRange = 1;
+constexpr qreal kFullStrengthClippingFraction = 0.03;
 
 qreal normalizedHistogramHeight(quint64 count, quint64 displayPeak)
 {
@@ -120,58 +120,88 @@ quint64 clippedChannelCount(
     return count;
 }
 
-QColor clippingIndicatorColor(const imaging::HistogramData &histogram,
-                              bool highlights)
+qreal clippingSeverity(const imaging::HistogramData &histogram, bool highlights)
 {
-    const bool red = clippedChannelCount(histogram.red, highlights) > 0;
-    const bool green = clippedChannelCount(histogram.green, highlights) > 0;
-    const bool blue = clippedChannelCount(histogram.blue, highlights) > 0;
-
-    if (!red && !green && !blue) {
-        return QColor(72, 72, 72);
+    if (histogram.pixelCount == 0) {
+        return 0.0;
     }
 
-    // Lightroom Classic uses the indicator color to show which RGB channels
-    // are clipped. When all three channels clip, the indicator appears white.
-    return QColor(red ? 235 : 0,
-                  green ? 235 : 0,
-                  blue ? 235 : 0);
+    const quint64 clippedPixels = std::max({
+        clippedChannelCount(histogram.red, highlights),
+        clippedChannelCount(histogram.green, highlights),
+        clippedChannelCount(histogram.blue, highlights),
+    });
+    if (clippedPixels == 0) {
+        return 0.0;
+    }
+
+    const qreal fraction = static_cast<qreal>(clippedPixels)
+        / static_cast<qreal>(histogram.pixelCount);
+    const qreal normalized = std::clamp(
+        fraction / kFullStrengthClippingFraction,
+        0.0,
+        1.0);
+
+    // Keep tiny amounts visible without making them look as severe as a large
+    // clipped region. The square-root response gives useful visual separation
+    // at the low end while still capping heavy clipping cleanly.
+    return std::max<qreal>(0.12, std::sqrt(normalized));
 }
 
-QPolygonF clippingIndicatorPolygon(const QRectF &plotRect, bool highlights)
+void drawClippingEdgeGlow(QPainter &painter,
+                          const QRectF &plotRect,
+                          const imaging::HistogramData &histogram,
+                          bool highlights)
 {
-    const qreal top = plotRect.top() + kClippingIndicatorInset;
+    const qreal severity = clippingSeverity(histogram, highlights);
+    if (severity <= 0.0 || plotRect.isEmpty()) {
+        return;
+    }
+
+    const QColor baseColor = highlights
+        ? QColor(255, 67, 58)
+        : QColor(48, 108, 255);
+    const qreal glowWidth = 4.0 + (severity * 8.0);
+    const int glowAlpha = static_cast<int>(42.0 + (severity * 118.0));
+    const int edgeAlpha = static_cast<int>(105.0 + (severity * 135.0));
+    const QRectF innerRect = plotRect.adjusted(1.0, 1.0, -1.0, -1.0);
+
+    QLinearGradient gradient;
+    QRectF glowRect;
+    qreal edgeX = innerRect.left();
     if (highlights) {
-        const qreal right = plotRect.right() - kClippingIndicatorInset;
-        return {
-            QPointF(right - kClippingIndicatorSize, top),
-            QPointF(right, top),
-            QPointF(right, top + kClippingIndicatorSize),
-        };
+        glowRect = QRectF(innerRect.right() - glowWidth,
+                          innerRect.top(),
+                          glowWidth,
+                          innerRect.height());
+        gradient = QLinearGradient(QPointF(innerRect.right(), 0.0),
+                                   QPointF(innerRect.right() - glowWidth, 0.0));
+        edgeX = innerRect.right();
+    } else {
+        glowRect = QRectF(innerRect.left(),
+                          innerRect.top(),
+                          glowWidth,
+                          innerRect.height());
+        gradient = QLinearGradient(QPointF(innerRect.left(), 0.0),
+                                   QPointF(innerRect.left() + glowWidth, 0.0));
     }
 
-    const qreal left = plotRect.left() + kClippingIndicatorInset;
-    return {
-        QPointF(left, top),
-        QPointF(left + kClippingIndicatorSize, top),
-        QPointF(left, top + kClippingIndicatorSize),
-    };
-}
-
-void drawClippingIndicator(QPainter &painter,
-                           const QRectF &plotRect,
-                           const imaging::HistogramData &histogram,
-                           bool highlights)
-{
-    const QColor fill = clippingIndicatorColor(histogram, highlights);
-    const bool active = fill != QColor(72, 72, 72);
+    QColor glowColor = baseColor;
+    glowColor.setAlpha(glowAlpha);
+    QColor transparentColor = baseColor;
+    transparentColor.setAlpha(0);
+    gradient.setColorAt(0.0, glowColor);
+    gradient.setColorAt(1.0, transparentColor);
 
     painter.save();
-    painter.setPen(QPen(active ? QColor(245, 245, 245, 170)
-                               : QColor(110, 110, 110),
-                        1.0));
-    painter.setBrush(fill);
-    painter.drawPolygon(clippingIndicatorPolygon(plotRect, highlights));
+    painter.setClipRect(innerRect);
+    painter.fillRect(glowRect, gradient);
+
+    QColor edgeColor = baseColor;
+    edgeColor.setAlpha(edgeAlpha);
+    painter.setPen(QPen(edgeColor, 1.0 + (severity * 0.8)));
+    painter.drawLine(QPointF(edgeX, innerRect.top()),
+                     QPointF(edgeX, innerRect.bottom()));
     painter.restore();
 }
 
@@ -266,6 +296,6 @@ void HistogramWidget::paintEvent(QPaintEvent *event)
     painter.setPen(QPen(QColor(48, 48, 48), 1.0));
     painter.drawRect(frameRect);
 
-    drawClippingIndicator(painter, plotRect, m_histogram, false);
-    drawClippingIndicator(painter, plotRect, m_histogram, true);
+    drawClippingEdgeGlow(painter, plotRect, m_histogram, false);
+    drawClippingEdgeGlow(painter, plotRect, m_histogram, true);
 }
