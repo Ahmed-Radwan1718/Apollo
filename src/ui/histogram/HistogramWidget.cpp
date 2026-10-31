@@ -5,6 +5,7 @@
 #include <QPainterPath>
 #include <QPaintEvent>
 #include <QPen>
+#include <QPolygonF>
 #include <QSizePolicy>
 
 #include <algorithm>
@@ -13,6 +14,9 @@
 namespace {
 
 constexpr int kHistogramPreviewMaximumEdge = 1024;
+constexpr int kClippingIndicatorSize = 14;
+constexpr int kClippingIndicatorInset = 5;
+constexpr int kClippingRange = 1;
 
 qreal normalizedHistogramHeight(quint64 count, quint64 displayPeak)
 {
@@ -95,6 +99,80 @@ quint64 histogramDisplayPeak(const imaging::HistogramData &histogram)
     }
 
     return peak;
+}
+
+quint64 clippedChannelCount(
+    const std::array<quint64, imaging::HistogramData::kBinCount> &bins,
+    bool highlights)
+{
+    quint64 count = 0;
+    if (highlights) {
+        for (int bin = imaging::HistogramData::kBinCount - 1 - kClippingRange;
+             bin < imaging::HistogramData::kBinCount;
+             ++bin) {
+            count += bins[static_cast<std::size_t>(bin)];
+        }
+    } else {
+        for (int bin = 0; bin <= kClippingRange; ++bin) {
+            count += bins[static_cast<std::size_t>(bin)];
+        }
+    }
+    return count;
+}
+
+QColor clippingIndicatorColor(const imaging::HistogramData &histogram,
+                              bool highlights)
+{
+    const bool red = clippedChannelCount(histogram.red, highlights) > 0;
+    const bool green = clippedChannelCount(histogram.green, highlights) > 0;
+    const bool blue = clippedChannelCount(histogram.blue, highlights) > 0;
+
+    if (!red && !green && !blue) {
+        return QColor(72, 72, 72);
+    }
+
+    // Lightroom Classic uses the indicator color to show which RGB channels
+    // are clipped. When all three channels clip, the indicator appears white.
+    return QColor(red ? 235 : 0,
+                  green ? 235 : 0,
+                  blue ? 235 : 0);
+}
+
+QPolygonF clippingIndicatorPolygon(const QRectF &plotRect, bool highlights)
+{
+    const qreal top = plotRect.top() + kClippingIndicatorInset;
+    if (highlights) {
+        const qreal right = plotRect.right() - kClippingIndicatorInset;
+        return {
+            QPointF(right - kClippingIndicatorSize, top),
+            QPointF(right, top),
+            QPointF(right, top + kClippingIndicatorSize),
+        };
+    }
+
+    const qreal left = plotRect.left() + kClippingIndicatorInset;
+    return {
+        QPointF(left, top),
+        QPointF(left + kClippingIndicatorSize, top),
+        QPointF(left, top + kClippingIndicatorSize),
+    };
+}
+
+void drawClippingIndicator(QPainter &painter,
+                           const QRectF &plotRect,
+                           const imaging::HistogramData &histogram,
+                           bool highlights)
+{
+    const QColor fill = clippingIndicatorColor(histogram, highlights);
+    const bool active = fill != QColor(72, 72, 72);
+
+    painter.save();
+    painter.setPen(QPen(active ? QColor(245, 245, 245, 170)
+                               : QColor(110, 110, 110),
+                        1.0));
+    painter.setBrush(fill);
+    painter.drawPolygon(clippingIndicatorPolygon(plotRect, highlights));
+    painter.restore();
 }
 
 } // namespace
@@ -187,4 +265,7 @@ void HistogramWidget::paintEvent(QPaintEvent *event)
 
     painter.setPen(QPen(QColor(48, 48, 48), 1.0));
     painter.drawRect(frameRect);
+
+    drawClippingIndicator(painter, plotRect, m_histogram, false);
+    drawClippingIndicator(painter, plotRect, m_histogram, true);
 }
