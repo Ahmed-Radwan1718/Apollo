@@ -285,7 +285,7 @@ ColorMixerPanel::ColorMixerPanel(MainWindow *window, QWidget *parent)
         "QLabel#colorMixerControlLabel { color: #d0d0d0; font-size: 12px; }"
         "QLabel#colorMixerValueLabel { color: #9f9f9f; font-size: 11px; }"
         "QSlider#colorMixerSlider { min-height: 14px; max-height: 14px; }"
-        "QSlider#colorMixerSlider::groove:horizontal { height: 2px; border-radius: 1px; background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #454545, stop:0.5 #777777, stop:1 #a2a2a2); }"
+        "QSlider#colorMixerSlider::groove:horizontal { height: 2px; border-radius: 1px; background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #303030, stop:0.5 #626262, stop:1 #9b9b9b); }"
         "QSlider#colorMixerSlider::sub-page:horizontal, QSlider#colorMixerSlider::add-page:horizontal { background: transparent; }"
         "QSlider#colorMixerSlider::handle:horizontal { width: 10px; height: 10px; margin: -4px 0; border-radius: 5px; background: #d9d9d9; border: 0; }"
         "QSlider#colorMixerSlider::handle:horizontal:hover { background: #ffffff; }"
