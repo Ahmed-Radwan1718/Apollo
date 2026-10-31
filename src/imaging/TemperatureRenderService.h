@@ -1,5 +1,6 @@
 #pragma once
 
+#include "imaging/ColorMixerSettings.h"
 #include "imaging/DetailSettings.h"
 #include "imaging/RawCalibration.h"
 
@@ -44,7 +45,8 @@ public:
                         int clarity,
                         int dehaze,
                         int saturation,
-                        int vibrance);
+                        int vibrance,
+                        const ColorMixerSettings &colorMixer);
     void requestFullRender(const QString &filePath,
                            int kelvin,
                            int tint,
@@ -59,7 +61,8 @@ public:
                            int clarity,
                            int dehaze,
                            int saturation,
-                           int vibrance);
+                           int vibrance,
+                           const ColorMixerSettings &colorMixer);
 
 signals:
     void renderReady(const QString &filePath,
@@ -77,6 +80,7 @@ signals:
                      int dehaze,
                      int saturation,
                      int vibrance,
+                     const ColorMixerSettings &colorMixer,
                      bool preview,
                      const QImage &image,
                      const QString &error);
@@ -98,6 +102,7 @@ private:
         int dehaze = 0;
         int saturation = 0;
         int vibrance = 0;
+        ColorMixerSettings colorMixer;
         DetailSettings detail;
         bool prepareOnly = false;
     };
