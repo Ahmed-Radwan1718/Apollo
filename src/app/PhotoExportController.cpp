@@ -262,7 +262,8 @@ ExportRenderResult renderForExport(const QString &filePath)
                                                state.saturation,
                                                state.vibrance,
                                                state.calibration,
-                                               false);
+                                               false,
+                                               state.colorMixer);
     if (!result.image.isNull()) {
         result.image = imaging::DetailProcessor::apply(result.image, state.detail);
         result.image = imaging::applyCropTransform(result.image, state);
