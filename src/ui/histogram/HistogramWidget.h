@@ -25,4 +25,6 @@ protected:
 
 private:
     imaging::HistogramData m_histogram;
+    qreal m_shadowClippingFraction = 0.0;
+    qreal m_highlightClippingFraction = 0.0;
 };

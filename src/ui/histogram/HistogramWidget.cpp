@@ -15,8 +15,15 @@
 namespace {
 
 constexpr int kHistogramPreviewMaximumEdge = 1024;
-constexpr int kClippingRange = 1;
+constexpr int kShadowClipLuminance = 1;
+constexpr int kHighlightClipLuminance = 254;
+constexpr qreal kMinimumVisibleClippingFraction = 0.0005;
 constexpr qreal kFullStrengthClippingFraction = 0.03;
+
+struct ClippingFractions {
+    qreal shadows = 0.0;
+    qreal highlights = 0.0;
+};
 
 qreal normalizedHistogramHeight(quint64 count, quint64 displayPeak)
 {
@@ -101,59 +108,69 @@ quint64 histogramDisplayPeak(const imaging::HistogramData &histogram)
     return peak;
 }
 
-quint64 clippedChannelCount(
-    const std::array<quint64, imaging::HistogramData::kBinCount> &bins,
-    bool highlights)
+ClippingFractions calculateClippingFractions(const QImage &image)
 {
-    quint64 count = 0;
-    if (highlights) {
-        for (int bin = imaging::HistogramData::kBinCount - 1 - kClippingRange;
-             bin < imaging::HistogramData::kBinCount;
-             ++bin) {
-            count += bins[static_cast<std::size_t>(bin)];
-        }
-    } else {
-        for (int bin = 0; bin <= kClippingRange; ++bin) {
-            count += bins[static_cast<std::size_t>(bin)];
+    ClippingFractions result;
+    if (image.isNull() || image.width() <= 0 || image.height() <= 0) {
+        return result;
+    }
+
+    const QImage rgbImage = image.format() == QImage::Format_RGB888
+        ? image
+        : image.convertToFormat(QImage::Format_RGB888);
+    if (rgbImage.isNull()) {
+        return result;
+    }
+
+    quint64 shadowPixels = 0;
+    quint64 highlightPixels = 0;
+    const quint64 pixelCount = static_cast<quint64>(rgbImage.width())
+        * static_cast<quint64>(rgbImage.height());
+
+    for (int y = 0; y < rgbImage.height(); ++y) {
+        const uchar *scanLine = rgbImage.constScanLine(y);
+        for (int x = 0; x < rgbImage.width(); ++x) {
+            const uchar *pixel = scanLine + (x * 3);
+            const int luminance = qGray(pixel[0], pixel[1], pixel[2]);
+            if (luminance <= kShadowClipLuminance) {
+                ++shadowPixels;
+            } else if (luminance >= kHighlightClipLuminance) {
+                ++highlightPixels;
+            }
         }
     }
-    return count;
+
+    if (pixelCount > 0) {
+        result.shadows = static_cast<qreal>(shadowPixels)
+            / static_cast<qreal>(pixelCount);
+        result.highlights = static_cast<qreal>(highlightPixels)
+            / static_cast<qreal>(pixelCount);
+    }
+
+    return result;
 }
 
-qreal clippingSeverity(const imaging::HistogramData &histogram, bool highlights)
+qreal clippingSeverity(qreal clippingFraction)
 {
-    if (histogram.pixelCount == 0) {
+    if (clippingFraction < kMinimumVisibleClippingFraction) {
         return 0.0;
     }
 
-    const quint64 clippedPixels = std::max({
-        clippedChannelCount(histogram.red, highlights),
-        clippedChannelCount(histogram.green, highlights),
-        clippedChannelCount(histogram.blue, highlights),
-    });
-    if (clippedPixels == 0) {
-        return 0.0;
-    }
-
-    const qreal fraction = static_cast<qreal>(clippedPixels)
-        / static_cast<qreal>(histogram.pixelCount);
     const qreal normalized = std::clamp(
-        fraction / kFullStrengthClippingFraction,
+        (clippingFraction - kMinimumVisibleClippingFraction)
+            / (kFullStrengthClippingFraction - kMinimumVisibleClippingFraction),
         0.0,
         1.0);
 
-    // Keep tiny amounts visible without making them look as severe as a large
-    // clipped region. The square-root response gives useful visual separation
-    // at the low end while still capping heavy clipping cleanly.
     return std::max<qreal>(0.12, std::sqrt(normalized));
 }
 
 void drawClippingEdgeGlow(QPainter &painter,
                           const QRectF &plotRect,
-                          const imaging::HistogramData &histogram,
+                          qreal clippingFraction,
                           bool highlights)
 {
-    const qreal severity = clippingSeverity(histogram, highlights);
+    const qreal severity = clippingSeverity(clippingFraction);
     if (severity <= 0.0 || plotRect.isEmpty()) {
         return;
     }
@@ -227,12 +244,17 @@ void HistogramWidget::setImage(const QImage &image)
     }
 
     m_histogram = imaging::Histogram::calculate(histogramImage);
+    const ClippingFractions clipping = calculateClippingFractions(histogramImage);
+    m_shadowClippingFraction = clipping.shadows;
+    m_highlightClippingFraction = clipping.highlights;
     update();
 }
 
 void HistogramWidget::clear()
 {
     m_histogram = {};
+    m_shadowClippingFraction = 0.0;
+    m_highlightClippingFraction = 0.0;
     update();
 }
 
@@ -296,6 +318,12 @@ void HistogramWidget::paintEvent(QPaintEvent *event)
     painter.setPen(QPen(QColor(48, 48, 48), 1.0));
     painter.drawRect(frameRect);
 
-    drawClippingEdgeGlow(painter, plotRect, m_histogram, false);
-    drawClippingEdgeGlow(painter, plotRect, m_histogram, true);
+    drawClippingEdgeGlow(painter,
+                         plotRect,
+                         m_shadowClippingFraction,
+                         false);
+    drawClippingEdgeGlow(painter,
+                         plotRect,
+                         m_highlightClippingFraction,
+                         true);
 }
