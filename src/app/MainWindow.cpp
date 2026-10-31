@@ -10,6 +10,7 @@
 #include "ui/leftpanel/NavigatorPanel.h"
 #include "ui/rightpanel/BasicPanel.h"
 #include "ui/rightpanel/CalibrationPanel.h"
+#include "ui/rightpanel/ColorMixerPanel.h"
 #include "ui/rightpanel/PhotoMetadataWidget.h"
 #include "ui/rightpanel/WhiteBalancePickerController.h"
 
@@ -890,7 +891,8 @@ void MainWindow::requestPreview(const DevelopState &state)
                                     state.clarity,
                                     state.dehaze,
                                     state.saturation,
-                                    state.vibrance);
+                                    state.vibrance,
+                                    state.colorMixer);
 }
 
 void MainWindow::requestFullRender(const DevelopState &state, const QString &historyLabel)
@@ -920,7 +922,8 @@ void MainWindow::requestFullRender(const DevelopState &state, const QString &his
                                        state.clarity,
                                        state.dehaze,
                                        state.saturation,
-                                       state.vibrance);
+                                       state.vibrance,
+                                       state.colorMixer);
 }
 
 void MainWindow::handleDevelopRender(const QString &filePath,
@@ -938,6 +941,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
                                      int dehaze,
                                      int saturation,
                                      int vibrance,
+                                     const imaging::ColorMixerSettings &colorMixer,
                                      bool preview,
                                      const QImage &image,
                                      const QString &error)
@@ -956,6 +960,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
     renderedState.dehaze = dehaze;
     renderedState.saturation = saturation;
     renderedState.vibrance = vibrance;
+    renderedState.colorMixer = colorMixer;
     renderedState.calibration = calibration;
 
     if (filePath != m_currentFilePath) {
@@ -965,6 +970,7 @@ void MainWindow::handleDevelopRender(const QString &filePath,
     if (renderedState != m_requestedState
         && (!preview
             || (!hasActiveDevelopSlider(m_basicPanel)
+                && !(m_colorMixerPanel && m_colorMixerPanel->isEditing())
                 && !m_calibrationPanel->isEditing()))) {
         return;
     }
@@ -1094,6 +1100,9 @@ void MainWindow::setDevelopControlsFromState(const DevelopState &state)
     }
     if (m_vibranceSlider) {
         m_vibranceSlider->setValue(state.vibrance);
+    }
+    if (m_colorMixerPanel) {
+        m_colorMixerPanel->setSettings(state.colorMixer);
     }
     if (m_calibrationPanel) {
         m_calibrationPanel->setCalibration(state.calibration);
