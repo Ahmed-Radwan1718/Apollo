@@ -6,6 +6,7 @@
 #include "ui/library/LibraryWorkspaceController.h"
 #include "ui/rightpanel/AutoStraightenController.h"
 #include "ui/rightpanel/BasicSliderInteractionController.h"
+#include "ui/rightpanel/ColorMixerPanel.h"
 #include "ui/rightpanel/CropToolController.h"
 #include "ui/rightpanel/DetailPanel.h"
 #include "ui/rightpanel/DevelopToolPlaceholderButtons.h"
@@ -51,6 +52,7 @@ int main(int argc, char *argv[])
         new BasicSliderInteractionController(basicPanel, &window);
     }
 
+    ColorMixerPanel::install(&window);
     auto *cropToolController = new CropToolController(&window, &window);
     new TransformController(&window, cropToolController, &window);
     auto *photoFlipController = new PhotoFlipController(&window, cropToolController, &window);
