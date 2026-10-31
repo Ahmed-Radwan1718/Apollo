@@ -7,16 +7,19 @@
 #include <QClipboard>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QObject>
 #include <QWidget>
 
+#include <algorithm>
 #include <optional>
 
 namespace {
 
-constexpr int kClipboardVersion = 2;
+constexpr int kClipboardVersion = 3;
+constexpr int kMinimumSupportedClipboardVersion = 2;
 constexpr auto kClipboardFormat = "apollo-develop-settings";
 
 std::optional<DevelopState> currentStateForPhoto(const QString &filePath)
@@ -65,6 +68,56 @@ imaging::RawCalibration calibrationFromJson(const QJsonObject &object)
     calibration.bluePrimaryHue = object.value(QStringLiteral("bluePrimaryHue")).toInt();
     calibration.bluePrimarySaturation = object.value(QStringLiteral("bluePrimarySaturation")).toInt();
     return calibration;
+}
+
+QJsonArray colorMixerValuesToJson(
+    const std::array<int, imaging::kColorMixerBandCount> &values)
+{
+    QJsonArray array;
+    for (int value : values) {
+        array.append(std::clamp(value, -100, 100));
+    }
+    return array;
+}
+
+std::array<int, imaging::kColorMixerBandCount> colorMixerValuesFromJson(
+    const QJsonValue &value)
+{
+    std::array<int, imaging::kColorMixerBandCount> values{};
+    const QJsonArray array = value.toArray();
+    const int count = std::min(array.size(),
+                               static_cast<int>(imaging::kColorMixerBandCount));
+    for (int index = 0; index < count; ++index) {
+        values[static_cast<std::size_t>(index)] =
+            std::clamp(array[index].toInt(0), -100, 100);
+    }
+    return values;
+}
+
+QJsonObject colorMixerToJson(const imaging::ColorMixerSettings &settings)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("enabled"), settings.enabled);
+    object.insert(QStringLiteral("hue"), colorMixerValuesToJson(settings.hue));
+    object.insert(QStringLiteral("saturation"),
+                  colorMixerValuesToJson(settings.saturation));
+    object.insert(QStringLiteral("luminance"),
+                  colorMixerValuesToJson(settings.luminance));
+    return object;
+}
+
+imaging::ColorMixerSettings colorMixerFromJson(const QJsonObject &object)
+{
+    imaging::ColorMixerSettings settings;
+    settings.enabled = object.contains(QStringLiteral("enabled"))
+        ? object.value(QStringLiteral("enabled")).toBool(true)
+        : true;
+    settings.hue = colorMixerValuesFromJson(object.value(QStringLiteral("hue")));
+    settings.saturation = colorMixerValuesFromJson(
+        object.value(QStringLiteral("saturation")));
+    settings.luminance = colorMixerValuesFromJson(
+        object.value(QStringLiteral("luminance")));
+    return settings;
 }
 
 QJsonObject detailToJson(const imaging::DetailSettings &detail)
@@ -151,6 +204,7 @@ QJsonObject stateToJson(const DevelopState &state)
     object.insert(QStringLiteral("dehaze"), state.dehaze);
     object.insert(QStringLiteral("saturation"), state.saturation);
     object.insert(QStringLiteral("vibrance"), state.vibrance);
+    object.insert(QStringLiteral("colorMixer"), colorMixerToJson(state.colorMixer));
     object.insert(QStringLiteral("calibration"), calibrationToJson(state.calibration));
     object.insert(QStringLiteral("detail"), detailToJson(state.detail));
     object.insert(QStringLiteral("effects"), effectsToJson(state.effects));
@@ -198,6 +252,8 @@ DevelopState stateFromJson(const QJsonObject &object)
     state.dehaze = object.value(QStringLiteral("dehaze")).toInt(state.dehaze);
     state.saturation = object.value(QStringLiteral("saturation")).toInt(state.saturation);
     state.vibrance = object.value(QStringLiteral("vibrance")).toInt(state.vibrance);
+    state.colorMixer = colorMixerFromJson(
+        object.value(QStringLiteral("colorMixer")).toObject());
     state.calibration = calibrationFromJson(
         object.value(QStringLiteral("calibration")).toObject());
     state.detail = detailFromJson(object.value(QStringLiteral("detail")).toObject());
@@ -263,9 +319,11 @@ std::optional<DevelopState> stateFromClipboard()
     }
 
     const QJsonObject payload = document.object();
+    const int version = payload.value(QStringLiteral("version")).toInt();
     if (payload.value(QStringLiteral("format")).toString()
             != QString::fromLatin1(kClipboardFormat)
-        || payload.value(QStringLiteral("version")).toInt() != kClipboardVersion) {
+        || version < kMinimumSupportedClipboardVersion
+        || version > kClipboardVersion) {
         return std::nullopt;
     }
 
