@@ -229,6 +229,14 @@ void LibraryWorkspaceController::setLibraryMode(bool libraryMode)
                 m_window->findChild<QWidget *>(QStringLiteral("leftPanel"))) {
             leftPanel->show();
         }
+        if (QWidget *developToolStrip =
+                m_window->findChild<QWidget *>(QStringLiteral("developToolStrip"))) {
+            developToolStrip->setVisible(!libraryMode);
+        }
+        if (QWidget *adjustmentsScrollArea =
+                m_window->findChild<QWidget *>(QStringLiteral("adjustmentsScrollArea"))) {
+            adjustmentsScrollArea->setVisible(!libraryMode);
+        }
     }
 
     if (m_navigator) {
