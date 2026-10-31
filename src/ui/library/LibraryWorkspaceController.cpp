@@ -233,9 +233,18 @@ void LibraryWorkspaceController::setLibraryMode(bool libraryMode)
                 m_window->findChild<QWidget *>(QStringLiteral("developToolStrip"))) {
             developToolStrip->setVisible(!libraryMode);
         }
-        if (QWidget *adjustmentsScrollArea =
-                m_window->findChild<QWidget *>(QStringLiteral("adjustmentsScrollArea"))) {
-            adjustmentsScrollArea->setVisible(!libraryMode);
+
+        const QStringList editorialPanelNames = {
+            QStringLiteral("basicPanel"),
+            QStringLiteral("detailPanel"),
+            QStringLiteral("calibrationPanel"),
+            QStringLiteral("transformPanel"),
+            QStringLiteral("effectsPanel")
+        };
+        for (const QString &panelName : editorialPanelNames) {
+            if (QWidget *panel = m_window->findChild<QWidget *>(panelName)) {
+                panel->setVisible(!libraryMode);
+            }
         }
     }
 
@@ -250,9 +259,6 @@ void LibraryWorkspaceController::setLibraryMode(bool libraryMode)
     }
     if (m_filmstrip) {
         m_filmstrip->setVisible(!libraryMode);
-    }
-    if (m_basicPanel) {
-        m_basicPanel->setVisible(!libraryMode);
     }
     if (m_sidebar) {
         m_sidebar->setVisible(libraryMode);
