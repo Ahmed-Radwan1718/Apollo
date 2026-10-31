@@ -109,6 +109,21 @@ constexpr double kWarmHueHalfWidthRadians = 0.6108652381980153; // 35 degrees
 constexpr double kWarmHueProtectionStrength = 0.5;
 constexpr int kVibranceGamutSearchIterations = 8;
 constexpr double kTwoPi = 6.28318530717958647692;
+constexpr double kColorMixerHueMaximumShiftRadians = 0.5235987755982988; // 30 degrees
+constexpr double kColorMixerLightnessMaximumShift = 0.20;
+constexpr double kColorMixerChromaProtectionStart = 0.004;
+constexpr double kColorMixerChromaProtectionFull = 0.035;
+constexpr int kColorMixerGamutSearchIterations = 8;
+constexpr std::array<double, kColorMixerBandCount> kColorMixerHueCentersRadians = {
+    0.5105088062083414, // Red, 29.25 degrees
+    0.9599310885968813, // Orange, 55 degrees
+    1.9163715186897738, // Yellow, 109.8 degrees
+    2.4870941840919194, // Green, 142.5 degrees
+    3.4033920413889427, // Aqua, 195 degrees
+    4.60766922526503,   // Blue, 264 degrees
+    5.235987755982989,  // Purple, 300 degrees
+    5.724679946541401,  // Magenta, 328 degrees
+};
 
 struct WhiteBalanceRatios {
     double redToGreen = 0.0;
@@ -1458,6 +1473,135 @@ bool isUnitGamut(const LinearRgb &rgb)
         && rgb.blue >= -epsilon && rgb.blue <= 1.0 + epsilon;
 }
 
+double normalizedHueRadians(double hue)
+{
+    hue = std::fmod(hue, kTwoPi);
+    return hue < 0.0 ? hue + kTwoPi : hue;
+}
+
+double interpolatedColorMixerValue(
+    const std::array<int, kColorMixerBandCount> &values,
+    double hue)
+{
+    const double normalizedHue = normalizedHueRadians(hue);
+
+    for (std::size_t index = 0; index < kColorMixerBandCount; ++index) {
+        const std::size_t nextIndex = (index + 1) % kColorMixerBandCount;
+        const double left = kColorMixerHueCentersRadians[index];
+        const double right = nextIndex == 0
+            ? kColorMixerHueCentersRadians[0] + kTwoPi
+            : kColorMixerHueCentersRadians[nextIndex];
+        double candidateHue = normalizedHue;
+        if (nextIndex == 0 && candidateHue < left) {
+            candidateHue += kTwoPi;
+        }
+        if (candidateHue < left || candidateHue > right) {
+            continue;
+        }
+
+        const double position = (candidateHue - left) / (right - left);
+        const double blend = smoothstep01(position);
+        return static_cast<double>(values[index]) * (1.0 - blend)
+            + static_cast<double>(values[nextIndex]) * blend;
+    }
+
+    return static_cast<double>(values[0]);
+}
+
+Oklab oklabFromLch(double lightness, double chroma, double hue)
+{
+    return {
+        lightness,
+        chroma * std::cos(hue),
+        chroma * std::sin(hue),
+    };
+}
+
+void applyColorMixer(double &red,
+                     double &green,
+                     double &blue,
+                     const ColorMixerSettings &settings)
+{
+    if (settings.isNeutral()) {
+        return;
+    }
+
+    // Normalize only for perceptual color math. This keeps the mixer independent
+    // of Exposure while preserving values above display white until final output.
+    const double normalization = std::max({1.0, red, green, blue});
+    const LinearRgb normalizedRgb{
+        std::max(0.0, red / normalization),
+        std::max(0.0, green / normalization),
+        std::max(0.0, blue / normalization),
+    };
+
+    const Oklab lab = linearSrgbToOklab(normalizedRgb);
+    const double chroma = std::hypot(lab.a, lab.b);
+    if (chroma <= std::numeric_limits<double>::epsilon()) {
+        return;
+    }
+
+    // Hue is undefined for grays. Fade targeted adjustments in with chroma so
+    // low-chroma neutral pixels cannot acquire colored edges or casts.
+    const double chromaWeight = smoothstep01(
+        (chroma - kColorMixerChromaProtectionStart)
+        / (kColorMixerChromaProtectionFull - kColorMixerChromaProtectionStart));
+    if (chromaWeight <= 0.0) {
+        return;
+    }
+
+    const double hue = normalizedHueRadians(std::atan2(lab.b, lab.a));
+    const double hueAmount = std::clamp(
+        interpolatedColorMixerValue(settings.hue, hue) / 100.0,
+        -1.0,
+        1.0) * chromaWeight;
+    const double saturationAmount = std::clamp(
+        interpolatedColorMixerValue(settings.saturation, hue) / 100.0,
+        -1.0,
+        1.0) * chromaWeight;
+    const double luminanceAmount = std::clamp(
+        interpolatedColorMixerValue(settings.luminance, hue) / 100.0,
+        -1.0,
+        1.0) * chromaWeight;
+
+    const double adjustedHue = normalizedHueRadians(
+        hue + hueAmount * kColorMixerHueMaximumShiftRadians);
+    const double adjustedChroma = chroma * std::max(0.0, 1.0 + saturationAmount);
+    const double adjustedLightness = std::clamp(
+        lab.lightness + luminanceAmount * kColorMixerLightnessMaximumShift,
+        0.0,
+        1.0);
+
+    LinearRgb adjusted = oklabToLinearSrgb(
+        oklabFromLch(adjustedLightness, adjustedChroma, adjustedHue));
+
+    // Hue, chroma and luminance moves can leave linear sRGB. Preserve the
+    // requested lightness and hue, then reduce only chroma until the color is in
+    // gamut instead of clipping channels and changing the perceived hue.
+    if (!isUnitGamut(adjusted)) {
+        double lowerChroma = 0.0;
+        double upperChroma = adjustedChroma;
+        adjusted = oklabToLinearSrgb(
+            oklabFromLch(adjustedLightness, 0.0, adjustedHue));
+
+        for (int iteration = 0; iteration < kColorMixerGamutSearchIterations; ++iteration) {
+            const double candidateChroma = 0.5 * (lowerChroma + upperChroma);
+            const LinearRgb candidate = oklabToLinearSrgb(
+                oklabFromLch(adjustedLightness, candidateChroma, adjustedHue));
+            if (isUnitGamut(candidate)) {
+                lowerChroma = candidateChroma;
+                adjusted = candidate;
+            } else {
+                upperChroma = candidateChroma;
+            }
+        }
+    }
+
+    red = std::max(0.0, adjusted.red * normalization);
+    green = std::max(0.0, adjusted.green * normalization);
+    blue = std::max(0.0, adjusted.blue * normalization);
+}
+
 double warmHueVibranceScale(const Oklab &lab, double chroma)
 {
     if (chroma <= 0.02) {
@@ -1569,6 +1713,7 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                           int dehaze,
                           int saturation,
                           int vibrance,
+                          const ColorMixerSettings &colorMixer,
                           QString *error)
 {
     if (processed.type != LIBRAW_IMAGE_BITMAP
@@ -1638,7 +1783,8 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
     if (clampedHighlights == 0 && clampedShadows == 0 && clampedWhites == 0
         && clampedBlacks == 0 && clampedContrast == 0 && clampedTexture == 0
         && clampedClarity == 0 && clampedDehaze == 0
-        && clampedSaturation == 0 && clampedVibrance == 0) {
+        && clampedSaturation == 0 && clampedVibrance == 0
+        && colorMixer.isNeutral()) {
         // Keep the neutral path byte-for-byte equivalent to the existing exposure
         // render and avoid per-pixel floating-point work when develop controls are 0.
         std::vector<std::uint8_t> transferTable(kLinearMaximum + 1);
@@ -1751,6 +1897,9 @@ QImage developedSrgbImage(const libraw_processed_image_t &processed,
                                       clampedDehaze,
                                       dehazeAirlight);
                 }
+                if (!colorMixer.isNeutral()) {
+                    applyColorMixer(rgb.red, rgb.green, rgb.blue, colorMixer);
+                }
                 if (clampedVibrance != 0) {
                     applyOklabVibrance(rgb.red, rgb.green, rgb.blue, clampedVibrance);
                 }
@@ -1789,7 +1938,8 @@ QImage ArwDecoder::decode(const QString &filePath,
                           int saturation,
                           int vibrance,
                           const RawCalibration &calibration,
-                          bool halfSizePreview)
+                          bool halfSizePreview,
+                          const ColorMixerSettings &colorMixer)
 {
     if (error != nullptr) {
         error->clear();
@@ -1900,6 +2050,7 @@ QImage ArwDecoder::decode(const QString &filePath,
                                       dehaze,
                                       saturation,
                                       vibrance,
+                                      colorMixer,
                                       error);
     LibRaw::dcraw_clear_mem(processed);
     return image;
