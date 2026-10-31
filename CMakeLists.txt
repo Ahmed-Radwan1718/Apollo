@@ -49,6 +49,7 @@ qt_add_executable(Nexus WIN32
     src/imaging/AutoHighlights.h
     src/imaging/AvifEncoder.cpp
     src/imaging/AvifEncoder.h
+    src/imaging/ColorMixerSettings.h
     src/imaging/SrgbTransfer.h
     src/imaging/AutoStraighten.cpp
     src/imaging/AutoStraighten.h
@@ -107,6 +108,8 @@ qt_add_executable(Nexus WIN32
     src/ui/rightpanel/BasicPanel.h
     src/ui/rightpanel/CalibrationPanel.cpp
     src/ui/rightpanel/CalibrationPanel.h
+    src/ui/rightpanel/ColorMixerPanel.cpp
+    src/ui/rightpanel/ColorMixerPanel.h
     src/ui/rightpanel/CropToolController.cpp
     src/ui/rightpanel/CropToolController.h
     src/ui/rightpanel/CropToolControllerTransform.cpp
